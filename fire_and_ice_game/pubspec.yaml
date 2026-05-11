@@ -1,0 +1,36 @@
+name: fire_and_ice_game
+description: "Fire & Ice - Aviation action game with elemental abilities and Windwalker flight"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 3D Math & Rendering
+  vector_math: ^2.1.4
+
+  # Network (future use)
+  http: ^1.6.0
+
+  # Storage
+  shared_preferences: ^2.5.4
+
+  # UI
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - config/
+    - assets/data/

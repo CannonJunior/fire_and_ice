@@ -1,0 +1,20 @@
+{
+  "flight": {
+    "flightSpeed": 7.0,
+    "pitchRate": 60.0,
+    "maxPitchAngle": 45.0,
+    "boostMultiplier": 1.5,
+    "brakeMultiplier": 0.6,
+    "brakeJumpForce": 3.0,
+    "manaDrainRate": 3.0,
+    "lowManaThreshold": 10.0,
+    "lowManaDescentRate": 2.0,
+    "bankRate": 120.0,
+    "maxBankAngle": 60.0,
+    "autoLevelRate": 90.0,
+    "autoLevelThreshold": 90.0,
+    "bankToTurnMultiplier": 2.5,
+    "barrelRollRate": 360.0,
+    "startAltitude": 15.0
+  }
+}
