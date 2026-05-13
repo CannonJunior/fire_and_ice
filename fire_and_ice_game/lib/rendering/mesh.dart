@@ -222,6 +222,102 @@ class Mesh {
     );
   }
 
+  /// Thin flat panel for control surfaces (aileron, elevator, flap, bay door).
+  ///
+  /// Local coordinate convention:
+  ///  - X spans ±[halfSpan] (spanwise axis — the rotation axis for ailerons/elevator)
+  ///  - Z runs from 0 (hinge / leading edge) to +[chord] (trailing edge)
+  ///  - Y runs ±[thickness]/2 (surface thickness)
+  ///
+  /// Placing the hinge at Z=0 means rotating the SceneNode around its local X
+  /// axis correctly sweeps the surface about the hinge line.
+  ///
+  /// For rudders (vertical surface), rotate the owning SceneNode 90° around Z
+  /// so that the span axis becomes Y rather than X.
+  factory Mesh.flatPanel({
+    required double halfSpan,
+    required double chord,
+    required double thickness,
+    required Vector3 color,
+  }) {
+    final s = halfSpan;
+    final c = chord;
+    final t = thickness / 2.0;
+    final col = color;
+
+    final verts = <double>[];
+    final norms  = <double>[];
+    final cols   = <double>[];
+    final idxs   = <int>[];
+
+    void addFace(List<List<double>> corners, List<double> n) {
+      final b = verts.length ~/ 3;
+      for (final v in corners) {
+        verts.addAll(v);
+        norms.addAll(n);
+        cols.addAll([col.x, col.y, col.z, 1.0]);
+      }
+      idxs.addAll([b, b + 1, b + 2, b, b + 2, b + 3]);
+    }
+
+    // +Y top face (normal up)
+    addFace([[-s, t, 0], [s, t, 0], [s, t, c], [-s, t, c]], [0, 1, 0]);
+    // -Y bottom face (normal down)
+    addFace([[-s, -t, c], [s, -t, c], [s, -t, 0], [-s, -t, 0]], [0, -1, 0]);
+    // Hinge edge at Z=0 (leading — faces -Z)
+    addFace([[-s, -t, 0], [s, -t, 0], [s, t, 0], [-s, t, 0]], [0, 0, -1]);
+    // Trailing edge at Z=c (faces +Z)
+    addFace([[-s, t, c], [s, t, c], [s, -t, c], [-s, -t, c]], [0, 0, 1]);
+    // Left tip at X=-s (faces -X)
+    addFace([[-s, t, 0], [-s, t, c], [-s, -t, c], [-s, -t, 0]], [-1, 0, 0]);
+    // Right tip at X=+s (faces +X)
+    addFace([[s, -t, 0], [s, -t, c], [s, t, c], [s, t, 0]], [1, 0, 0]);
+
+    return Mesh(
+      vertices: Float32List.fromList(verts),
+      indices:  Uint16List.fromList(idxs),
+      normals:  Float32List.fromList(norms),
+      colors:   Float32List.fromList(cols),
+    );
+  }
+
+  /// Box strut for landing gear legs — attachment point at Y=0, tip at Y=-[length].
+  ///
+  /// Placing the attachment at local Y=0 means SceneNode.position points at the
+  /// wing attachment and the strut naturally hangs downward. Driven by
+  /// [gearProgress] via SceneNode.position.y in the game loop.
+  factory Mesh.strut({
+    required double length,
+    required double radius,
+    required Vector3 color,
+  }) {
+    final r = radius;
+    final l = length;
+    final c = color;
+
+    final verts = <double>[];
+    final norms  = <double>[];
+    final cols   = <double>[];
+    final idxs   = <int>[];
+
+    void addFace(List<List<double>> corners, List<double> n) {
+      final b = verts.length ~/ 3;
+      for (final v in corners) { verts.addAll(v); norms.addAll(n); cols.addAll([c.x,c.y,c.z,1.0]); }
+      idxs.addAll([b,b+1,b+2, b,b+2,b+3]);
+    }
+
+    // Box from Y=0 (top, attachment) to Y=-length (tip), ±radius in X and Z
+    addFace([[-r,0,-r],[r,0,-r],[r,0,r],[-r,0,r]], [0,1,0]);       // top cap
+    addFace([[-r,-l,r],[r,-l,r],[r,-l,-r],[-r,-l,-r]], [0,-1,0]);  // bottom cap
+    addFace([[r,0,-r],[r,0,r],[r,-l,r],[r,-l,-r]], [1,0,0]);        // +X
+    addFace([[-r,0,r],[-r,0,-r],[-r,-l,-r],[-r,-l,r]], [-1,0,0]);  // -X
+    addFace([[-r,0,-r],[-r,-l,-r],[r,-l,-r],[r,0,-r]], [0,0,-1]);   // -Z
+    addFace([[r,0,r],[r,-l,r],[-r,-l,r],[-r,0,r]], [0,0,1]);        // +Z
+
+    return Mesh(vertices: Float32List.fromList(verts), indices: Uint16List.fromList(idxs),
+        normals: Float32List.fromList(norms), colors: Float32List.fromList(cols));
+  }
+
   /// Backward-compat alias — delegates to [Mesh.aircraft].
   factory Mesh.createCharacterMesh({double size = 1.0}) =>
       Mesh.aircraft(length: size * 4.0);

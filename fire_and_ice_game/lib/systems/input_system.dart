@@ -101,6 +101,13 @@ class InputSystem {
 
       case GameAction.toggleView:
         return _pressedKeys.contains('Tab');
+
+      case GameAction.throttleUp:
+        return _pressedKeys.contains(']');
+      case GameAction.throttleDown:
+        return _pressedKeys.contains('[');
+      case GameAction.toggleGear:
+        return _pressedKeys.contains('g');
     }
   }
 
@@ -124,7 +131,7 @@ class InputSystem {
       ' ',      // Space
       '1', '2', '3', '4', '5',
       '6', '7', '8', '9', '0',
-      'Alt', 'Tab',
+      'Alt', 'Tab', 'g', 'G', '[', ']',
       'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
     };
 

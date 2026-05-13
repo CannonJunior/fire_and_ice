@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'game_state.dart';
+import 'loadout_page.dart';
 import 'mfd_pages.dart';
 
 // ── Color palette ─────────────────────────────────────────────────────────────
@@ -8,9 +9,11 @@ import 'mfd_pages.dart';
 const _kBevel = Color(0xFF2A3040);
 
 // Left MFD — green phosphor
-const _kLBg  = Color(0xFF001600);
-const _kLFg  = Color(0xFF00FF41);
-const _kLDim = Color(0xFF005519);
+const _kLBg    = Color(0xFF001600);
+const _kLFg    = Color(0xFF00FF41);
+const _kLDim   = Color(0xFF005519);
+const _kLAmber = Color(0xFFFFB300);
+const _kLWarn  = Color(0xFFFF4400);
 
 // Right MFD — navigation blue
 const _kRBg  = Color(0xFF000E1A);
@@ -26,7 +29,7 @@ const _kCDim   = Color(0xFF554400);
 
 Widget buildLeftMFD(GameState state, {int page = 0}) {
   final Widget body = switch (page) {
-    1 => buildAbltPage(state),
+    1 => buildLoadoutPage(state),
     2 => buildStatPage(state),
     3 => buildModePage(state),
     _ => Column(children: [
@@ -40,7 +43,7 @@ Widget buildLeftMFD(GameState state, {int page = 0}) {
       ]),
   };
   return Container(
-    width: 280, height: 220,
+    width: 280, height: 200,
     decoration: BoxDecoration(color: _kLBg, border: Border.all(color: _kBevel, width: 2)),
     child: body,
   );
@@ -105,29 +108,40 @@ Widget _miniBar(String label, double f) {
 
 Widget _abilityList(GameState state) {
   return Padding(
-    padding: const EdgeInsets.all(6),
+    padding: const EdgeInsets.all(5),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: List.generate(state.abilities.length, (i) {
-        final ab    = state.abilities[i];
-        final cd    = state.abilityCooldowns[ab.name] ?? 0.0;
-        final ready = cd <= 0.0;
-        final col   = ready ? _kLFg : _kLDim;
+      children: state.abilities.map((ab) {
+        final cd       = state.abilityCooldowns[ab.name] ?? 0.0;
+        final charges  = ab.isExpendable ? (state.abilityCharges[ab.name] ?? ab.maxCharges) : null;
+        final depleted = charges != null && charges <= 0;
+        final onCD     = cd > 0.0;
+        final ready    = !depleted && !onCD;
+
+        final nameCol   = depleted ? _kLWarn : (ready ? _kLFg : _kLDim);
+        final statusCol = depleted ? _kLWarn : (ready ? _kLFg : _kLAmber);
+
+        // Status label: charge fraction for expendable, cooldown or RDY for rechargeable
+        final String status;
+        if (depleted)       status = 'EXPD';
+        else if (onCD)      status = '${cd.toStringAsFixed(1)}s';
+        else if (charges != null) status = '$charges/${ab.maxCharges}';
+        else                status = 'RDY';
+
         return Row(children: [
-          Text(ab.icon, style: const TextStyle(fontSize: 11)),
-          const SizedBox(width: 4),
+          Text(ab.icon, style: const TextStyle(fontSize: 9)),
+          const SizedBox(width: 3),
           Expanded(child: Text(
             ab.name.split(' ').last.toUpperCase(),
-            style: TextStyle(color: col, fontSize: 8),
+            style: TextStyle(color: nameCol, fontSize: 7.5),
           )),
-          if (!ready)
-            Text('${cd.toStringAsFixed(1)}s',
-                style: const TextStyle(color: Color(0xFFFFB300), fontSize: 7)),
-          if (ready)
-            Text('RDY', style: TextStyle(color: _kLFg, fontSize: 7, fontWeight: FontWeight.bold)),
+          Text(status, style: TextStyle(
+            color: statusCol, fontSize: 7,
+            fontWeight: ready || depleted ? FontWeight.bold : FontWeight.normal,
+          )),
         ]);
-      }),
+      }).toList(),
     ),
   );
 }
@@ -186,27 +200,69 @@ final List<Offset> _terrainDots = List.generate(28, (i) {
   return Offset(r.nextDouble(), r.nextDouble());
 });
 
-Widget buildRightMFD(GameState state, {int page = 0}) {
+Widget buildRightMFD(
+  GameState state, {
+  int page = 0,
+  Function(double, double)? onMapTap,
+  Function(int)? onDeleteWaypoint,
+}) {
+  // Compute world offset to locked waypoint (for NAV map overlay)
+  (double, double)? wpData;
+  if (state.lockedWaypoint >= 0) {
+    final (_, wx, wz) = GameState.kWaypoints[state.lockedWaypoint];
+    wpData = (wx - state.playerPosition.x, wz - state.playerPosition.z);
+  }
+
   final Widget body = switch (page) {
     1 => buildTerrPage(state),
-    2 => buildTgtPage(state),
-    3 => buildMarkPage(state),
+    2 => buildFirePage(state),
+    3 => buildMarkPage(state, onDeleteWaypoint: onDeleteWaypoint),
     _ => Column(children: [
         _header('TERRAIN NAV', 'NAV', _kRFg, _kRDim),
-        Expanded(child: CustomPaint(
-          painter: _TerrainMap(
-            px: state.playerPosition.x,
-            pz: state.playerPosition.z,
-            heading: state.playerRotation.y,
-            zoom: state.mapZoom,
-          ),
-          child: Container(),
+        Expanded(child: LayoutBuilder(
+          builder: (context, constraints) {
+            final mapW = constraints.maxWidth;
+            final mapH = constraints.maxHeight;
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: onMapTap == null ? null : (details) {
+                final zoom     = state.mapZoom;
+                final ringBase = zoom == 1 ? 18.0 : zoom == 2 ? 42.0 : 28.0;
+                const upr      = 30.0; // world units per ring
+                final scale    = ringBase / upr;
+                final cx       = mapW / 2;
+                final cy       = mapH / 2;
+                final sdx      = details.localPosition.dx - cx;
+                final sdy      = details.localPosition.dy - cy;
+                final headRad  = state.playerRotation.y * math.pi / 180.0;
+                final relAngle = math.atan2(sdx, -sdy);
+                final dist     = math.sqrt(sdx * sdx + sdy * sdy) / scale;
+                final bearing  = relAngle + headRad;
+                onMapTap(
+                  state.playerPosition.x + math.sin(bearing) * dist,
+                  state.playerPosition.z + math.cos(bearing) * dist,
+                );
+              },
+              child: CustomPaint(
+                painter: _TerrainMap(
+                  px: state.playerPosition.x,
+                  pz: state.playerPosition.z,
+                  heading: state.playerRotation.y,
+                  zoom: state.mapZoom,
+                  wpData: wpData,
+                  flightPlan: state.flightPlan,
+                  flightPlanIndex: state.flightPlanIndex,
+                ),
+                child: Container(),
+              ),
+            );
+          },
         )),
         _navFooter(state),
       ]),
   };
   return Container(
-    width: 280, height: 220,
+    width: 280, height: 200,
     decoration: BoxDecoration(color: _kRBg, border: Border.all(color: _kBevel, width: 2)),
     child: body,
   );
@@ -232,12 +288,38 @@ Widget _navFooter(GameState state) {
 class _TerrainMap extends CustomPainter {
   final double px, pz, heading;
   final int zoom;
-  const _TerrainMap({required this.px, required this.pz, required this.heading, this.zoom = 0});
+  final (double, double)? wpData;
+  final List<(String, double, double)> flightPlan;
+  final int flightPlanIndex;
+
+  const _TerrainMap({
+    required this.px, required this.pz, required this.heading,
+    this.zoom = 0, this.wpData,
+    this.flightPlan = const [],
+    this.flightPlanIndex = 0,
+  });
+
+  Offset _toScreen(double wx, double wz, double cx, double cy,
+      double scale, double headRad) {
+    final dx = wx - px;
+    final dz = wz - pz;
+    final dist = math.sqrt(dx * dx + dz * dz);
+    if (dist <= 0) return Offset(cx, cy);
+    final relAngle = math.atan2(dx, dz) - headRad;
+    return Offset(
+      cx + math.sin(relAngle) * dist * scale,
+      cy - math.cos(relAngle) * dist * scale,
+    );
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
+    final cx       = size.width / 2;
+    final cy       = size.height / 2;
+    final ringBase = zoom == 1 ? 18.0 : zoom == 2 ? 42.0 : 28.0;
+    final headRad  = heading * math.pi / 180;
+    const upr      = 30.0; // units per ring
+    final scale    = ringBase / upr;
 
     // Grid
     final gp = Paint()..color = const Color(0xFF003355)..strokeWidth = 0.5;
@@ -254,8 +336,7 @@ class _TerrainMap extends CustomPainter {
       canvas.drawCircle(Offset(d.dx * size.width, d.dy * size.height), 4, dp);
     }
 
-    // Range rings — size varies by zoom (0=1×, 1=2×, 2=0.5×)
-    final ringBase = zoom == 1 ? 18.0 : zoom == 2 ? 42.0 : 28.0;
+    // Range rings
     final rp = Paint()
       ..color = const Color(0xFF005577)
       ..strokeWidth = 0.5
@@ -264,8 +345,68 @@ class _TerrainMap extends CustomPainter {
       canvas.drawCircle(Offset(cx, cy), ringBase * mult, rp);
     }
 
+    // Flight plan: connecting lines
+    if (flightPlan.length > 1) {
+      final lp = Paint()
+        ..color = const Color(0xFF0088CC).withValues(alpha: 0.55)
+        ..strokeWidth = 0.8;
+      for (int i = 0; i < flightPlan.length - 1; i++) {
+        final (_, wx1, wz1) = flightPlan[i];
+        final (_, wx2, wz2) = flightPlan[i + 1];
+        canvas.drawLine(
+          _toScreen(wx1, wz1, cx, cy, scale, headRad),
+          _toScreen(wx2, wz2, cx, cy, scale, headRad),
+          lp,
+        );
+      }
+    }
+
+    // Flight plan: dots + labels
+    for (int i = 0; i < flightPlan.length; i++) {
+      final (name, wx, wz) = flightPlan[i];
+      final pos    = _toScreen(wx, wz, cx, cy, scale, headRad);
+      final isTgt  = i == flightPlanIndex;
+      final color  = isTgt ? const Color(0xFF00FF88) : const Color(0xFF00AAFF);
+      canvas.drawCircle(pos, isTgt ? 4.0 : 3.0,
+          Paint()..color = color..style = PaintingStyle.fill);
+      final tp = TextPainter(
+        text: TextSpan(text: name,
+            style: TextStyle(color: color, fontSize: 6,
+                fontWeight: isTgt ? FontWeight.bold : FontWeight.normal)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(pos.dx + 5, pos.dy - 4));
+    }
+
+    // Locked waypoint diamond overlay
+    if (wpData != null) {
+      final (dx, dz) = wpData!;
+      final dist = math.sqrt(dx * dx + dz * dz);
+      if (dist > 0) {
+        final bearing  = math.atan2(dx, dz);
+        final relAngle = bearing - headRad;
+        final sdx = math.sin(relAngle) * dist * scale;
+        final sdy = -math.cos(relAngle) * dist * scale;
+        final maxR   = math.min(cx, cy) - 6;
+        final sdist  = math.sqrt(sdx * sdx + sdy * sdy);
+        final factor = sdist > maxR ? maxR / sdist : 1.0;
+        final wpX = cx + sdx * factor;
+        final wpY = cy + sdy * factor;
+        canvas.drawLine(Offset(cx, cy), Offset(wpX, wpY),
+            Paint()..color = const Color(0xFF00FF88).withValues(alpha: 0.55)
+              ..strokeWidth = 0.8);
+        final path = Path()
+          ..moveTo(wpX,     wpY - 5)
+          ..lineTo(wpX + 4, wpY)
+          ..lineTo(wpX,     wpY + 5)
+          ..lineTo(wpX - 4, wpY)
+          ..close();
+        canvas.drawPath(path,
+            Paint()..color = const Color(0xFF00FF88)..style = PaintingStyle.fill);
+      }
+    }
+
     // Heading vector
-    final headRad = heading * math.pi / 180;
     final hx = cx + math.sin(headRad) * 22;
     final hy = cy - math.cos(headRad) * 22;
     canvas.drawLine(Offset(cx, cy), Offset(hx, hy),
@@ -286,14 +427,16 @@ class _TerrainMap extends CustomPainter {
 
   @override
   bool shouldRepaint(_TerrainMap o) =>
-      o.px != px || o.pz != pz || o.heading != heading || o.zoom != zoom;
+      o.px != px || o.pz != pz || o.heading != heading || o.zoom != zoom ||
+      o.wpData != wpData || o.flightPlan.length != flightPlan.length ||
+      o.flightPlanIndex != flightPlanIndex;
 }
 
 // ── Center MFD – Flight Data ──────────────────────────────────────────────────
 
 Widget buildCenterMFD(GameState state) {
   return Container(
-    width: 200, height: 160,
+    width: 200, height: 148,
     decoration: BoxDecoration(
       color: _kCBg,
       border: Border.all(color: _kBevel, width: 2),
@@ -309,6 +452,7 @@ Widget buildCenterMFD(GameState state) {
             _dataRow('SPD', '${state.flightSpeed.toStringAsFixed(1)} u/s'),
             _dataRow('PCH', '${state.flightPitchAngle.toStringAsFixed(1)}°'),
             _dataRow('BNK', '${state.flightBankAngle.toStringAsFixed(1)}°'),
+            _dataRow('THR', '${(state.throttle * 100).round()}%'),
           ],
         ),
       )),

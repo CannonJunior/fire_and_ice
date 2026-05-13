@@ -23,12 +23,7 @@ class TerrainGenerator {
 
   // ── Public API ───────────────────────────────────────────────────────────
 
-  /// Generate terrain and return a (mesh, transform) pair.
-  ///
-  /// [gridSize] controls resolution (64 recommended for performance).
-  /// [tileSize] is the world-unit size of each grid cell.
-  /// [maxHeight] is the maximum terrain elevation.
-  /// [seed] shifts the noise phase for variety.
+  /// Generate a single centred terrain mesh (original single-tile API).
   static ({Mesh mesh, Transform3d transform}) generate({
     int gridSize    = 64,
     double tileSize = 2.0,
@@ -36,10 +31,47 @@ class TerrainGenerator {
     int seed        = 42,
   }) {
     final heights = _generateHeightmap(gridSize, maxHeight, seed);
-    final mesh    = _buildMesh(gridSize, tileSize, maxHeight, heights);
-    final transform = Transform3d(); // Identity - centered at origin
+    final mesh    = _buildMesh(gridSize, tileSize, maxHeight, heights, center: true);
+    return (mesh: mesh, transform: Transform3d());
+  }
 
-    return (mesh: mesh, transform: transform);
+  /// Return the terrain height at world position (wx, wz).
+  ///
+  /// Uses the same noise formula and parameters as the default [generate] call
+  /// (gridSize=64, tileSize=2.0, maxHeight=12.0, seed=1337, centered) so the
+  /// physics system can query ground elevation without storing the heightmap.
+  static double heightAt(double wx, double wz) {
+    const seedOff = 1337 * 0.123; // = 164.451
+    // World → normalized grid coordinates (same transform as _generateHeightmap)
+    final nx = wx / 128.0 + 0.5 + seedOff;
+    final nz = wz / 128.0 + 0.5 + seedOff;
+    double h = 0.5    * _noise(nx * 2.1,  nz * 2.1);
+    h       += 0.25   * _noise(nx * 4.3,  nz * 4.3);
+    h       += 0.125  * _noise(nx * 8.7,  nz * 8.7);
+    h       += 0.0625 * _noise(nx * 17.1, nz * 17.1);
+    h = (h + 0.9375) / 1.875;
+    h = h.clamp(0.0, 1.0) * 12.0;
+    if (h < 1.8) h *= 0.4; // flatten valley bottoms (12.0 × 0.15 = 1.8)
+    return h;
+  }
+
+  /// Generate one chunk of an infinite terrain grid.
+  ///
+  /// Uses world-space coordinates for the noise function so heights are
+  /// perfectly continuous at every chunk boundary.  Vertex (0, ?, 0) in
+  /// local space corresponds to world position
+  /// (chunkX × gridSize × tileSize, ?, chunkZ × gridSize × tileSize).
+  static Mesh generateChunk({
+    required int chunkX,
+    required int chunkZ,
+    int gridSize     = 32,
+    double tileSize  = 2.0,
+    double maxHeight = 12.0,
+    int seed         = 1337,
+  }) {
+    final heights = _generateChunkHeightmap(
+        chunkX, chunkZ, gridSize, tileSize, maxHeight, seed);
+    return _buildMesh(gridSize, tileSize, maxHeight, heights, center: false);
   }
 
   // ── Heightmap generation ─────────────────────────────────────────────────
@@ -91,6 +123,44 @@ class TerrainGenerator {
     return heights;
   }
 
+  /// Heightmap for one chunk using global world coordinates.
+  ///
+  /// The noise is sampled at the same frequency as the single-mesh variant
+  /// but at absolute world positions, guaranteeing seamless edges between
+  /// adjacent chunks regardless of render distance or generation order.
+  static List<List<double>> _generateChunkHeightmap(
+    int chunkX, int chunkZ,
+    int size, double tileSize, double maxHeight, int seed,
+  ) {
+    // Seed-derived world offset so different seeds look different
+    final so = seed * 8.37;
+
+    final heights = List.generate(size + 1, (_) => List<double>.filled(size + 1, 0.0));
+
+    for (int iz = 0; iz <= size; iz++) {
+      for (int ix = 0; ix <= size; ix++) {
+        // Absolute world-space coordinates — same values at shared edges
+        final wx = (chunkX * size + ix) * tileSize + so;
+        final wz = (chunkZ * size + iz) * tileSize + so;
+
+        // Same octave structure as the single-mesh generator, expressed in
+        // world-unit frequencies (derived by dividing the original per-mesh
+        // frequencies by the original mesh world size of 128 units).
+        double h = 0.5000 * _noise(wx * 0.01641, wz * 0.01641);
+        h       += 0.2500 * _noise(wx * 0.03359, wz * 0.03359);
+        h       += 0.1250 * _noise(wx * 0.06797, wz * 0.06797);
+        h       += 0.0625 * _noise(wx * 0.13359, wz * 0.13359);
+
+        h = (h + 0.9375) / 1.875;          // normalise to [0, 1]
+        h = h.clamp(0.0, 1.0) * maxHeight;
+        if (h < maxHeight * 0.15) h *= 0.4; // flatten valleys
+
+        heights[iz][ix] = h;
+      }
+    }
+    return heights;
+  }
+
   /// Smooth, continuous noise function using sine products.
   ///
   /// Not true Perlin noise but produces similar visual results without
@@ -107,12 +177,19 @@ class TerrainGenerator {
   ///
   /// Computes smooth normals by averaging cross-products of adjacent triangles
   /// so the terrain lights convincingly under directional illumination.
+  /// Build the terrain Mesh from a heightmap.
+  ///
+  /// [center] = true  → vertices span (−half, 0, −half) to (+half, ?, +half),
+  ///            suitable for a single mesh centred at world origin.
+  /// [center] = false → vertices span (0, 0, 0) to (size×tileSize, ?, size×tileSize),
+  ///            suitable for chunks positioned by a world-space Transform3d.
   static Mesh _buildMesh(
     int size,
     double tileSize,
     double maxHeight,
-    List<List<double>> heights,
-  ) {
+    List<List<double>> heights, {
+    bool center = true,
+  }) {
     final vertexCount  = (size + 1) * (size + 1);
     final indexCount   = size * size * 6;
 
@@ -127,9 +204,11 @@ class TerrainGenerator {
         final vi = (z * (size + 1) + x);
         final h  = heights[z][x];
 
-        vertices[vi * 3 + 0] = (x - size / 2.0) * tileSize;
+        final ox = center ? x - size / 2.0 : x.toDouble();
+        final oz = center ? z - size / 2.0 : z.toDouble();
+        vertices[vi * 3 + 0] = ox * tileSize;
         vertices[vi * 3 + 1] = h;
-        vertices[vi * 3 + 2] = (z - size / 2.0) * tileSize;
+        vertices[vi * 3 + 2] = oz * tileSize;
 
         // Height-based coloring
         final t = h / maxHeight; // 0 = valley, 1 = peak

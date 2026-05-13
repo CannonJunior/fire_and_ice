@@ -45,6 +45,11 @@ Controls:
 - Space/brake: air brake (slow + upward bump)
 - Camera roll follows bank angle for visual feedback
 
+## Aircraft Changes
+- All changes to aircraft configurations, cockpit layouts, and defaults MUST be recorded in `AIRCRAFT_CHANGES.md` (project root).
+- Default aircraft is **IceFighter** (`icefighter`). Update `settings_state.dart → selectedAircraft` if changing the default.
+- Aircraft catalogue order reflects selection-screen display order; IceFighter is always position #1.
+
 ## Architecture Notes
 - No Riverpod, no Flame - plain Flutter + dart:html WebGL
 - Terrain is visual only (no collision system)

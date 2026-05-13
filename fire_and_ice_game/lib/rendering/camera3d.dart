@@ -55,6 +55,9 @@ class Camera3D {
   /// Smooth lerp speed for camera position transitions
   final double _lerpSpeed = 8.0;
 
+  /// Pre-allocated scratch vectors — avoids allocating new Vector3 each frame.
+  final Vector3 _desiredPos = Vector3.zero();
+
   Camera3D({
     Vector3? position,
     this.fov = 90.0,
@@ -121,26 +124,25 @@ class Camera3D {
     final pitchHeightBonus = _thirdPersonDistance *
         math.sin(radians(_thirdPersonPitch)) * 0.5;
 
-    final desiredPos = Vector3(
+    // In-place: reuse _desiredPos to avoid allocating a new Vector3 each frame.
+    _desiredPos.setValues(
       targetPosition.x + offsetX,
       targetPosition.y + _thirdPersonHeight + pitchHeightBonus,
       targetPosition.z + offsetZ,
     );
 
-    // Smooth lerp toward desired position
+    // Smooth lerp in-place — no new Vector3 allocation.
     final t = math.min(1.0, _lerpSpeed * dt);
-    transform.position = Vector3(
-      transform.position.x + (desiredPos.x - transform.position.x) * t,
-      transform.position.y + (desiredPos.y - transform.position.y) * t,
-      transform.position.z + (desiredPos.z - transform.position.z) * t,
-    );
+    transform.position.x += (_desiredPos.x - transform.position.x) * t;
+    transform.position.y += (_desiredPos.y - transform.position.y) * t;
+    transform.position.z += (_desiredPos.z - transform.position.z) * t;
 
-    // Look at slightly above the aircraft's centre of mass
-    _target = Vector3(
-      targetPosition.x,
-      targetPosition.y + 0.5,
-      targetPosition.z,
-    );
+    // Update look-at target in-place.
+    if (_target == null) {
+      _target = Vector3(targetPosition.x, targetPosition.y + 0.5, targetPosition.z);
+    } else {
+      _target!.setValues(targetPosition.x, targetPosition.y + 0.5, targetPosition.z);
+    }
 
     // Mirror roll angle for banking visual feedback.
     // Reason: camera roll lags slightly behind aircraft bank for a cinematic feel.

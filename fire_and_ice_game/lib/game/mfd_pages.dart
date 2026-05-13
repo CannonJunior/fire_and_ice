@@ -33,70 +33,6 @@ Widget _hdr(String title, String mode, Color fg, Color dim) {
 // LEFT MFD pages 1–3
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ── ABLT – Ability Loadout ────────────────────────────────────────────────────
-
-Widget buildAbltPage(GameState state) {
-  return Column(children: [
-    _hdr('ABILITY LOADOUT', 'ABLT', _kLFg, _kLDim),
-    Expanded(child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: state.abilities.map((ab) {
-          final cd    = state.abilityCooldowns[ab.name] ?? 0.0;
-          final ready = cd <= 0.0;
-          final color = ready ? _kLFg : _kLDim;
-          final manaPct = (ab.manaCost / GameState.maxMana).clamp(0.0, 1.0);
-          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Text(ab.icon, style: const TextStyle(fontSize: 10)),
-              const SizedBox(width: 4),
-              Expanded(child: Text(ab.name.toUpperCase(),
-                  style: TextStyle(color: color, fontSize: 8))),
-              Text(ready ? 'RDY' : '${cd.toStringAsFixed(1)}s',
-                  style: TextStyle(
-                    color: ready ? _kLFg : _kAmber,
-                    fontSize: 7, fontWeight: FontWeight.bold,
-                  )),
-            ]),
-            const SizedBox(height: 2),
-            Row(children: [
-              Text('MNA:${ab.manaCost.toInt()}',
-                  style: TextStyle(color: _kLDim, fontSize: 7)),
-              const SizedBox(width: 8),
-              Text('CDN:${ab.cooldown.toStringAsFixed(1)}s',
-                  style: TextStyle(color: _kLDim, fontSize: 7)),
-              const Spacer(),
-              SizedBox(
-                width: 60, height: 4,
-                child: Stack(children: [
-                  Container(color: _kLDim.withValues(alpha: 0.25)),
-                  FractionallySizedBox(
-                    widthFactor: manaPct,
-                    alignment: Alignment.centerLeft,
-                    child: Container(color: color),
-                  ),
-                ]),
-              ),
-            ]),
-            Divider(color: _kLDim.withValues(alpha: 0.3), height: 6),
-          ]);
-        }).toList(),
-      ),
-    )),
-    Container(
-      height: 22,
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      color: _kLDim.withValues(alpha: 0.3),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text('LOADOUT:${state.abilities.length}/10',
-            style: TextStyle(color: _kLFg, fontSize: 8)),
-        Text('MANA CAP:${GameState.maxMana.toInt()}',
-            style: TextStyle(color: _kLDim, fontSize: 8)),
-      ]),
-    ),
-  ]);
-}
 
 // ── STAT – Systems Status ─────────────────────────────────────────────────────
 
@@ -224,9 +160,9 @@ Widget _modeRow(String label, String value) {
 // ── TERR – Terrain Proximity / Compass Rose ───────────────────────────────────
 
 Widget buildTerrPage(GameState state) {
-  final alt    = state.flightAltitude;
-  final gpws   = alt < 5.0 ? 'WARNING' : alt < 10.0 ? 'CAUTION' : 'CLEAR';
-  final gpwsCol = alt < 5.0 ? _kWarn : alt < 10.0 ? _kAmber : _kRFg;
+  final clearance = state.flightAltitude - state.terrainHeight;
+  final gpws    = clearance < 3.0 ? 'WARNING' : clearance < state.cfgGpwsAltitude ? 'CAUTION' : 'CLEAR';
+  final gpwsCol = clearance < 3.0 ? _kWarn    : clearance < state.cfgGpwsAltitude ? _kAmber  : _kRFg;
   return Column(children: [
     _hdr('TERRAIN PROX', 'TERR', _kRFg, _kRDim),
     Expanded(child: CustomPaint(
@@ -239,15 +175,16 @@ Widget buildTerrPage(GameState state) {
       color: _kRDim.withValues(alpha: 0.3),
       child: Column(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('ALT:${alt.toStringAsFixed(1)}m',
+          Text('ALT:${state.flightAltitude.toStringAsFixed(1)}m',
               style: const TextStyle(color: _kRFg, fontSize: 8)),
-          Text('TERRAIN:$gpws',
-              style: TextStyle(color: gpwsCol, fontSize: 8, fontWeight: FontWeight.bold)),
+          Text('CLR:${clearance.toStringAsFixed(1)}m',
+              style: TextStyle(color: gpwsCol, fontSize: 8)),
+          Text(gpws, style: TextStyle(color: gpwsCol, fontSize: 8, fontWeight: FontWeight.bold)),
         ]),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('GND PROX:$gpws',
-              style: TextStyle(color: gpwsCol, fontSize: 8)),
-          Text('GPWS:${gpws == "CLEAR" ? "OFF" : "ACTIVE"}',
+          Text('GND:${state.terrainHeight.toStringAsFixed(1)}m',
+              style: const TextStyle(color: _kRFg, fontSize: 8)),
+          Text('GPWS:${state.isGpwsActive ? "ACTIVE" : "OFF"}',
               style: TextStyle(color: gpwsCol, fontSize: 8)),
         ]),
       ]),
@@ -308,13 +245,19 @@ class _CompassPainter extends CustomPainter {
   bool shouldRepaint(_CompassPainter o) => o.heading != heading;
 }
 
-// ── TGT – Targeting Radar (animated sweep) ────────────────────────────────────
+// ── FIRE – Thermal Fire Detection ─────────────────────────────────────────────
 
-Widget buildTgtPage(GameState state) {
+// Deterministic fire hotspot positions (seeded, stable across frames)
+final List<Offset> _fireHotspots = List.generate(5, (i) {
+  final r = math.Random(i * 47 + 13);
+  return Offset(r.nextDouble() * 0.7 + 0.15, r.nextDouble() * 0.7 + 0.15);
+});
+
+Widget buildFirePage(GameState state) {
   return Column(children: [
-    _hdr('TARGETING RADAR', 'TGT', _kRFg, _kRDim),
+    _hdr('FIRE DETECTION', 'FIRE', _kRFg, _kRDim),
     Expanded(child: CustomPaint(
-      painter: _RadarPainter(),
+      painter: _FireDetectPainter(),
       child: Container(),
     )),
     Container(
@@ -323,140 +266,169 @@ Widget buildTgtPage(GameState state) {
       color: _kRDim.withValues(alpha: 0.3),
       child: Column(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Text('MODE:360°', style: TextStyle(color: _kRFg, fontSize: 8)),
-          const Text('RNG:50km',  style: TextStyle(color: _kRFg, fontSize: 8)),
-          const Text('TGT:NONE',  style: TextStyle(color: _kRDim, fontSize: 8)),
+          const Text('MODE:THERM', style: TextStyle(color: _kRFg, fontSize: 8)),
+          const Text('RNG:50km',   style: TextStyle(color: _kRFg, fontSize: 8)),
+          Text('FIRES:${_fireHotspots.length}',
+              style: const TextStyle(color: _kWarn, fontSize: 8, fontWeight: FontWeight.bold)),
         ]),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('SCAN:ACTIVE', style: TextStyle(color: _kRFg, fontSize: 8)),
-          const Text('LOCK:OFF',    style: TextStyle(color: _kRDim, fontSize: 8)),
-          const Text('BRG:---',     style: TextStyle(color: _kRDim, fontSize: 8)),
+          const Text('SUPRS:RDY',  style: TextStyle(color: _kRFg, fontSize: 8)),
+          const Text('INTNS:HIGH', style: TextStyle(color: _kWarn, fontSize: 8)),
         ]),
       ]),
     ),
   ]);
 }
 
-class _RadarPainter extends CustomPainter {
+class _FireDetectPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
     final cy = size.height / 2;
     final r  = math.min(cx, cy) - 8;
+    final ms = DateTime.now().millisecondsSinceEpoch;
 
-    // Background
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
         Paint()..color = const Color(0xFF000A14));
 
     // Range rings
-    final rp = Paint()..color = const Color(0xFF003355)..strokeWidth = 0.5..style = PaintingStyle.stroke;
+    final rp = Paint()..color = const Color(0xFF330011)..strokeWidth = 0.5..style = PaintingStyle.stroke;
     for (final frac in [0.33, 0.67, 1.0]) {
       canvas.drawCircle(Offset(cx, cy), r * frac, rp);
     }
-
     // Cross hairs
-    final cp = Paint()..color = const Color(0xFF004466)..strokeWidth = 0.5;
-    canvas.drawLine(Offset(0, cy), Offset(size.width, cy), cp);
-    canvas.drawLine(Offset(cx, 0), Offset(cx, size.height), cp);
+    canvas.drawLine(Offset(0, cy), Offset(size.width, cy),
+        Paint()..color = const Color(0xFF440022)..strokeWidth = 0.5);
+    canvas.drawLine(Offset(cx, 0), Offset(cx, size.height),
+        Paint()..color = const Color(0xFF440022)..strokeWidth = 0.5);
 
-    // Radar sweep (rotates based on wall clock)
-    final elapsed = DateTime.now().millisecondsSinceEpoch;
-    final sweepAngle = (elapsed % 3000) / 3000 * 2 * math.pi - math.pi / 2;
-
-    // Sweep fade trail
-    for (int i = 0; i < 30; i++) {
-      final trailAngle = sweepAngle - (i / 30) * (math.pi / 2);
-      final alpha = (1 - i / 30) * 0.35;
-      final tp = Paint()
-        ..color = _kRFg.withValues(alpha: alpha)
-        ..strokeWidth = 2..style = PaintingStyle.stroke;
+    // Thermal sweep — orange, faster than a targeting radar
+    final sweepAngle = (ms % 2000) / 2000 * 2 * math.pi - math.pi / 2;
+    for (int i = 0; i < 25; i++) {
+      final ta = sweepAngle - (i / 25) * (math.pi / 2);
       canvas.drawLine(
         Offset(cx, cy),
-        Offset(cx + math.cos(trailAngle) * r, cy + math.sin(trailAngle) * r),
-        tp,
+        Offset(cx + math.cos(ta) * r, cy + math.sin(ta) * r),
+        Paint()
+          ..color = const Color(0xFFFF6600).withValues(alpha: (1 - i / 25) * 0.35)
+          ..strokeWidth = 2..style = PaintingStyle.stroke,
       );
     }
+    canvas.drawLine(Offset(cx, cy),
+        Offset(cx + math.cos(sweepAngle) * r, cy + math.sin(sweepAngle) * r),
+        Paint()..color = const Color(0xFFFF8800)..strokeWidth = 1.5);
 
-    // Sweep line
-    canvas.drawLine(
-      Offset(cx, cy),
-      Offset(cx + math.cos(sweepAngle) * r, cy + math.sin(sweepAngle) * r),
-      Paint()..color = _kRFg..strokeWidth = 1.5,
-    );
+    // Fire hotspots — pulsing orange/red dots
+    final pulse = (math.sin(ms / 400.0) + 1) / 2;
+    for (final hot in _fireHotspots) {
+      final hx = hot.dx * size.width;
+      final hy = hot.dy * size.height;
+      if (math.sqrt(math.pow(hx - cx, 2) + math.pow(hy - cy, 2)) > r) continue;
+      final col = Color.lerp(
+          const Color(0xFFFF2200), const Color(0xFFFFAA00), pulse)!;
+      canvas.drawCircle(Offset(hx, hy), 3, Paint()..color = col..style = PaintingStyle.fill);
+      canvas.drawCircle(Offset(hx, hy), 6,
+          Paint()..color = const Color(0xFFFF4400).withValues(alpha: 0.3)
+            ..style = PaintingStyle.stroke..strokeWidth = 1);
+    }
 
-    // Aircraft dot at centre
+    // Aircraft dot
     canvas.drawCircle(Offset(cx, cy), 3,
         Paint()..color = const Color(0xFF00DDFF)..style = PaintingStyle.fill);
-
-    // "NO TARGETS" label
-    final tp = TextPainter(
-      text: const TextSpan(text: 'NO TARGETS',
-          style: TextStyle(color: Color(0xFF003355), fontSize: 11, letterSpacing: 2)),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(canvas, Offset(cx - tp.width / 2, cy * 1.5 - tp.height / 2));
   }
 
   @override
-  bool shouldRepaint(_RadarPainter _) => true; // animated
+  bool shouldRepaint(_FireDetectPainter _) => true;
 }
 
-// ── MARK – Waypoints ──────────────────────────────────────────────────────────
+// ── MARK – Flight Plan Waypoints ──────────────────────────────────────────────
 
-// Game-world waypoints (name, world-x, world-z)
-const _kWaypoints = [
-  ('ORIGIN',      0.0,    0.0),
-  ('VALLEY PEAK', 32.0,  32.0),
-  ('NORTH RIDGE', 10.0,  80.0),
-  ('FIRE SHRINE',-80.0,  20.0),
-  ('ICE CAVERN',  50.0, -90.0),
-];
+Widget buildMarkPage(GameState state, {Function(int)? onDeleteWaypoint}) {
+  final px   = state.playerPosition.x;
+  final pz   = state.playerPosition.z;
+  final plan = state.flightPlan;
 
-Widget buildMarkPage(GameState state) {
-  final px = state.playerPosition.x;
-  final pz = state.playerPosition.z;
+  // Footer: active target info
+  String footerWpt = '---', footerBrg = '---', footerDist = '---';
+  if (plan.isNotEmpty && state.flightPlanIndex < plan.length) {
+    final (name, wx, wz) = plan[state.flightPlanIndex];
+    final dx  = wx - px; final dz = wz - pz;
+    final rng = math.sqrt(dx * dx + dz * dz);
+    final brg = ((math.atan2(dx, dz) * 180 / math.pi) + 360) % 360;
+    footerWpt  = name;
+    footerBrg  = '${brg.toStringAsFixed(0)}°';
+    footerDist = rng.toStringAsFixed(0);
+  }
+
   return Column(children: [
-    _hdr('WAYPOINTS', 'MARK', _kRFg, _kRDim),
+    _hdr('FLIGHT PLAN', 'MARK', _kRFg, _kRDim),
+    // Column header
     Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       color: _kRDim.withValues(alpha: 0.15),
       child: Row(children: [
-        SizedBox(width: 18, child: Text('WP', style: TextStyle(color: _kRDim, fontSize: 7))),
-        Expanded(child: Text('NAME',         style: TextStyle(color: _kRDim, fontSize: 7))),
-        SizedBox(width: 36, child: Text('RNG',  style: TextStyle(color: _kRDim, fontSize: 7), textAlign: TextAlign.right)),
-        SizedBox(width: 36, child: Text('BRG',  style: TextStyle(color: _kRDim, fontSize: 7), textAlign: TextAlign.right)),
+        SizedBox(width: 18, child: Text('#', style: TextStyle(color: _kRDim, fontSize: 7))),
+        Expanded(child: Text('NAME', style: TextStyle(color: _kRDim, fontSize: 7))),
+        SizedBox(width: 28, child: Text('RNG', style: TextStyle(color: _kRDim, fontSize: 7), textAlign: TextAlign.right)),
+        SizedBox(width: 28, child: Text('BRG', style: TextStyle(color: _kRDim, fontSize: 7), textAlign: TextAlign.right)),
+        const SizedBox(width: 22),
       ]),
     ),
-    Expanded(child: Column(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: _kWaypoints.indexed.map((entry) {
-        final (i, wp) = entry;
-        final (name, wx, wz) = wp;
-        final dx  = wx - px; final dz = wz - pz;
-        final rng = math.sqrt(dx * dx + dz * dz);
-        final brg = ((math.atan2(dx, -dz) * 180 / math.pi) + 360) % 360;
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: Row(children: [
-            SizedBox(width: 18, child: Text('${i + 1 < 10 ? '0' : ''}${i + 1}',
-                style: TextStyle(color: _kRDim, fontSize: 8))),
-            Expanded(child: Text(name, style: TextStyle(color: _kRFg, fontSize: 8))),
-            SizedBox(width: 36, child: Text(rng.toStringAsFixed(0),
-                style: TextStyle(color: _kRFg, fontSize: 8), textAlign: TextAlign.right)),
-            SizedBox(width: 36, child: Text('${brg.toStringAsFixed(0)}°',
-                style: TextStyle(color: _kRDim, fontSize: 8), textAlign: TextAlign.right)),
-          ]),
-        );
-      }).toList(),
-    )),
+    // Waypoint list
+    Expanded(child: plan.isEmpty
+      ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('NO WAYPOINTS', style: TextStyle(color: _kRDim, fontSize: 9, letterSpacing: 1)),
+          const SizedBox(height: 4),
+          Text('TAP NAV MAP TO ADD', style: TextStyle(color: _kRDim.withValues(alpha: 0.5), fontSize: 7)),
+        ]))
+      : ListView(children: plan.indexed.map((entry) {
+          final (i, wp) = entry;
+          final (name, wx, wz) = wp;
+          final dx   = wx - px; final dz = wz - pz;
+          final rng  = math.sqrt(dx * dx + dz * dz);
+          final brg  = ((math.atan2(dx, dz) * 180 / math.pi) + 360) % 360;
+          final isTgt = i == state.flightPlanIndex && state.autopilotEnabled;
+          final col  = isTgt ? _kAmber : _kRFg;
+          final dim  = isTgt ? _kAmber : _kRDim;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            child: Row(children: [
+              SizedBox(width: 18, child: Text(
+                isTgt ? '▶' : '${(i + 1).toString().padLeft(2, '0')}',
+                style: TextStyle(color: dim, fontSize: 8),
+              )),
+              Expanded(child: Text(name, style: TextStyle(color: col, fontSize: 8))),
+              SizedBox(width: 28, child: Text(rng.toStringAsFixed(0),
+                  style: TextStyle(color: col, fontSize: 8), textAlign: TextAlign.right)),
+              SizedBox(width: 28, child: Text('${brg.toStringAsFixed(0)}°',
+                  style: TextStyle(color: dim, fontSize: 8), textAlign: TextAlign.right)),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: () => onDeleteWaypoint?.call(i),
+                child: Container(
+                  width: 18, height: 14,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A0808),
+                    border: Border.all(color: const Color(0xFF662222), width: 0.5),
+                  ),
+                  child: const Text('×', style: TextStyle(color: Color(0xFFCC4444), fontSize: 10)),
+                ),
+              ),
+            ]),
+          );
+        }).toList()),
+    ),
+    // Footer: active target
     Container(
       height: 22,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       color: _kRDim.withValues(alpha: 0.3),
-      child: const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text('ACTIVE:NONE', style: TextStyle(color: _kRDim, fontSize: 8)),
-        Text('BRG:---',     style: TextStyle(color: _kRDim, fontSize: 8)),
-        Text('DIST:---',    style: TextStyle(color: _kRDim, fontSize: 8)),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text('TGT:$footerWpt',  style: TextStyle(color: plan.isNotEmpty ? _kRFg : _kRDim, fontSize: 8)),
+        Text('BRG:$footerBrg',  style: TextStyle(color: plan.isNotEmpty ? _kAmber : _kRDim, fontSize: 8)),
+        Text('DIST:$footerDist',style: TextStyle(color: plan.isNotEmpty ? _kAmber : _kRDim, fontSize: 8)),
       ]),
     ),
   ]);

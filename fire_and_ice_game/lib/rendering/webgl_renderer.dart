@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:vector_math/vector_math.dart';
 import 'camera3d.dart';
 import 'mesh.dart';
+import 'scene_node.dart';
 import 'shader_program.dart';
 import 'transform3d.dart';
 
@@ -84,10 +85,14 @@ class WebGLRenderer {
   }
 
   /// Draw [mesh] at world-space [transform] as seen by [camera].
+  void render(Mesh mesh, Transform3d transform, Camera3D camera) =>
+      renderWithMatrix(mesh, transform.toMatrix(), camera);
+
+  /// Draw [mesh] using a raw world-space [modelMatrix].
   ///
-  /// Uploads geometry on first call for this mesh; subsequent calls use
-  /// the cached GPU buffers for O(1) draw setup.
-  void render(Mesh mesh, Transform3d transform, Camera3D camera) {
+  /// Used by [renderSceneGraph] to avoid wrapping every SceneNode in a
+  /// Transform3d.  Uploads geometry to GPU on first call (cached thereafter).
+  void renderWithMatrix(Mesh mesh, Matrix4 modelMatrix, Camera3D camera) {
     final bufs = _getOrCreateBuffers(mesh);
 
     shader.use();
@@ -95,7 +100,7 @@ class WebGLRenderer {
     // MVP matrices
     shader.setUniformMatrix4('uProjection', camera.getProjectionMatrix());
     shader.setUniformMatrix4('uView',       camera.getViewMatrix());
-    shader.setUniformMatrix4('uModel',      transform.toMatrix());
+    shader.setUniformMatrix4('uModel',      modelMatrix);
 
     // Lighting
     shader.setUniformVector3('uLightPos',     lightPosition);
@@ -140,6 +145,16 @@ class WebGLRenderer {
     if (posLoc  >= 0) gl.disableVertexAttribArray(posLoc);
     if (normLoc >= 0) gl.disableVertexAttribArray(normLoc);
     if (colLoc  >= 0) gl.disableVertexAttribArray(colLoc);
+  }
+
+  /// Walk a SceneNode scene graph and render every node that carries a mesh.
+  ///
+  /// Call after [SceneNode.updateWorldMatrix] has been called on the root.
+  /// One draw call per node with a mesh — typically ~8–12 for a full aircraft.
+  void renderSceneGraph(SceneNode root, Camera3D camera) {
+    for (final node in root.renderables) {
+      renderWithMatrix(node.mesh!, node.worldMatrix, camera);
+    }
   }
 
   // ── Buffer management ─────────────────────────────────────────────────────

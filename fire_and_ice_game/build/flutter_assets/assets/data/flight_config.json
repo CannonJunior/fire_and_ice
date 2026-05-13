@@ -15,6 +15,38 @@
     "autoLevelThreshold": 90.0,
     "bankToTurnMultiplier": 2.5,
     "barrelRollRate": 360.0,
-    "startAltitude": 15.0
-  }
+    "startAltitude": 0.5,
+    "stallSpeed": 2.5,
+    "stallPitchAngle": 35.0,
+    "gpwsAltitude": 10.0,
+    "crashDamageRate": 80.0,
+    "landingMaxSpeed": 9.0,
+    "landingMaxPitchDeg": 10.0
+  },
+  "taxi": {
+    "maxGroundSpeed": 10.0,
+    "groundAccel": 3.0,
+    "groundBrake": 8.0,
+    "liftoffSpeed": 8.0,
+    "groundTurnRate": 55.0,
+    "runwayStartZ": 78.0,
+    "throttleRate": 0.45,
+    "flightSpeedAccel": 2.5
+  },
+  "aircraft": [
+    {
+      "id": "firefighter",
+      "displayName": "Firefighter",
+      "icon": "🔥",
+      "description": "Heavy tanker — stable platform, high-capacity retardant drop",
+      "gearLeverPosition": "center"
+    },
+    {
+      "id": "icefighter",
+      "displayName": "Icefighter",
+      "icon": "❄️",
+      "description": "Cryo interceptor — side-mounted gear lever, dual ice systems",
+      "gearLeverPosition": "leftOfLeft"
+    }
+  ]
 }

@@ -1,13 +1,18 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'annunciator_panel.dart';
+import 'attitude_gyro.dart';
+import 'cockpit_drag.dart';
 import 'game_state.dart';
+import 'gear_lever.dart';
+import 'hud_gauges.dart';
+import 'hud_tutorial.dart';
 import 'hud_widgets.dart' as hud;
 import 'mfd_panels.dart';
+import 'suppression_panel.dart';
 
 // ── Colors ────────────────────────────────────────────────────────────────────
 
-const _kPanelBg  = Color(0xFF141418);
-const _kBevel    = Color(0xFF30303C);
 const _kOsbBg    = Color(0xFF1A1A22);
 const _kOsbBrd   = Color(0xFF3C3C4C);
 const _kOsbTxt   = Color(0xFF6A6A8A);
@@ -20,25 +25,47 @@ const _kHudDim   = Color(0xFF006644);
 // ── Public entry ──────────────────────────────────────────────────────────────
 
 /// Build the active HUD, switching between cockpit and third-person modes.
-///
-/// - **Cockpit** (`ViewMode.cockpit`): full instrument panel + windshield overlay.
-/// - **Third-person** (`ViewMode.thirdPerson`): minimal game HUD with action bar.
-///
-/// [onAbilityActivate] fires with the slot index when an ability OSB is tapped.
 Widget buildCockpitHud(
   GameState state, {
   void Function(int index)? onAbilityActivate,
   void Function(int page)?  onLeftPage,
   void Function(int page)?  onRightPage,
   VoidCallback?             onMapZoom,
+  VoidCallback?             onGearToggle,
+  VoidCallback?             onFlapsToggle,
+  VoidCallback?             onAutopilot,
+  VoidCallback?             onWaypointLock,
+  VoidCallback?             onClear,
+  bool showAnnunciator  = true,
+  bool showTelemetry    = true,
+  bool showActionBar    = true,
+  bool showTutorial     = false,
+  bool cockpitDraggable = false,
+  bool showCockpitInfo  = false,
+  VoidCallback?             onSuppArm,
+  VoidCallback?             onSuppAuto,
+  VoidCallback?             onRetardantKnob,
+  VoidCallback?             onRangeKnob,
+  VoidCallback?             onSensorKnob,
+  void Function(double, double)? onNavMapTap,
+  void Function(int)?            onDeleteWaypoint,
 }) {
   if (state.viewMode == ViewMode.thirdPerson) {
     return Stack(children: [
-      hud.buildHud(state),
-      Positioned(top: 12, right: 12, child: _viewBadge('🎮 3RD PERSON')),
+      hud.buildHud(state,
+          showTelemetry: showTelemetry,
+          showActionBar: showActionBar,
+          showTutorial:  showTutorial),
+      Positioned(top: 12, right: 115, child: Row(mainAxisSize: MainAxisSize.min, children: [
+        _modeBadge(state.gameMode),
+        const SizedBox(width: 6),
+        _viewBadge('🎮 3RD PERSON'),
+      ])),
     ]);
   }
 
+  // Cockpit view — persistent corner gauges overlay the windshield so they
+  // remain visible even though the cockpit panel occupies centre-bottom.
   return Stack(children: [
     IgnorePointer(child: _windshieldHud(state)),
     Align(
@@ -47,10 +74,58 @@ Widget buildCockpitHud(
           onAbilityActivate: onAbilityActivate,
           onLeftPage: onLeftPage,
           onRightPage: onRightPage,
-          onMapZoom: onMapZoom),
+          onMapZoom: onMapZoom,
+          onGearToggle: onGearToggle,
+          onFlapsToggle: onFlapsToggle,
+          onAutopilot: onAutopilot,
+          onWaypointLock: onWaypointLock,
+          onClear: onClear,
+          showAnnunciator:  showAnnunciator,
+          cockpitDraggable: cockpitDraggable,
+          showCockpitInfo:  showCockpitInfo,
+          onSuppArm: onSuppArm,
+          onSuppAuto: onSuppAuto,
+          onRetardantKnob: onRetardantKnob,
+          onRangeKnob: onRangeKnob,
+          onSensorKnob: onSensorKnob,
+          onNavMapTap: onNavMapTap,
+          onDeleteWaypoint: onDeleteWaypoint),
     ),
-    Positioned(top: 12, right: 12, child: _viewBadge('👁 COCKPIT')),
+    // Persistent gauges — spec §7: these survive the cockpit ↔ third-person
+    // transition. Corner positions clear the centred cockpit panel.
+    IgnorePointer(child: Stack(children: [
+      WarningTextZone(state: state),
+      Positioned(bottom: 12, left: 12,
+          child: FireProximitySensor(state: state)),
+      Positioned(bottom: 12, right: 12,
+          child: HullIntegrityArc(state: state)),
+      if (showTutorial) buildTutorialOverlay(state),
+    ])),
+    Positioned(top: 12, right: 115, child: Row(mainAxisSize: MainAxisSize.min, children: [
+      _modeBadge(state.gameMode),
+      const SizedBox(width: 6),
+      _viewBadge('👁 COCKPIT'),
+    ])),
   ]);
+}
+
+/// Mode badge — shows TAXI / FLIGHT / LANDING in a colour-coded chip.
+Widget _modeBadge(GameMode mode) {
+  final (String label, Color color) = switch (mode) {
+    GameMode.taxi    => ('TAXI',    const Color(0xFF00CC44)),
+    GameMode.flight  => ('FLIGHT',  const Color(0xFF4499FF)),
+    GameMode.landing => ('LANDING', const Color(0xFFFFAA00)),
+  };
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.15),
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(color: color.withValues(alpha: 0.6)),
+    ),
+    child: Text(label,
+        style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
+  );
 }
 
 /// Small top-right badge showing the active view mode (Tab to toggle).
@@ -86,6 +161,30 @@ Widget _windshieldHud(GameState state) {
       alignment: const Alignment(0, -0.80),
       child: _headingStrip(state),
     ),
+    // Autopilot engaged banner
+    if (state.autopilotEnabled)
+      Align(
+        alignment: const Alignment(0, -0.68),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          color: const Color(0xFF003300),
+          child: Text(
+            state.flightPlan.isEmpty
+              ? '◆  A/P  ENGAGED  —  NO WAYPOINTS'
+              : () {
+                  final idx = state.flightPlanIndex.clamp(0, state.flightPlan.length - 1);
+                  return '◆  A/P  ENGAGED  —  ${state.flightPlan[idx].$1}';
+                }(),
+            style: const TextStyle(
+              color: Color(0xFF00FF88), fontSize: 9,
+              fontWeight: FontWeight.bold, letterSpacing: 2,
+            ),
+          ),
+        ),
+      ),
+    // Waypoint bearing readout (bottom-left of glass)
+    if (state.lockedWaypoint >= 0)
+      Positioned(left: 24, bottom: 310, child: _waypointHudReadout(state)),
     // Centre reticle
     Align(
       alignment: const Alignment(0, -0.10),
@@ -102,6 +201,26 @@ Widget _windshieldHud(GameState state) {
             )),
       ),
   ]);
+}
+
+Widget _waypointHudReadout(GameState state) {
+  final (name, wx, wz) = GameState.kWaypoints[state.lockedWaypoint];
+  final dx  = wx - state.playerPosition.x;
+  final dz  = wz - state.playerPosition.z;
+  final dist = math.sqrt(dx * dx + dz * dz);
+  final brg  = ((math.atan2(dx, dz) * 180 / math.pi) + 360) % 360;
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: Colors.black.withValues(alpha: 0.35),
+      border: Border.all(color: const Color(0xFF00FF88).withValues(alpha: 0.4), width: 1),
+    ),
+    child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('◆ $name', style: const TextStyle(color: Color(0xFF00FF88), fontSize: 8, letterSpacing: 1)),
+      Text('BRG ${brg.toStringAsFixed(0)}°  DIST ${dist.toStringAsFixed(0)}',
+          style: const TextStyle(color: Color(0xFF00CC66), fontSize: 8)),
+    ]),
+  );
 }
 
 Widget _hudReadout(String label, String value, String unit) {
@@ -170,59 +289,100 @@ Widget _cockpitPanel(GameState state, {
   void Function(int)? onLeftPage,
   void Function(int)? onRightPage,
   VoidCallback?       onMapZoom,
+  VoidCallback?       onGearToggle,
+  VoidCallback?       onFlapsToggle,
+  VoidCallback?       onAutopilot,
+  VoidCallback?       onWaypointLock,
+  VoidCallback?       onClear,
+  bool showAnnunciator  = true,
+  bool cockpitDraggable = false,
+  bool showCockpitInfo  = false,
+  VoidCallback?       onSuppArm,
+  VoidCallback?       onSuppAuto,
+  VoidCallback?       onRetardantKnob,
+  VoidCallback?       onRangeKnob,
+  VoidCallback?       onSensorKnob,
+  void Function(double, double)? onNavMapTap,
+  void Function(int)?            onDeleteWaypoint,
 }) {
   final lp = state.leftMfdPage;
   final rp = state.rightMfdPage;
-  return Container(
-    decoration: BoxDecoration(
-      color: _kPanelBg,
-      border: Border(top: BorderSide(color: _kBevel, width: 2)),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+  final gearLeft = state.gearLeverOnLeft;
+  // No solid panel background — each instrument carries its own colour.
+  // Transparent gaps let the WebGL scene show through between components.
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(0, 4, 0, 6),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        // SeaBird: gear lever sits flush left of the left console
+        if (gearLeft) ...[
+          CockpitDragGroup(label: 'Gear (Ext)', draggable: cockpitDraggable, showInfo: showCockpitInfo,
+            child: buildGearLever(state, onTap: onGearToggle)),
+          const SizedBox(width: 8),
+        ],
         // Left MFD column
-        Column(mainAxisSize: MainAxisSize.min, children: [
-          Center(child: _osbRow([
-            _Osb('ELMT', active: lp == 0, onTap: () => onLeftPage?.call(0)),
-            _Osb('ABLT', active: lp == 1, onTap: () => onLeftPage?.call(1)),
-            _Osb('STAT', active: lp == 2, onTap: () => onLeftPage?.call(2)),
-            _Osb('MODE', active: lp == 3, onTap: () => onLeftPage?.call(3)),
+        CockpitDragGroup(label: 'Left MFD', draggable: cockpitDraggable, showInfo: showCockpitInfo,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Center(child: _osbRow([
+              _Osb('ELMT', active: lp == 0, onTap: () => onLeftPage?.call(0)),
+              _Osb('LOAD', active: lp == 1, onTap: () => onLeftPage?.call(1)),
+              _Osb('STAT', active: lp == 2, onTap: () => onLeftPage?.call(2)),
+              _Osb('MODE', active: lp == 3, onTap: () => onLeftPage?.call(3)),
+            ])),
+            const SizedBox(height: 4),
+            buildLeftMFD(state, page: lp),
+            const SizedBox(height: 4),
+            Center(child: _abilityOsbRow(state, onAbilityActivate)),
           ])),
-          const SizedBox(height: 4),
-          buildLeftMFD(state, page: lp),
-          const SizedBox(height: 4),
-          Center(child: _abilityOsbRow(state, onAbilityActivate)),
-        ]),
         const SizedBox(width: 20),
-        // Center column
-        Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 32),
-          buildCenterMFD(state),
-          const SizedBox(height: 4),
-          _centerButtonCluster(),
-        ]),
+        // Centre console
+        CockpitDragGroup(label: 'Centre Console', draggable: cockpitDraggable, showInfo: showCockpitInfo,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (showAnnunciator) buildAnnunciatorPanel(state),
+            if (showAnnunciator) const SizedBox(height: 4),
+            buildCenterMFD(state),
+            const SizedBox(height: 4),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              buildSuppressionPanel(state,
+                  onSuppArm: onSuppArm, onSuppAuto: onSuppAuto,
+                  onRetardantKnob: onRetardantKnob,
+                  onRangeKnob: onRangeKnob, onSensorKnob: onSensorKnob),
+              const SizedBox(width: 8),
+              buildFlapsLever(state, onTap: onFlapsToggle),
+              if (!gearLeft) ...[
+                const SizedBox(width: 4),
+                buildGearLever(state, onTap: onGearToggle),
+              ],
+              const SizedBox(width: 4),
+              buildThrottleGauge(state),
+            ]),
+            const SizedBox(height: 4),
+            buildAttitudeGyro(state),
+          ])),
         const SizedBox(width: 20),
         // Right MFD column
-        Column(mainAxisSize: MainAxisSize.min, children: [
-          Center(child: _osbRow([
-            _Osb('NAV',  active: rp == 0, onTap: () => onRightPage?.call(0)),
-            _Osb('TERR', active: rp == 1, onTap: () => onRightPage?.call(1)),
-            _Osb('TGT',  active: rp == 2, onTap: () => onRightPage?.call(2)),
-            _Osb('MARK', active: rp == 3, onTap: () => onRightPage?.call(3)),
+        CockpitDragGroup(label: 'Right MFD', draggable: cockpitDraggable, showInfo: showCockpitInfo,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Center(child: _osbRow([
+              _Osb('NAV',  active: rp == 0, onTap: () => onRightPage?.call(0)),
+              _Osb('TERR', active: rp == 1, onTap: () => onRightPage?.call(1)),
+              _Osb('FIRE', active: rp == 2, onTap: () => onRightPage?.call(2)),
+              _Osb('MARK', active: rp == 3, onTap: () => onRightPage?.call(3)),
+            ])),
+            const SizedBox(height: 4),
+            buildRightMFD(state, page: rp,
+                onMapTap: onNavMapTap, onDeleteWaypoint: onDeleteWaypoint),
+            const SizedBox(height: 4),
+            Center(child: _osbRow([
+              _Osb('ZOOM', onTap: onMapZoom),
+              _Osb('AUTO', active: state.autopilotEnabled,    onTap: onAutopilot),
+              _Osb('LOCK', active: state.lockedWaypoint >= 0, onTap: onWaypointLock),
+              _Osb('CLR',  onTap: onClear),
+            ])),
           ])),
-          const SizedBox(height: 4),
-          buildRightMFD(state, page: rp),
-          const SizedBox(height: 4),
-          Center(child: _osbRow([
-            _Osb('ZOOM', onTap: onMapZoom),
-            _Osb('AUTO'),
-            _Osb('LOCK'),
-            _Osb('CLR'),
-          ])),
-        ]),
       ]),
-    ),
   );
 }
 
@@ -296,30 +456,3 @@ String _abilityOsbLabel(String name) {
   return word.substring(0, math.min(4, word.length)).toUpperCase();
 }
 
-/// 2×4 grid of small system buttons in the centre console.
-Widget _centerButtonCluster() {
-  const row1 = ['SYS', 'PWR', 'FLGT', 'WPNS'];
-  const row2 = ['CONF', 'AUTO', 'RDY ', 'RST '];
-  return Column(mainAxisSize: MainAxisSize.min, children: [
-    Row(mainAxisSize: MainAxisSize.min, children: row1.map(_smallBtn).toList()),
-    const SizedBox(height: 3),
-    Row(mainAxisSize: MainAxisSize.min, children: row2.map(_smallBtn).toList()),
-  ]);
-}
-
-Widget _smallBtn(String label) {
-  return Container(
-    width: 28, height: 22,
-    margin: const EdgeInsets.symmetric(horizontal: 1.5),
-    decoration: BoxDecoration(
-      color: const Color(0xFF181820),
-      border: Border.all(color: const Color(0xFF383848), width: 1),
-    ),
-    child: Center(child: Text(
-      label.trim(),
-      style: const TextStyle(
-        color: Color(0xFF505070), fontSize: 5.5, fontWeight: FontWeight.bold,
-      ),
-    )),
-  );
-}

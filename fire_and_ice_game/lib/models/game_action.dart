@@ -69,4 +69,13 @@ enum GameAction {
 
   /// Tab - toggle between third-person and cockpit views
   toggleView,
+
+  /// ] - increase throttle
+  throttleUp,
+
+  /// [ - decrease throttle
+  throttleDown,
+
+  /// G - toggle landing gear up/down
+  toggleGear,
 }

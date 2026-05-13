@@ -96,6 +96,16 @@ class AbilitySystem {
       return;
     }
 
+    // For expendable stores: require at least one charge remaining
+    if (ability.isExpendable) {
+      final remaining = state.abilityCharges[ability.name] ?? 0;
+      if (remaining <= 0) {
+        debugPrint('[AbilitySystem] ${ability.name} — no charges remaining');
+        return;
+      }
+      state.abilityCharges[ability.name] = remaining - 1;
+    }
+
     // Commit the cast
     state.spendMana(ability.manaCost);
     state.startCooldown(ability);
@@ -120,21 +130,22 @@ class AbilitySystem {
 
   /// Lifetime (seconds) per ability type.
   static double _effectLifetime(AbilityData ability) {
+    if (ability.isExpendable) return 1.0; // expendable stores have longer visual
     switch (ability.name) {
-      case 'Fire Blast':  return 0.4;
-      case 'Ice Nova':    return 1.2;
-      case 'Heat Wave':   return 0.8;
-      case 'Frost Bolt':  return 0.6;
+      case 'Fire Bolt':   return 0.4;
+      case 'Ice Shard':   return 0.5;
+      case 'Wind Gust':   return 0.7;
+      case 'Flame Ward':  return 1.2;
       default:            return 0.5;
     }
   }
 
-  /// Initial visual scale per ability type.
   static double _effectStartScale(AbilityData ability) {
+    if (ability.isExpendable) return 2.0; // expendable stores make bigger blast
     switch (ability.name) {
-      case 'Ice Nova':  return 2.5; // Larger AoE burst
-      case 'Heat Wave': return 1.8;
-      default:          return 1.0;
+      case 'Flame Ward':  return 2.5;
+      case 'Wind Gust':   return 1.8;
+      default:            return 1.0;
     }
   }
 
