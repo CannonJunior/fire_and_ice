@@ -36,6 +36,9 @@ class GameState {
   int leftMfdPage  = 0;
   int rightMfdPage = 0;
   int mapZoom      = 0;
+  int auxDisplayPage = 0; // 0=CHAT 1=VID 2=MAP 3=MIRROR
+  int auxMirrorIndex = 0; // 0..7 → ELMT/LOAD/STAT/MODE/NAV/TERR/FIRE/MARK
+  void scrollAuxMirror(int d) => auxMirrorIndex = (auxMirrorIndex + d + 8) % 8;
 
   // ── Aircraft + Upgrade economy ────────────────────────────────────────────
 
@@ -145,10 +148,21 @@ class GameState {
   void stepDropRange()  { dropRange      = (dropRange      + 1) % 4; }
   void stepSensorGain() { sensorGain     = (sensorGain     + 1) % 4; }
 
-  // ── Throttle ──────────────────────────────────────────────────────────────
+  // ── Throttle & engine instruments ────────────────────────────────────────
 
   /// Engine throttle 0.0 (idle) → 1.0 (full).
   double throttle = 0.0;
+
+  /// Animated N1 fan RPM (0–1).  Lags throttle by ~2.5 s.
+  double engineN1  = 0.0;
+  /// Animated N2 core RPM (0–1).  Lags throttle by ~2.0 s.
+  double engineN2  = 0.0;
+  /// Animated EGT exhaust temperature (0–1).  Lags throttle by ~4.0 s.
+  double engineEgt = 0.0;
+
+  /// Throttle gauge display mode: 0=bar  1=bar+engine  2=big-number.
+  int throttleDisplayMode = 0;
+  void stepThrottleMode() { throttleDisplayMode = (throttleDisplayMode + 1) % 3; }
 
   // ── Landing gear ─────────────────────────────────────────────────────────
 
@@ -198,6 +212,67 @@ class GameState {
   bool   isGpwsActive   = false;
   /// True when the aircraft is in an aerodynamic stall.
   bool   isStalling     = false;
+
+  // ── Fire zones ────────────────────────────────────────────────────────────
+
+  /// World-space (X, Z) centres of active fire zones.
+  ///
+  /// Positions are placed across the terrain away from the runway (Z ≈ 78)
+  /// so the player has to fly to find them.  Shared by the MFD fire page,
+  /// the proximity sensor, and the altimeter fire indicator.
+  static const List<(double, double)> firePositions = [
+    (-45.0,  28.0),
+    ( 22.0, -60.0),
+    ( 55.0,  42.0),
+    (-72.0, -18.0),
+    (  8.0,  95.0),
+  ];
+
+  /// Horizontal radius of each fire zone in world units.
+  static const double fireRadius = 20.0;
+
+  /// True when the aircraft's X/Z position is inside any fire zone.
+  bool get isFireBelow {
+    final px = playerPosition.x, pz = playerPosition.z;
+    for (final (fx, fz) in firePositions) {
+      final dx = px - fx, dz = pz - fz;
+      if (dx * dx + dz * dz < fireRadius * fireRadius) return true;
+    }
+    return false;
+  }
+
+  // ── Dual-engine fire suppression ─────────────────────────────────────────
+
+  /// Left engine fire: triggered below 40 HP unless halon has been deployed.
+  bool get engineFireL => health < 40 && !halonFiredL;
+  /// Right engine fire: triggered below 20 HP unless halon has been deployed.
+  bool get engineFireR => health < 20 && !halonFiredR;
+
+  /// Glass guard lifted for left / right fire-suppression button.
+  bool halonShieldL = false;
+  bool halonShieldR = false;
+
+  /// Halon deployed in left / right engine (suppresses fire).
+  bool halonFiredL = false;
+  bool halonFiredR = false;
+
+  /// Tap the engine-fire button.
+  /// First tap lifts the guard; second tap (guard open) fires halon.
+  void tapEngineFire(bool left) {
+    if (left) {
+      if (!halonShieldL) { halonShieldL = true; }
+      else               { halonFiredL = true; halonShieldL = false; }
+    } else {
+      if (!halonShieldR) { halonShieldR = true; }
+      else               { halonFiredR = true; halonShieldR = false; }
+    }
+  }
+
+  /// Lower the guard without firing halon.
+  void lowerShield(bool left) {
+    if (left) halonShieldL = false;
+    else      halonShieldR = false;
+  }
 
   // ── Flight config (loaded from JSON) ─────────────────────────────────────
 

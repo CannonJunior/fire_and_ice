@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import '../rendering/camera3d.dart';
@@ -57,6 +58,22 @@ class SettingsState {
   bool cockpitDraggable = false;
   bool showCockpitInfo  = false;
 
+  // ── Per-aircraft cockpit element positions ──────────────────────────────────
+  // Layout: aircraftId → elementId → [dx, dy]
+  Map<String, Map<String, List<double>>> cockpitLayouts = {};
+
+  /// Offset for one element, or (0, 0) if unset.
+  (double, double) cockpitOffset(String aircraftId, String elementId) {
+    final pos = cockpitLayouts[aircraftId]?[elementId];
+    return (pos != null && pos.length >= 2) ? (pos[0], pos[1]) : (0.0, 0.0);
+  }
+
+  void setCockpitOffset(String aircraftId, String elementId, double dx, double dy) =>
+      cockpitLayouts.putIfAbsent(aircraftId, () => {})[elementId] = [dx, dy];
+
+  /// Clear all element positions for [aircraftId] (Restore Defaults).
+  void resetCockpitLayout(String aircraftId) => cockpitLayouts.remove(aircraftId);
+
   // ── Persistence ────────────────────────────────────────────────────────────
   static const _p = 'fai_';
 
@@ -79,6 +96,17 @@ class SettingsState {
       cockpitDraggable  = sp.getBool('${_p}cockpitDraggable')  ?? cockpitDraggable;
       showCockpitInfo   = sp.getBool('${_p}showCockpitInfo')   ?? showCockpitInfo;
       selectedAircraft  = sp.getString('${_p}aircraft')        ?? selectedAircraft;
+      final layoutJson  = sp.getString('${_p}cockpitLayouts');
+      if (layoutJson != null) {
+        final raw = jsonDecode(layoutJson) as Map<String, dynamic>;
+        cockpitLayouts = {
+          for (final e in raw.entries)
+            e.key: {
+              for (final p in (e.value as Map<String, dynamic>).entries)
+                p.key: (p.value as List).map((v) => (v as num).toDouble()).toList()
+            }
+        };
+      }
       debugPrint('[Settings] Loaded from SharedPreferences');
     } catch (e) {
       debugPrint('[Settings] Load failed ($e) — using defaults');
@@ -104,6 +132,7 @@ class SettingsState {
       await sp.setBool('${_p}cockpitDraggable', cockpitDraggable);
       await sp.setBool('${_p}showCockpitInfo',  showCockpitInfo);
       await sp.setString('${_p}aircraft',       selectedAircraft);
+      await sp.setString('${_p}cockpitLayouts', jsonEncode(cockpitLayouts));
     } catch (e) {
       debugPrint('[Settings] Save failed: $e');
     }

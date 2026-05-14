@@ -58,6 +58,18 @@ class _FpsLabel extends StatelessWidget {
   );
 }
 
+// Pre-computed ember contact data (seed 42, 6 slots).
+// Avoids allocating math.Random and calling nextDouble() inside paint().
+final _kEmberAngles = List.unmodifiable(() {
+  final rng = math.Random(42);
+  return [for (int i = 0; i < 6; i++) rng.nextDouble() * math.pi * 2];
+}());
+final _kEmberDists = List.unmodifiable(() {
+  final rng = math.Random(42);
+  for (int i = 0; i < 6; i++) rng.nextDouble(); // consume angle slots
+  return [for (int i = 0; i < 6; i++) 0.35 + rng.nextDouble() * 0.55];
+}());
+
 class _FpsPainter extends CustomPainter {
   final double threat; // 0–1
   const _FpsPainter({required this.threat});
@@ -86,13 +98,12 @@ class _FpsPainter extends CustomPainter {
       Paint()..color = kDanger.withValues(alpha: dangerAlpha)
             ..style = PaintingStyle.stroke..strokeWidth = 1.0);
 
-    // Ambient fire signatures — simulated until enemies exist
+    // Ambient fire signatures — use pre-computed positions; no allocation.
     if (threat > 0.15) {
-      final rng = math.Random(42);
       final count = (threat * 5).ceil().clamp(1, 6);
       for (int i = 0; i < count; i++) {
-        final angle = rng.nextDouble() * math.pi * 2;
-        final dist  = 0.35 + rng.nextDouble() * (1.0 - threat) * 0.55;
+        final angle = _kEmberAngles[i];
+        final dist  = _kEmberDists[i] * (1.0 - threat);
         final ex    = cx + math.cos(angle) * r * dist;
         final ey    = cy + math.sin(angle) * r * dist;
         final sz    = 2.5 + (1.0 - dist) * 4.0;

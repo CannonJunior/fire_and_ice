@@ -303,22 +303,28 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
           debugPrint('[Game] Liftoff → FLIGHT');
         }
       case GameMode.landing:
-        // Touchdown: aircraft descends to runway surface
-        if (_state.playerPosition.y <= 0.55) {
-          _state.playerPosition.y = 0.5;
-          _state.gameMode          = GameMode.taxi;
-          _state.groundSpeed       = _state.flightSpeed;
-          _state.throttle          = 0.0;
-          _state.flightPitchAngle  = 0.0;
-          _state.flightBankAngle   = 0.0;
-          _state.gearTargetDown    = true;
-          _state.gearDeployed      = true;
-          _state.gearProgress      = 1.0;
-          _state.gearMoving        = false;
-          debugPrint('[Game] Touchdown → TAXI');
+        // Touchdown on runway or terrain surface (terrainHeight updated every frame).
+        final touchFloor = math.max(_state.terrainHeight, 0.5);
+        if (_state.playerPosition.y <= touchFloor + 0.1) {
+          _state.playerPosition.y = touchFloor;
+          _state.gameMode         = GameMode.taxi;
+          _state.groundSpeed      = _state.flightSpeed;
+          _state.throttle = _state.flightPitchAngle = _state.flightBankAngle = 0.0;
+          _state.gearTargetDown = _state.gearDeployed = true;
+          _state.gearProgress   = 1.0;
+          _state.gearMoving     = false;
         }
       case GameMode.flight:
-        break;
+        // Crash-stop: terrain impact bled speed to near-zero; hand off to ground.
+        final cf = math.max(_state.terrainHeight, 0.5);
+        if (_state.playerPosition.y <= cf + 0.1 && _state.flightSpeed < 1.0) {
+          _state.playerPosition.y = cf;
+          _state.gameMode         = GameMode.taxi;
+          _state.groundSpeed      = _state.flightSpeed;
+          _state.throttle         = 0.0;
+          _state.flightPitchAngle = 0.0;
+          _state.flightBankAngle  = 0.0;
+        }
     }
   }
 
@@ -429,11 +435,11 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
           cockpit.buildCockpitHud(
             _state,
             showAnnunciator: _settings.showAnnunciator,
-            showTelemetry:    _settings.showTelemetry,
-            showActionBar:    _settings.showActionBar,
-            showTutorial:     _settings.showTutorial,
-            cockpitDraggable: _settings.cockpitDraggable,
-            showCockpitInfo:  _settings.showCockpitInfo,
+            showTelemetry:   _settings.showTelemetry,
+            showActionBar:   _settings.showActionBar,
+            showTutorial:    _settings.showTutorial,
+            settings:        _settings,
+            onLayoutChanged: () { _settings.save(); setState(() {}); },
             onAbilityActivate: (i) => AbilitySystem.activateAbility(_state, i),
             onLeftPage:   (p) => setState(() => _state.leftMfdPage  = p),
             onRightPage:  (p) => setState(() => _state.rightMfdPage = p),
@@ -449,7 +455,9 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             onRangeKnob:    ()  => setState(() => _state.stepDropRange()),
             onSensorKnob:   ()  => setState(() => _state.stepSensorGain()),
             onNavMapTap:    (wx, wz) => setState(() => _state.addWaypoint(wx, wz)),
-            onDeleteWaypoint: (i) => setState(() => _state.removeWaypoint(i)),
+            onDeleteWaypoint:    (i) => setState(() => _state.removeWaypoint(i)),
+            onAnnunciatorChange: () => setState(() {}),
+            onThrottleModeToggle: () => setState(_state.stepThrottleMode), onThrottleChange: (v) => setState(() => _state.throttle = v.clamp(0.0, 1.0)), onAuxPage: (p) => setState(() => _state.auxDisplayPage = p), onAuxMirrorScroll: (d) => setState(() => _state.scrollAuxMirror(d)),
           ),
 
           // ── Top-right menu buttons ─────────────────────────────────────────

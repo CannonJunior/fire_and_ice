@@ -211,6 +211,17 @@ class _SettingsPanelState extends State<SettingsPanel> {
         hint: 'Drag grip appears on each cockpit group to reposition it'),
     _ToggleRow('Element Info',      s.showCockpitInfo,  (v) { s.showCockpitInfo  = v; _changed(); },
         hint: 'Show name, position offset, and FIXED / DRAG state per group'),
+    _RestoreLayoutRow(
+      aircraftName: s.aircraftConfigs
+          .firstWhere((a) => a.id == s.selectedAircraft,
+              orElse: () => s.aircraftConfigs.first)
+          .displayName,
+      onRestore: () {
+        s.resetCockpitLayout(s.selectedAircraft);
+        s.save();
+        _changed();
+      },
+    ),
   ]);
 
   // ── Controls section ────────────────────────────────────────────────────────
@@ -423,6 +434,39 @@ class _ToggleRow extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Info row (read-only label + value) ───────────────────────────────────────
+
+// ── Restore cockpit layout row ────────────────────────────────────────────────
+
+class _RestoreLayoutRow extends StatelessWidget {
+  final String      aircraftName;
+  final VoidCallback onRestore;
+  const _RestoreLayoutRow({required this.aircraftName, required this.onRestore});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+    child: Row(children: [
+      Text('$aircraftName layout', style: const TextStyle(color: _kText, fontSize: 11)),
+      const Spacer(),
+      GestureDetector(
+        onTap: onRestore,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color:  const Color(0xFF1A0808),
+            border: Border.all(color: const Color(0xFF664444)),
+            borderRadius: BorderRadius.circular(3),
+          ),
+          child: const Text('Restore Defaults',
+              style: TextStyle(color: Color(0xFFCC5555), fontSize: 9,
+                  fontWeight: FontWeight.bold)),
+        ),
+      ),
+    ]),
+  );
 }
 
 // ── Info row (read-only label + value) ───────────────────────────────────────

@@ -4,12 +4,16 @@ import 'annunciator_panel.dart';
 import 'attitude_gyro.dart';
 import 'cockpit_drag.dart';
 import 'game_state.dart';
+import 'settings_state.dart';
 import 'gear_lever.dart';
 import 'hud_gauges.dart';
 import 'hud_tutorial.dart';
 import 'hud_widgets.dart' as hud;
 import 'mfd_panels.dart';
 import 'suppression_panel.dart';
+import 'throttle_quadrant.dart';
+import 'alt_indicator.dart';
+import 'aux_display.dart';
 
 // ── Colors ────────────────────────────────────────────────────────────────────
 
@@ -36,12 +40,12 @@ Widget buildCockpitHud(
   VoidCallback?             onAutopilot,
   VoidCallback?             onWaypointLock,
   VoidCallback?             onClear,
-  bool showAnnunciator  = true,
-  bool showTelemetry    = true,
-  bool showActionBar    = true,
-  bool showTutorial     = false,
-  bool cockpitDraggable = false,
-  bool showCockpitInfo  = false,
+  bool showAnnunciator = true,
+  bool showTelemetry   = true,
+  bool showActionBar   = true,
+  bool showTutorial    = false,
+  SettingsState? settings,
+  VoidCallback?  onLayoutChanged,
   VoidCallback?             onSuppArm,
   VoidCallback?             onSuppAuto,
   VoidCallback?             onRetardantKnob,
@@ -49,6 +53,10 @@ Widget buildCockpitHud(
   VoidCallback?             onSensorKnob,
   void Function(double, double)? onNavMapTap,
   void Function(int)?            onDeleteWaypoint,
+  VoidCallback?                  onAnnunciatorChange,
+  VoidCallback?                  onThrottleModeToggle,
+  void Function(double)?         onThrottleChange,
+  void Function(int)? onAuxPage, void Function(int)? onAuxMirrorScroll,
 }) {
   if (state.viewMode == ViewMode.thirdPerson) {
     return Stack(children: [
@@ -80,16 +88,20 @@ Widget buildCockpitHud(
           onAutopilot: onAutopilot,
           onWaypointLock: onWaypointLock,
           onClear: onClear,
-          showAnnunciator:  showAnnunciator,
-          cockpitDraggable: cockpitDraggable,
-          showCockpitInfo:  showCockpitInfo,
+          showAnnunciator: showAnnunciator,
+          settings:        settings,
+          onLayoutChanged: onLayoutChanged,
           onSuppArm: onSuppArm,
           onSuppAuto: onSuppAuto,
           onRetardantKnob: onRetardantKnob,
           onRangeKnob: onRangeKnob,
           onSensorKnob: onSensorKnob,
           onNavMapTap: onNavMapTap,
-          onDeleteWaypoint: onDeleteWaypoint),
+          onDeleteWaypoint: onDeleteWaypoint,
+          onAnnunciatorChange: onAnnunciatorChange,
+          onThrottleModeToggle: onThrottleModeToggle,
+          onThrottleChange: onThrottleChange,
+          onAuxPage: onAuxPage, onAuxMirrorScroll: onAuxMirrorScroll),
     ),
     // Persistent gauges — spec §7: these survive the cockpit ↔ third-person
     // transition. Corner positions clear the centred cockpit panel.
@@ -294,9 +306,9 @@ Widget _cockpitPanel(GameState state, {
   VoidCallback?       onAutopilot,
   VoidCallback?       onWaypointLock,
   VoidCallback?       onClear,
-  bool showAnnunciator  = true,
-  bool cockpitDraggable = false,
-  bool showCockpitInfo  = false,
+  bool showAnnunciator = true,
+  SettingsState? settings,
+  VoidCallback?  onLayoutChanged,
   VoidCallback?       onSuppArm,
   VoidCallback?       onSuppAuto,
   VoidCallback?       onRetardantKnob,
@@ -304,84 +316,114 @@ Widget _cockpitPanel(GameState state, {
   VoidCallback?       onSensorKnob,
   void Function(double, double)? onNavMapTap,
   void Function(int)?            onDeleteWaypoint,
+  VoidCallback?                  onAnnunciatorChange,
+  VoidCallback?                  onThrottleModeToggle,
+  void Function(double)?         onThrottleChange,
+  void Function(int)? onAuxPage, void Function(int)? onAuxMirrorScroll,
 }) {
-  final lp = state.leftMfdPage;
-  final rp = state.rightMfdPage;
+  final lp       = state.leftMfdPage;
+  final rp       = state.rightMfdPage;
   final gearLeft = state.gearLeverOnLeft;
-  // No solid panel background — each instrument carries its own colour.
-  // Transparent gaps let the WebGL scene show through between components.
+  final aid      = state.aircraftId;
+
+  // Shorthand: builds a CockpitDragGroup with per-aircraft persistent offset.
+  Widget drag(String id, String label, Widget child) {
+    final (dx, dy) = settings?.cockpitOffset(aid, id) ?? (0.0, 0.0);
+    return CockpitDragGroup(
+      key:           ValueKey('${aid}_$id'),
+      label:         label,
+      initialOffset: Offset(dx, dy),
+      draggable:     settings?.cockpitDraggable ?? false,
+      showInfo:      settings?.showCockpitInfo  ?? false,
+      onOffsetChanged: (o) {
+        settings?.setCockpitOffset(aid, id, o.dx, o.dy);
+        onLayoutChanged?.call();
+      },
+      child: child,
+    );
+  }
+
   return Padding(
     padding: const EdgeInsets.fromLTRB(0, 4, 0, 6),
     child: Row(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        // SeaBird: gear lever sits flush left of the left console
+        // SeaBird: external gear lever left of the left console
         if (gearLeft) ...[
-          CockpitDragGroup(label: 'Gear (Ext)', draggable: cockpitDraggable, showInfo: showCockpitInfo,
-            child: buildGearLever(state, onTap: onGearToggle)),
+          drag('gearExt', 'Gear (Ext)', buildGearLever(state, onTap: onGearToggle)),
           const SizedBox(width: 8),
         ],
         // Left MFD column
-        CockpitDragGroup(label: 'Left MFD', draggable: cockpitDraggable, showInfo: showCockpitInfo,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Center(child: _osbRow([
-              _Osb('ELMT', active: lp == 0, onTap: () => onLeftPage?.call(0)),
-              _Osb('LOAD', active: lp == 1, onTap: () => onLeftPage?.call(1)),
-              _Osb('STAT', active: lp == 2, onTap: () => onLeftPage?.call(2)),
-              _Osb('MODE', active: lp == 3, onTap: () => onLeftPage?.call(3)),
-            ])),
-            const SizedBox(height: 4),
-            buildLeftMFD(state, page: lp),
-            const SizedBox(height: 4),
-            Center(child: _abilityOsbRow(state, onAbilityActivate)),
+        drag('leftMfd', 'Left MFD', Column(mainAxisSize: MainAxisSize.min, children: [
+          Center(child: _osbRow([
+            _Osb('ELMT', active: lp == 0, onTap: () => onLeftPage?.call(0)),
+            _Osb('LOAD', active: lp == 1, onTap: () => onLeftPage?.call(1)),
+            _Osb('STAT', active: lp == 2, onTap: () => onLeftPage?.call(2)),
+            _Osb('MODE', active: lp == 3, onTap: () => onLeftPage?.call(3)),
           ])),
+          const SizedBox(height: 4),
+          buildLeftMFD(state, page: lp),
+          const SizedBox(height: 4),
+          Center(child: _abilityOsbRow(state, onAbilityActivate)),
+        ])),
         const SizedBox(width: 20),
-        // Centre console
-        CockpitDragGroup(label: 'Centre Console', draggable: cockpitDraggable, showInfo: showCockpitInfo,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            if (showAnnunciator) buildAnnunciatorPanel(state),
-            if (showAnnunciator) const SizedBox(height: 4),
-            buildCenterMFD(state),
-            const SizedBox(height: 4),
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              buildSuppressionPanel(state,
-                  onSuppArm: onSuppArm, onSuppAuto: onSuppAuto,
-                  onRetardantKnob: onRetardantKnob,
-                  onRangeKnob: onRangeKnob, onSensorKnob: onSensorKnob),
-              const SizedBox(width: 8),
-              buildFlapsLever(state, onTap: onFlapsToggle),
-              if (!gearLeft) ...[
-                const SizedBox(width: 4),
-                buildGearLever(state, onTap: onGearToggle),
-              ],
+        // Centre column — each instrument is individually draggable
+        Column(mainAxisSize: MainAxisSize.min, children: [
+          if (showAnnunciator)
+            drag('annunciator', 'Annunciator',
+                buildAnnunciatorPanel(state, onChanged: onAnnunciatorChange)),
+          if (showAnnunciator) const SizedBox(height: 4),
+          Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+            drag('centerMfd', 'Centre MFD', buildCenterMFD(state)),
+            const SizedBox(width: 8),
+            drag('suppression', 'Suppression', buildSuppressionPanel(state,
+                onSuppArm: onSuppArm, onSuppAuto: onSuppAuto,
+                onRetardantKnob: onRetardantKnob,
+                onRangeKnob: onRangeKnob, onSensorKnob: onSensorKnob)),
+          ]),
+          const SizedBox(height: 4),
+          Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+            drag('flaps',    'Flaps',    buildFlapsLever(state, onTap: onFlapsToggle)),
+            if (!gearLeft) ...[
               const SizedBox(width: 4),
-              buildThrottleGauge(state),
-            ]),
-            const SizedBox(height: 4),
-            buildAttitudeGyro(state),
-          ])),
+              drag('gear',   'Gear',     buildGearLever(state, onTap: onGearToggle)),
+            ],
+            const SizedBox(width: 4),
+            drag('throttle', 'Throttle', buildThrottleGauge(state, onModeToggle: onThrottleModeToggle)),
+            const SizedBox(width: 4),
+            drag('tq', 'Throttle Quad', buildThrottleQuadrant(state,
+                onThrottle: onThrottleChange ?? (_) {})),
+            const SizedBox(width: 4),
+            drag('alt', 'Altimeter', buildAltIndicator(state)),
+          ]),
+          const SizedBox(height: 4),
+          drag('attitudeGyro', 'Attitude Gyro', buildAttitudeGyro(state)),
+        ]),
         const SizedBox(width: 20),
         // Right MFD column
-        CockpitDragGroup(label: 'Right MFD', draggable: cockpitDraggable, showInfo: showCockpitInfo,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Center(child: _osbRow([
-              _Osb('NAV',  active: rp == 0, onTap: () => onRightPage?.call(0)),
-              _Osb('TERR', active: rp == 1, onTap: () => onRightPage?.call(1)),
-              _Osb('FIRE', active: rp == 2, onTap: () => onRightPage?.call(2)),
-              _Osb('MARK', active: rp == 3, onTap: () => onRightPage?.call(3)),
-            ])),
-            const SizedBox(height: 4),
-            buildRightMFD(state, page: rp,
-                onMapTap: onNavMapTap, onDeleteWaypoint: onDeleteWaypoint),
-            const SizedBox(height: 4),
-            Center(child: _osbRow([
-              _Osb('ZOOM', onTap: onMapZoom),
-              _Osb('AUTO', active: state.autopilotEnabled,    onTap: onAutopilot),
-              _Osb('LOCK', active: state.lockedWaypoint >= 0, onTap: onWaypointLock),
-              _Osb('CLR',  onTap: onClear),
-            ])),
+        drag('rightMfd', 'Right MFD', Column(mainAxisSize: MainAxisSize.min, children: [
+          Center(child: _osbRow([
+            _Osb('NAV',  active: rp == 0, onTap: () => onRightPage?.call(0)),
+            _Osb('TERR', active: rp == 1, onTap: () => onRightPage?.call(1)),
+            _Osb('FIRE', active: rp == 2, onTap: () => onRightPage?.call(2)),
+            _Osb('MARK', active: rp == 3, onTap: () => onRightPage?.call(3)),
           ])),
+          const SizedBox(height: 4),
+          buildRightMFD(state, page: rp,
+              onMapTap: onNavMapTap, onDeleteWaypoint: onDeleteWaypoint),
+          const SizedBox(height: 4),
+          Center(child: _osbRow([
+            _Osb('ZOOM', onTap: onMapZoom),
+            _Osb('AUTO', active: state.autopilotEnabled,    onTap: onAutopilot),
+            _Osb('LOCK', active: state.lockedWaypoint >= 0, onTap: onWaypointLock),
+            _Osb('CLR',  onTap: onClear),
+          ])),
+          ])),
+        const SizedBox(width: 20),
+        // Aux display — CHAT / VID / MAP / MIRROR
+        drag('auxDisp', 'Aux Display', buildAuxDisplay(state,
+            onPage: onAuxPage, onMirrorScroll: onAuxMirrorScroll)),
       ]),
   );
 }

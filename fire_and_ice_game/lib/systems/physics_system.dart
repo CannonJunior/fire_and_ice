@@ -37,6 +37,23 @@ class PhysicsSystem {
       _updateMana(state, dt);
       _updateTerrainAndAltitude(state, dt);
     }
+    _updateEngines(state, dt);
+  }
+
+  // ── Engine instrument simulation ──────────────────────────────────────────
+
+  /// Animate N1/N2/EGT with first-order lag matching real turbofan spool times.
+  ///
+  /// N1 (fan) and N2 (core) settle to idle (~20–25%) when throttle = 0.
+  /// EGT rises more slowly and stays elevated briefly after throttle reduction.
+  static void _updateEngines(GameState s, double dt) {
+    final idle = s.throttle > 0 ? 0.20 : 0.0;
+    final n1t  = idle + s.throttle * 0.80;   // 20–100 % fan RPM
+    final n2t  = idle + s.throttle * 0.75;   // 20–95 % core RPM
+    final egtt = idle + s.throttle * 0.80;   // proportional EGT
+    s.engineN1  += (n1t  - s.engineN1)  * math.min(dt / 2.5, 1.0);
+    s.engineN2  += (n2t  - s.engineN2)  * math.min(dt / 2.0, 1.0);
+    s.engineEgt += (egtt - s.engineEgt) * math.min(dt / 4.0, 1.0);
   }
 
   // ── Ground / taxi physics ─────────────────────────────────────────────────
@@ -68,13 +85,18 @@ class PhysicsSystem {
     final yawRad = state.playerRotation.y * math.pi / 180.0;
     state.playerPosition.x -= math.sin(yawRad) * state.groundSpeed * dt;
     state.playerPosition.z -= math.cos(yawRad) * state.groundSpeed * dt;
-    state.playerPosition.y  = 0.5; // on runway
-    state.flightAltitude    = 0.0;
-    state.flightSpeed       = state.groundSpeed;
-    state.flightPitchAngle  = 0.0;
-    state.flightBankAngle   = 0.0;
-    state.playerRotation.x  = 0.0;
-    state.playerRotation.z  = 0.0;
+
+    // Pin to terrain surface so the aircraft follows hills after a crash-land.
+    final gndH = TerrainGenerator.heightAt(
+        state.playerPosition.x, state.playerPosition.z);
+    state.terrainHeight    = gndH;
+    state.playerPosition.y = math.max(gndH, 0.5);
+    state.flightAltitude   = state.playerPosition.y;
+    state.flightSpeed      = state.groundSpeed;
+    state.flightPitchAngle = 0.0;
+    state.flightBankAngle  = 0.0;
+    state.playerRotation.x = 0.0;
+    state.playerRotation.z = 0.0;
 
     // Mana regenerates on the ground (no drain while taxiing)
     state.restoreMana(5.0 * dt);
@@ -183,19 +205,22 @@ class PhysicsSystem {
 
   // ── Position update ──────────────────────────────────────────────────────
 
+  // Pre-allocated scratch vector — avoids one Vector3 heap allocation per frame.
+  static final Vector3 _fwd = Vector3.zero();
+
   static void _updatePosition(GameState state, double dt) {
     final yawRad   = state.playerRotation.y * (math.pi / 180.0);
     final pitchRad = state.flightPitchAngle  * (math.pi / 180.0);
-    final speed    = state.flightSpeed;
+    final cosP     = math.cos(pitchRad);
 
-    final forward = Vector3(
-      -math.sin(yawRad) * math.cos(pitchRad),
+    _fwd.setValues(
+      -math.sin(yawRad) * cosP,
        math.sin(pitchRad),
-      -math.cos(yawRad) * math.cos(pitchRad),
+      -math.cos(yawRad) * cosP,
     );
 
-    state.playerPosition += forward * speed * dt;
-    state.flightAltitude  = state.playerPosition.y;
+    state.playerPosition.addScaled(_fwd, state.flightSpeed * dt);
+    state.flightAltitude = state.playerPosition.y;
   }
 
   // ── Mana ─────────────────────────────────────────────────────────────────
@@ -259,23 +284,29 @@ class PhysicsSystem {
       state.playerRotation.x = state.flightPitchAngle;
     }
 
-    // Terrain collision — elevated terrain only (gndH ≥ 2 m).
-    // Low terrain (runway / flat valleys) is handled by the existing
-    // touchdown logic in game_widget._checkModeTransitions.
-    if (gndH >= 2.0 && state.playerPosition.y < gndH + 0.3) {
-      // Crimson Skies-style: damage scales with speed and approach angle.
-      final severity = ((state.flightSpeed + state.flightPitchAngle.abs() * 0.1) /
-          state.cfgFlightSpeed).clamp(0.2, 3.0);
-      state.takeDamage(state.cfgCrashDamageRate * severity * dt);
-      // Bounce aircraft above terrain, bleed off speed, level pitch
-      state.playerPosition.y = gndH + 1.0;
-      state.flightSpeed      = (state.flightSpeed * 0.55).clamp(0.0, double.infinity);
-      state.flightPitchAngle = state.flightPitchAngle.clamp(-20.0, 5.0);
-      state.playerRotation.x = state.flightPitchAngle;
-    }
+    // ── Hard terrain floor ───────────────────────────────────────────────────
+    // Aircraft cannot penetrate terrain regardless of approach speed or angle.
+    // max(gndH, 0.5) preserves the runway floor so the existing landing →
+    // taxi transition in game_widget fires normally at y ≤ touchFloor + 0.1.
+    final floor = math.max(gndH, 0.5);
+    if (state.playerPosition.y < floor) {
+      state.playerPosition.y = floor;
 
-    // Absolute floor: never below 0.5 (runway height), preserves landing logic
-    if (state.playerPosition.y < 0.5) state.playerPosition.y = 0.5;
+      // Terrain impact: skip on runway surface (gndH ≈ 0) to allow smooth
+      // touchdown; apply crash physics only on elevated terrain.
+      if (gndH > 0.6 && state.flightSpeed > 0.5) {
+        // Severity scales with speed and dive angle, clamped to avoid
+        // insta-kill at the bottom of a steep descent.
+        final severity = ((state.flightSpeed +
+                state.flightPitchAngle.abs() * 0.05) /
+            state.cfgFlightSpeed).clamp(0.1, 3.0);
+        state.takeDamage(state.cfgCrashDamageRate * severity * dt);
+        // Bleed speed aggressively — aircraft grinds to a stop on hillside.
+        state.flightSpeed      = (state.flightSpeed * 0.35).clamp(0.0, double.infinity);
+        state.flightPitchAngle = state.flightPitchAngle.clamp(-15.0, 5.0);
+        state.playerRotation.x = state.flightPitchAngle;
+      }
+    }
 
     state.flightAltitude = state.playerPosition.y;
   }

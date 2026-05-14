@@ -34,6 +34,10 @@ class Camera3D {
   /// Positive = roll right, negative = roll left.
   double rollAngle = 0.0;
 
+  // ── Projection cache ──────────────────────────────────────────────────────
+  Matrix4? _projCache;
+  double   _cachedFov = -1, _cachedAspect = -1;
+
   /// Y offset added to the look-at target for pitch following.
   ///
   /// When the aircraft pitches up or down this offsets where the camera
@@ -87,9 +91,15 @@ class Camera3D {
     );
   }
 
-  /// Build perspective projection matrix.
+  /// Build perspective projection matrix (cached; recomputed only when fov or
+  /// aspectRatio changes, which happens only on window resize or settings change).
   Matrix4 getProjectionMatrix() {
-    return makePerspectiveMatrix(radians(fov), aspectRatio, near, far);
+    if (_projCache == null || fov != _cachedFov || aspectRatio != _cachedAspect) {
+      _projCache    = makePerspectiveMatrix(radians(fov), aspectRatio, near, far);
+      _cachedFov    = fov;
+      _cachedAspect = aspectRatio;
+    }
+    return _projCache!;
   }
 
   // ── Third-person follow ──────────────────────────────────────────────────

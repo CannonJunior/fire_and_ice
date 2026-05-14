@@ -257,66 +257,154 @@ class _FlapsLeverPainter extends CustomPainter {
       o.level != level || o.color != color;
 }
 
-/// Throttle percentage bar for the cockpit (vertical, amber).
-Widget buildThrottleGauge(GameState state) {
-  final pct = (state.throttle * 100).round();
-  return Container(
-    width: 36,
-    decoration: BoxDecoration(
-      color: const Color(0xFF0A0A10),
-      border: Border.all(color: const Color(0xFF2A3040), width: 2),
-    ),
-    child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Container(
-        height: 14,
-        color: const Color(0xFF1A1200).withValues(alpha: 0.5),
-        child: const Center(child: Text('THR',
-            style: TextStyle(color: Color(0xFF554400), fontSize: 6.5, fontWeight: FontWeight.bold, letterSpacing: 1))),
+// ── Throttle gauge (3 display modes) ─────────────────────────────────────────
+
+/// Throttle gauge with mode toggle and optional engine instrument bars.
+///
+/// Mode 0 (BAR): amber bar + % label.
+/// Mode 1 (ENG): amber bar + N1/EGT/N2 instrument bars.
+/// Mode 2 (NUM): large percentage number only.
+Widget buildThrottleGauge(GameState state, {VoidCallback? onModeToggle}) {
+  final mode = state.throttleDisplayMode;
+  final pct  = (state.throttle * 100).round();
+  const bg   = Color(0xFF0A0A10);
+  const bev  = Color(0xFF2A3040);
+
+  if (mode == 2) {
+    return GestureDetector(
+      onTap: onModeToggle,
+      child: Container(
+        width: 52,
+        decoration: BoxDecoration(color: bg, border: Border.all(color: bev, width: 2)),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(height: 14, color: const Color(0xFF1A1200).withValues(alpha: 0.5),
+            child: const Center(child: Text('THR',
+              style: TextStyle(color: Color(0xFF554400), fontSize: 6.5,
+                  fontWeight: FontWeight.bold, letterSpacing: 1)))),
+          Padding(padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text('$pct',
+              style: const TextStyle(color: Color(0xFFFFAA00),
+                  fontSize: 26, fontWeight: FontWeight.bold))),
+          const Padding(padding: EdgeInsets.only(bottom: 4),
+            child: Text('%', style: TextStyle(color: Color(0xFF554400), fontSize: 8))),
+        ]),
       ),
+    );
+  }
+
+  final showEng = mode == 1;
+  return Container(
+    width: showEng ? 86 : 48,
+    decoration: BoxDecoration(color: bg, border: Border.all(color: bev, width: 2)),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      // Header — mode toggle button on left
+      Row(children: [
+        GestureDetector(
+          onTap: onModeToggle,
+          child: Container(width: 18, height: 14,
+            color: const Color(0xFF111120),
+            child: Center(child: Text(showEng ? '≡+' : '≡',
+              style: const TextStyle(color: Color(0xFF6688AA), fontSize: 7)))),
+        ),
+        Expanded(child: Container(height: 14,
+          color: const Color(0xFF1A1200).withValues(alpha: 0.5),
+          child: const Center(child: Text('THR',
+            style: TextStyle(color: Color(0xFF554400), fontSize: 6.5,
+                fontWeight: FontWeight.bold, letterSpacing: 1))))),
+      ]),
       SizedBox(
         height: 60,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
-          child: _ThrottleBarPainter.widget(state.throttle),
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+          child: Row(children: [
+            Expanded(child: CustomPaint(
+                painter: _ThrottleBarPainter(state.throttle),
+                child: const SizedBox.expand())),
+            if (showEng) ...[
+              const SizedBox(width: 3),
+              SizedBox(width: 38, child: CustomPaint(
+                  painter: _EngineBarsPainter(
+                      n1: state.engineN1, egt: state.engineEgt, n2: state.engineN2),
+                  child: const SizedBox.expand())),
+            ],
+          ]),
         ),
       ),
-      Padding(
-        padding: const EdgeInsets.only(bottom: 4),
+      Padding(padding: const EdgeInsets.only(bottom: 4),
         child: Text('$pct%',
-            style: const TextStyle(color: Color(0xFFFFAA00), fontSize: 7, fontWeight: FontWeight.bold)),
-      ),
+          style: const TextStyle(color: Color(0xFFFFAA00),
+              fontSize: 7, fontWeight: FontWeight.bold))),
     ]),
   );
 }
 
 class _ThrottleBarPainter extends CustomPainter {
-  final double value; // 0.0–1.0
+  final double value;
   const _ThrottleBarPainter(this.value);
-
-  static Widget widget(double v) => CustomPaint(
-      painter: _ThrottleBarPainter(v), child: const SizedBox.expand());
 
   @override
   void paint(Canvas canvas, Size size) {
-    const bg  = Color(0xFF1A1200);
-    const fg  = Color(0xFFFFAA00);
+    const bg = Color(0xFF1A1200);
+    const fg = Color(0xFFFFAA00);
     final fillH = size.height * value;
-
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
-        Paint()..color = bg);
-    canvas.drawRect(
-      Rect.fromLTWH(0, size.height - fillH, size.width, fillH),
-      Paint()..color = fg,
-    );
-
-    // Tick marks at 25%, 50%, 75%
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), Paint()..color = bg);
+    canvas.drawRect(Rect.fromLTWH(0, size.height - fillH, size.width, fillH), Paint()..color = fg);
     final tp = Paint()..color = const Color(0xFF554400)..strokeWidth = 0.5;
-    for (final frac in [0.25, 0.5, 0.75]) {
-      final y = size.height * (1 - frac);
-      canvas.drawLine(Offset(0, y), Offset(size.width * 0.4, y), tp);
+    for (final f in [0.25, 0.5, 0.75]) {
+      final y = size.height * (1 - f);
+      canvas.drawLine(Offset(0, y), Offset(size.width * 0.5, y), tp);
     }
   }
 
   @override
   bool shouldRepaint(_ThrottleBarPainter o) => o.value != value;
+}
+
+/// Three side-by-side vertical bars: N1 (green), EGT (amber), N2 (cyan).
+///
+/// Each bar changes colour as it enters caution/limit territory.
+class _EngineBarsPainter extends CustomPainter {
+  final double n1, egt, n2;
+  const _EngineBarsPainter({required this.n1, required this.egt, required this.n2});
+
+  static Color _col(double v, double warn, double red) {
+    if (v >= red)  return const Color(0xFFFF2222);
+    if (v >= warn) return const Color(0xFFFFAA00);
+    return const Color(0xFF00CC44);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const labels = ['N1', 'GT', 'N2'];
+    final values = [n1, egt, n2];
+    final warns  = [0.90, 0.80, 0.95];
+    final reds   = [0.97, 0.92, 0.98];
+    final bw     = size.width / 3;
+    const bg     = Color(0xFF0A100A);
+    const lblSt  = TextStyle(color: Color(0xFF446644), fontSize: 6);
+
+    for (int i = 0; i < 3; i++) {
+      final x    = bw * i;
+      final v    = values[i];
+      final fill = size.height * v;
+      canvas.drawRect(Rect.fromLTWH(x + 1, 0, bw - 2, size.height), Paint()..color = bg);
+      canvas.drawRect(
+        Rect.fromLTWH(x + 1, size.height - fill, bw - 2, fill),
+        Paint()..color = _col(v, warns[i], reds[i]),
+      );
+      // Limit line
+      final limitY = size.height * (1 - reds[i]);
+      canvas.drawLine(Offset(x + 1, limitY), Offset(x + bw - 1, limitY),
+          Paint()..color = const Color(0xFF882222)..strokeWidth = 0.8);
+      // Label
+      final tp = TextPainter(
+          text: TextSpan(text: labels[i], style: lblSt), textDirection: TextDirection.ltr)
+        ..layout();
+      tp.paint(canvas, Offset(x + (bw - tp.width) / 2, size.height - tp.height));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_EngineBarsPainter o) =>
+      o.n1 != n1 || o.egt != egt || o.n2 != n2;
 }

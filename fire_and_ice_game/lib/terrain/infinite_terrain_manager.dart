@@ -34,7 +34,11 @@ class InfiniteTerrainManager {
 
   // ── State ─────────────────────────────────────────────────────────────────
 
-  final Map<String, TerrainChunk> _chunks = {};
+  // Integer key: packs (cx, cz) into one int — avoids string allocation per lookup.
+  // Supports chunk coords in ±524287 range (>> sufficient for any playable world).
+  static int _key(int cx, int cz) => (cx & 0xFFFFF) << 20 | (cz & 0xFFFFF);
+
+  final Map<int, TerrainChunk> _chunks = {};
 
   int _lastCX = 0x7fffffff;
   int _lastCZ = 0x7fffffff;
@@ -91,7 +95,7 @@ class InfiniteTerrainManager {
     final needed = <(int, int, int)>[]; // (dist², dx, dz)
     for (int dx = -renderDistance; dx <= renderDistance; dx++) {
       for (int dz = -renderDistance; dz <= renderDistance; dz++) {
-        if (!_chunks.containsKey('${cx + dx},${cz + dz}')) {
+        if (!_chunks.containsKey(_key(cx + dx, cz + dz))) {
           needed.add((dx * dx + dz * dz, dx, dz));
         }
       }
@@ -116,7 +120,7 @@ class InfiniteTerrainManager {
   }
 
   void _generate(int cx, int cz) {
-    final key = '$cx,$cz';
+    final key = _key(cx, cz);
     if (_chunks.containsKey(key)) return;
 
     final mesh = TerrainGenerator.generateChunk(
@@ -127,14 +131,12 @@ class InfiniteTerrainManager {
       seed:     _seed,
     );
 
-    final worldX = cx * chunkWorldSize;
-    final worldZ = cz * chunkWorldSize;
-
     _chunks[key] = TerrainChunk(
       chunkX:    cx,
       chunkZ:    cz,
       mesh:      mesh,
-      transform: Transform3d(position: Vector3(worldX, 0, worldZ)),
+      transform: Transform3d(
+          position: Vector3(cx * chunkWorldSize, 0, cz * chunkWorldSize)),
     );
   }
 }
