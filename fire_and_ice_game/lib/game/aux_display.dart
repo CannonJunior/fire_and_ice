@@ -4,6 +4,7 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'game_state.dart';
+import 'maneuver_tutorial.dart';
 import 'mfd_panels.dart';
 import '../terrain/terrain_generator.dart';
 
@@ -31,15 +32,22 @@ void _regYt(String id) {
   _kVidReg.add(id);
   ui_web.platformViewRegistry.registerViewFactory(
     'yt-$id',
-    (int _) => html.IFrameElement()
-      ..src = 'https://www.youtube.com/embed/$id?rel=0&modestbranding=1'
-      ..style.width = '100%'
-      ..style.height = '100%'
-      ..style.border = 'none'
-      ..setAttribute('allow',
-          'accelerometer; autoplay; clipboard-write; '
-          'encrypted-media; gyroscope; picture-in-picture; web-share')
-      ..setAttribute('allowfullscreen', ''),
+    (int _) {
+      final el = html.IFrameElement()
+        ..src = 'https://www.youtube.com/embed/$id?rel=0&modestbranding=1'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.border = 'none'
+        ..setAttribute('allow',
+            'accelerometer; autoplay; clipboard-write; '
+            'encrypted-media; gyroscope; picture-in-picture; web-share')
+        ..setAttribute('allowfullscreen', '')
+        // tabindex=-1 prevents tab-based focus; focus listener returns
+        // keyboard control to the game document so flight keys keep working.
+        ..setAttribute('tabindex', '-1');
+      el.addEventListener('focus', (e) => html.document.body?.focus());
+      return el;
+    },
   );
 }
 
@@ -58,11 +66,14 @@ const _kLog = [
 // ── Public builder ────────────────────────────────────────────────────────────
 
 /// Auxiliary display: 560×400 content + 56px bottom OSB row (2× original).
-/// Pages: 0=CHAT  1=VID  2=MAP  3=MIRROR
+/// Pages: 0=CHAT  1=VID  2=MAP  3=MIRROR  4=MANUV
 Widget buildAuxDisplay(GameState state, {
   void Function(int)? onPage,
   void Function(int)? onMirrorScroll,
   void Function(int)? onVideoScroll,
+  void Function(int)? onManeuverScroll,
+  void Function()?    onManeuverExecute,
+  void Function()?    onManeuverStop,
 }) {
   final page = state.auxDisplayPage;
   final mi   = state.auxMirrorIndex.clamp(0, _kOpts.length - 1);
@@ -76,6 +87,12 @@ Widget buildAuxDisplay(GameState state, {
           width: 280, height: 200,
           child: mi < 4 ? buildLeftMFD(state, page: mi) : buildRightMFD(state, page: mi - 4),
         ),
+      ),
+    4 => ManeuverPage(
+        state: state,
+        onScroll:  onManeuverScroll,
+        onExecute: onManeuverExecute,
+        onStop:    onManeuverStop,
       ),
     _ => _chatPage(),
   };
@@ -98,11 +115,12 @@ Widget buildAuxDisplay(GameState state, {
 Widget _bottomRow(int page, int mi,
     void Function(int)? onPage, void Function(int)? onMirrorScroll) {
   return Row(mainAxisSize: MainAxisSize.min, children: [
-    _osb('CHAT', page == 0, () => onPage?.call(0)),
-    _osb('VID',  page == 1, () => onPage?.call(1)),
-    _osb('MAP',  page == 2, () => onPage?.call(2)),
+    _osb('CHAT',  page == 0, () => onPage?.call(0)),
+    _osb('VID',   page == 1, () => onPage?.call(1)),
+    _osb('MAP',   page == 2, () => onPage?.call(2)),
     _MirrorOsb(label: _kOpts[mi], active: page == 3,
         onTap: () => onPage?.call(3), onScroll: onMirrorScroll),
+    _osb('MANUV', page == 4, () => onPage?.call(4)),
   ]);
 }
 

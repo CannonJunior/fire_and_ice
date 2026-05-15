@@ -13,6 +13,7 @@ import '../rendering/transform3d.dart';
 import '../rendering/webgl_renderer.dart';
 import '../systems/ability_system.dart';
 import '../systems/input_system.dart';
+import '../systems/maneuver_system.dart';
 import '../systems/physics_system.dart';
 import '../terrain/airfield_generator.dart';
 import '../terrain/infinite_terrain_manager.dart';
@@ -167,7 +168,13 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   void _registerKeyListeners() {
     _keyDownSub = html.document.onKeyDown.listen(InputSystem.handleKeyDown);
     _keyUpSub   = html.document.onKeyUp.listen(InputSystem.handleKeyUp);
-    _blurSub    = html.window.onBlur.listen((_) => InputSystem.clearAll());
+    // When the game window loses focus (e.g. YouTube iframe captures it),
+    // clear pressed keys to avoid stuck inputs, then schedule a refocus so
+    // flight keyboard controls recover without the user having to click.
+    _blurSub = html.window.onBlur.listen((_) {
+      InputSystem.clearAll();
+      html.window.requestAnimationFrame((_) => html.document.body?.focus());
+    });
   }
 
   void _buildScene() {
@@ -224,24 +231,33 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     final rl  = InputSystem.isActionActive(GameAction.rotateLeft);
     final rr  = InputSystem.isActionActive(GameAction.rotateRight);
 
-    // Any manual flight input disengages autopilot
+    // Manual input disengages autopilot and any active maneuver
     if (_state.autopilotEnabled && (fwd || bk || sl || sr || rl || rr)) {
       _state.autopilotEnabled = false;
+    }
+    if (_state.activeManeuverIdx != null && (fwd || bk || sl || sr || rl || rr)) {
+      _state.stopManeuver();
     }
     final ap = _state.autopilotEnabled;
 
     PhysicsSystem.updateAutopilot(_state, dt);
 
+    // Maneuver computer overrides all flight inputs when active.
+    final mo = ManeuverSystem.tick(_state, dt);
+    final mi = mo.input;
+    _state.maneuverDropWindowActive = mo.dropWindowActive;
+    if (mo.dropTriggered) _state.dropRetardant();
+
     PhysicsSystem.updateFlight(
       _state,
-      ap ? false : (_settings.invertedPitch ? bk  : fwd),
-      ap ? false : (_settings.invertedPitch ? fwd : bk),
-      ap ? false : sl,
-      ap ? false : sr,
-      ap ? false : rl,
-      ap ? false : rr,
-      InputSystem.isActionActive(GameAction.sprint),
-      InputSystem.isActionActive(GameAction.brake),
+      mi != null ? mi.fwd    : (ap ? false : (_settings.invertedPitch ? bk  : fwd)),
+      mi != null ? mi.bk     : (ap ? false : (_settings.invertedPitch ? fwd : bk)),
+      mi != null ? mi.bl     : (ap ? false : sl),
+      mi != null ? mi.br     : (ap ? false : sr),
+      mi != null ? mi.yl     : (ap ? false : rl),
+      mi != null ? mi.yr     : (ap ? false : rr),
+      mi != null ? mi.sprint : InputSystem.isActionActive(GameAction.sprint),
+      mi != null ? mi.brake  : InputSystem.isActionActive(GameAction.brake),
       dt,
     );
 
@@ -458,6 +474,12 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             onDeleteWaypoint:    (i) => setState(() => _state.removeWaypoint(i)),
             onAnnunciatorChange: () => setState(() {}),
             onThrottleModeToggle: () => setState(_state.stepThrottleMode), onThrottleChange: (v) => setState(() => _state.throttle = v.clamp(0.0, 1.0)), onAuxPage: (p) => setState(() => _state.auxDisplayPage = p), onAuxMirrorScroll: (d) => setState(() => _state.scrollAuxMirror(d)), onAuxVideoScroll: (d) => setState(() => _state.scrollAuxVideo(d)),
+            onManeuverScroll:  (d) => setState(() {
+              final n = ManeuverSystem.catalog.length;
+              _state.selectedManeuverIdx = (_state.selectedManeuverIdx + d + n) % n;
+            }),
+            onManeuverExecute: ()  => setState(() => _state.startManeuver(_state.selectedManeuverIdx)),
+            onManeuverStop:    ()  => setState(() => _state.stopManeuver()),
           ),
 
           // ── Top-right menu buttons ─────────────────────────────────────────

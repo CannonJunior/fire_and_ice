@@ -36,11 +36,21 @@ class GameState {
   int leftMfdPage  = 0;
   int rightMfdPage = 0;
   int mapZoom      = 0;
-  int auxDisplayPage = 0; // 0=CHAT 1=VID 2=MAP 3=MIRROR
+  int auxDisplayPage = 0; // 0=CHAT 1=VID 2=MAP 3=MIRROR 4=MANUV
   int auxMirrorIndex = 0; // 0..7 → ELMT/LOAD/STAT/MODE/NAV/TERR/FIRE/MARK
   int auxVideoIndex  = 0; // 0=LISA HAYES  1=LIN MINMEI
   void scrollAuxMirror(int d) => auxMirrorIndex = (auxMirrorIndex + d + 8) % 8;
   void scrollAuxVideo(int d)  => auxVideoIndex  = (auxVideoIndex  + d + 2) % 2;
+
+  // ── Maneuver computer ─────────────────────────────────────────────────────
+
+  int     selectedManeuverIdx = 0;
+  int?    activeManeuverIdx;
+  double  maneuverTimer         = 0.0;
+  bool    maneuverDropWindowActive = false;
+
+  void startManeuver(int idx) { activeManeuverIdx = idx; maneuverTimer = 0.0; }
+  void stopManeuver()         => activeManeuverIdx = null;
 
   // ── Aircraft + Upgrade economy ────────────────────────────────────────────
 
@@ -233,14 +243,31 @@ class GameState {
   /// Horizontal radius of each fire zone in world units.
   static const double fireRadius = 20.0;
 
-  /// True when the aircraft's X/Z position is inside any fire zone.
+  List<bool> fireExtinguished      = List.filled(5, false);
+  int  get activeFires => fireExtinguished.where((e) => !e).length;
+  bool get allFiresOut => activeFires == 0;
+
   bool get isFireBelow {
     final px = playerPosition.x, pz = playerPosition.z;
-    for (final (fx, fz) in firePositions) {
-      final dx = px - fx, dz = pz - fz;
-      if (dx * dx + dz * dz < fireRadius * fireRadius) return true;
+    for (int i = 0; i < firePositions.length; i++) {
+      if (fireExtinguished[i]) continue;
+      final (fx, fz) = firePositions[i];
+      if ((px-fx)*(px-fx)+(pz-fz)*(pz-fz) < fireRadius*fireRadius) return true;
     }
     return false;
+  }
+
+  bool dropRetardant() {
+    if (!suppressionArmed) return false;
+    final d2 = [20.0, 32.0, 46.0, 64.0][dropRange.clamp(0, 3)];
+    final px = playerPosition.x, pz = playerPosition.z;
+    bool hit = false;
+    for (int i = 0; i < firePositions.length; i++) {
+      if (fireExtinguished[i]) continue;
+      final (fx, fz) = firePositions[i];
+      if ((px-fx)*(px-fx)+(pz-fz)*(pz-fz) < d2*d2) { fireExtinguished[i] = true; hit = true; }
+    }
+    return hit;
   }
 
   // ── Dual-engine fire suppression ─────────────────────────────────────────
@@ -284,6 +311,7 @@ class GameState {
   double cfgBoostMultiplier    = 1.5;
   double cfgBrakeMultiplier    = 0.6;
   double cfgBrakeJumpForce     = 3.0;
+  double cfgFireDamageRate     = 6.0;
   double cfgManaDrainRate      = 3.0;
   double cfgLowManaThreshold   = 10.0;
   double cfgLowManaDescentRate = 2.0;

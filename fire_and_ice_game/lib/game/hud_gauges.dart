@@ -314,3 +314,183 @@ class _WarningChip extends StatelessWidget {
           fontWeight: FontWeight.bold, letterSpacing: 2)),
   );
 }
+
+// ── Cockpit Windshield HUD ────────────────────────────────────────────────────
+// F-22-style glass HUD: pitch ladder, FPM, heading tape, speed/alt chevron
+// boxes, status strip, glide-slope reference.
+
+const _hG   = Color(0xFF00FF55); // HUD green
+const _hM   = Color(0xFFFF3399); // magenta — compass direction
+const _hDim = Color(0xFF008833); // secondary labels
+const _tsN  = TextStyle(color: _hG, fontSize: 17, fontWeight: FontWeight.bold, height: 1.0);
+const _tsS  = TextStyle(color: _hG, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5, height: 1.18);
+const _tsD  = TextStyle(color: _hDim, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.5, height: 1.18);
+
+Widget buildCockpitWindshieldHud(GameState state) {
+  final hdg   = ((state.playerRotation.y % 360) + 360) % 360;
+  final pitch = state.flightPitchAngle;
+  final bank  = state.flightBankAngle;
+  final spd   = state.flightSpeed;
+  final alt   = state.flightAltitude;
+  final thr   = (state.throttle * 100).round();
+  final aoa   = (pitch * 0.72).clamp(-20.0, 30.0);
+  final radar = (alt - state.terrainHeight).clamp(0.0, 9999.0);
+  final vs    = (spd * math.sin(pitch * math.pi / 180) * 60).round();
+  final gearLbl = state.gearMoving ? 'TRANS' : (state.gearDeployed ? 'DN' : 'UP');
+  final flapLbl = ['UP', 'T/O', 'APR', 'FUL'][state.flapsLevel.clamp(0, 3)];
+  final vsStr   = '${vs >= 0 ? '+' : ''}$vs';
+
+  Widget wayptBox() {
+    final (name, wx, wz) = GameState.kWaypoints[state.lockedWaypoint];
+    final dx = wx - state.playerPosition.x, dz = wz - state.playerPosition.z;
+    final dist = math.sqrt(dx * dx + dz * dz);
+    final brg  = ((math.atan2(dx, dz) * 180 / math.pi) + 360) % 360;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+      Text('${dist.toStringAsFixed(2)} NM', style: _tsS),
+      Text('ILOS  $name', style: _tsD),
+      Text('BRG   ${brg.toStringAsFixed(0)}°', style: _tsD),
+    ]);
+  }
+
+  return Stack(children: [
+    Positioned.fill(child: CustomPaint(painter: _HwPainter(pitch: pitch, bank: bank, heading: hdg))),
+    Positioned(left: 210, top: 258, child: _chevBox(spd.toStringAsFixed(0), true)),
+    Positioned(left: 210, top: 303, child: Text('α   ${aoa.toStringAsFixed(0)}', style: _tsS)),
+    Positioned(right: 210, top: 258, child: _chevBox(alt.toStringAsFixed(0), false)),
+    Positioned(right: 210, top: 303, child: Text(vsStr, style: _tsS)),
+    Positioned(left: 150, top: 368,
+      child: DefaultTextStyle(style: _tsS, child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text('GS   ${state.groundSpeed.toStringAsFixed(0)}'),
+        Text('FP   $flapLbl'),
+        Text('LG   $gearLbl'),
+      ]))),
+    Positioned(left: 150, top: 456, child: Text('$thr %', style: _tsN.copyWith(fontSize: 19))),
+    Positioned(right: 150, top: 368,
+      child: DefaultTextStyle(style: _tsS, child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text('APC  ${(state.engineN1 * 1000).round()}'),
+        Text('R    ${radar.toStringAsFixed(0)}'),
+      ]))),
+    if (state.lockedWaypoint >= 0) Positioned(left: 44, top: 95, child: wayptBox()),
+    if (state.autopilotEnabled)
+      Align(alignment: const Alignment(0, -0.56),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          color: const Color(0x99003300),
+          child: Text(
+            state.flightPlan.isEmpty ? '◆  A/P  ENGAGED'
+                : '◆  A/P  →  ${state.flightPlan[state.flightPlanIndex.clamp(0, state.flightPlan.length-1)].$1}',
+            style: const TextStyle(color: _hG, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 2)))),
+    if (state.isBarrelRolling)
+      Align(alignment: const Alignment(0, -0.32),
+        child: const Text('◀  BARREL ROLL  ▶',
+          style: TextStyle(color: Color(0xFFFF6600), fontSize: 36, fontWeight: FontWeight.bold, letterSpacing: 4))),
+  ]);
+}
+
+Widget _chevBox(String v, bool left) => CustomPaint(
+  painter: _ChevP(left),
+  child: Padding(padding: EdgeInsets.fromLTRB(left?16:8, 5, left?8:16, 5),
+    child: Text(v, style: _tsN)));
+
+class _ChevP extends CustomPainter {
+  final bool l;
+  const _ChevP(this.l);
+  @override void paint(Canvas c, Size s) {
+    final p = Paint()..color = _hG..strokeWidth = 1.5..style = PaintingStyle.stroke;
+    const d = 10.0; final w = s.width, h = s.height;
+    c.drawPath(l
+      ? (Path()..moveTo(w,0)..lineTo(0,0)..lineTo(-d,h/2)..lineTo(0,h)..lineTo(w,h))
+      : (Path()..moveTo(0,0)..lineTo(w,0)..lineTo(w+d,h/2)..lineTo(w,h)..lineTo(0,h)), p);
+  }
+  @override bool shouldRepaint(_ChevP o) => o.l != l;
+}
+
+// ── Main HUD CustomPainter ────────────────────────────────────────────────────
+
+class _HwPainter extends CustomPainter {
+  final double pitch, bank, heading;
+  const _HwPainter({required this.pitch, required this.bank, required this.heading});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2, cy = size.height * 0.335;
+    _hdgTape(canvas, cx, heading);
+    canvas.save();
+    canvas.translate(cx, cy);
+    canvas.rotate(-bank * math.pi / 180);
+    _ladder(canvas, pitch);
+    _fpm(canvas);
+    canvas.restore();
+    _gsRef(canvas, cx, cy);
+  }
+
+  void _ladder(Canvas canvas, double pitch) {
+    final p = Paint()..color = _hG..strokeWidth = 1.5..style = PaintingStyle.stroke;
+    for (int lp = -30; lp <= 30; lp += 5) {
+      final dy = (lp - pitch) * 18.0;
+      if (dy.abs() > 230) continue;
+      final hw = lp % 10 == 0 ? 80.0 : 50.0;
+      const g = 32.0;
+      if (lp > 0) {
+        canvas.drawLine(Offset(-hw, dy), Offset(-g, dy), p);
+        canvas.drawLine(Offset(g, dy), Offset(hw, dy), p);
+      } else if (lp < 0) {
+        _dash(canvas, Offset(-hw, dy), Offset(-g, dy), p);
+        _dash(canvas, Offset(g, dy), Offset(hw, dy), p);
+        canvas.drawLine(Offset(-hw, dy), Offset(-hw, dy+9), p);
+        canvas.drawLine(Offset(hw, dy), Offset(hw, dy+9), p);
+      } else {
+        p.strokeWidth = 2; canvas.drawLine(Offset(-hw,dy),Offset(-g,dy),p);
+        canvas.drawLine(Offset(g,dy),Offset(hw,dy),p); p.strokeWidth = 1.5;
+      }
+      if (lp % 10 == 0 && lp != 0) {
+        _lbl(canvas, '${lp.abs()}', Offset(-hw-20, dy));
+        _lbl(canvas, '${lp.abs()}', Offset(hw+5, dy));
+      }
+    }
+  }
+
+  void _dash(Canvas canvas, Offset a, Offset b, Paint p) {
+    final dx = b.dx-a.dx, dy = b.dy-a.dy, len = math.sqrt(dx*dx+dy*dy);
+    final ux = dx/len, uy = dy/len; var t = 0.0; var on = true;
+    while (t < len) { final s = on?7.0:4.0; final t2=(t+s).clamp(0.0,len);
+      if (on) canvas.drawLine(Offset(a.dx+ux*t,a.dy+uy*t),Offset(a.dx+ux*t2,a.dy+uy*t2),p);
+      t+=s; on=!on; }
+  }
+
+  void _fpm(Canvas canvas) {
+    final p = Paint()..color = _hG..strokeWidth = 2..style = PaintingStyle.stroke;
+    canvas.drawCircle(Offset.zero, 12, p);
+    canvas.drawLine(const Offset(-12,0), const Offset(-32,0), p);
+    canvas.drawLine(const Offset(12,0), const Offset(32,0), p);
+    canvas.drawLine(const Offset(0,-12), const Offset(0,-24), p);
+  }
+
+  void _hdgTape(Canvas canvas, double cx, double hdg) {
+    final p = Paint()..color = _hG..strokeWidth = 1.5;
+    for (int dh = -18; dh <= 18; dh++) {
+      final th = ((hdg+dh)%360+360)%360; final x = cx+dh*9.0;
+      if (th%10==0) { canvas.drawLine(Offset(x,48),Offset(x,58),p); _lbl(canvas,'${(th/10).round()%36}',Offset(x,64)); }
+      else if (th%5==0) canvas.drawLine(Offset(x,48),Offset(x,54),p);
+    }
+    final hs = hdg.round().toString().padLeft(3,'0');
+    canvas.drawRect(Rect.fromLTWH(cx-28,74,56,24),Paint()..color=_hG..style=PaintingStyle.stroke..strokeWidth=1.5);
+    _lbl(canvas,hs,Offset(cx,86),sz:15,bold:true);
+    _lbl(canvas,_cdir(hdg),Offset(cx,30),sz:13,bold:true,col:_hM);
+  }
+
+  void _gsRef(Canvas canvas, double cx, double cy) {
+    canvas.drawLine(Offset(cx+175,cy-20),Offset(cx+175,cy+20),Paint()..color=_hDim..strokeWidth=1);
+    canvas.drawCircle(Offset(cx+179,cy),3,Paint()..color=_hDim);
+    _lbl(canvas,'GS',Offset(cx+165,cy),sz:10,col:_hDim);
+  }
+
+  void _lbl(Canvas canvas, String t, Offset c, {double sz=11, bool bold=false, Color? col}) {
+    final tp = TextPainter(text: TextSpan(text:t,style:TextStyle(color:col??_hG,fontSize:sz,height:1.0,fontWeight:bold?FontWeight.bold:FontWeight.normal)),textDirection:TextDirection.ltr)..layout();
+    tp.paint(canvas, c - Offset(tp.width/2, tp.height/2));
+  }
+
+  static String _cdir(double h) => const ['N','NE','E','SE','S','SW','W','NW'][((h+22.5)/45).floor()%8];
+
+  @override bool shouldRepaint(_HwPainter o) => o.pitch!=pitch||o.bank!=bank||o.heading!=heading;
+}

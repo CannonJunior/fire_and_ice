@@ -36,6 +36,7 @@ class PhysicsSystem {
       _updatePosition(state, dt);
       _updateMana(state, dt);
       _updateTerrainAndAltitude(state, dt);
+      _updateFireProximity(state, dt);
     }
     _updateEngines(state, dt);
   }
@@ -309,5 +310,17 @@ class PhysicsSystem {
     }
 
     state.flightAltitude = state.playerPosition.y;
+  }
+
+  // Fire danger applies only when flying BETWEEN 10 m and 35 m above the
+  // terrain surface inside an active fire zone — the low-altitude overflight
+  // band.  Below 10 m clearance the aircraft is in GPWS/takeoff territory;
+  // above 35 m it is safely above the smoke column.
+  static void _updateFireProximity(GameState state, double dt) {
+    final clearance = state.flightAltitude - state.terrainHeight;
+    if (state.isFireBelow && clearance >= 10.0 && clearance < 35.0) {
+      state.takeDamage(state.cfgFireDamageRate * dt);
+      state.spendMana(state.cfgFireDamageRate * 0.3 * dt);
+    }
   }
 }

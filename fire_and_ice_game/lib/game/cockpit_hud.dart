@@ -15,7 +15,7 @@ import 'throttle_quadrant.dart';
 import 'alt_indicator.dart';
 import 'aux_display.dart';
 
-// ── Colors ────────────────────────────────────────────────────────────────────
+// Colors
 
 const _kOsbBg    = Color(0xFF1A1A22);
 const _kOsbBrd   = Color(0xFF3C3C4C);
@@ -23,10 +23,6 @@ const _kOsbTxt   = Color(0xFF6A6A8A);
 const _kOsbActBrd = Color(0xFFAAAAAA);
 const _kOsbActTxt = Color(0xFFCCCCFF);
 const _kWarn     = Color(0xFFFF6600);
-const _kHudGreen = Color(0xFF00FF88);
-const _kHudDim   = Color(0xFF006644);
-
-// ── Public entry ──────────────────────────────────────────────────────────────
 
 /// Build the active HUD, switching between cockpit and third-person modes.
 Widget buildCockpitHud(
@@ -57,6 +53,7 @@ Widget buildCockpitHud(
   VoidCallback?                  onThrottleModeToggle,
   void Function(double)?         onThrottleChange,
   void Function(int)? onAuxPage, void Function(int)? onAuxMirrorScroll, void Function(int)? onAuxVideoScroll,
+  void Function(int)? onManeuverScroll, void Function()? onManeuverExecute, void Function()? onManeuverStop,
 }) {
   if (state.viewMode == ViewMode.thirdPerson) {
     return Stack(children: [
@@ -72,8 +69,6 @@ Widget buildCockpitHud(
     ]);
   }
 
-  // Cockpit view — persistent corner gauges overlay the windshield so they
-  // remain visible even though the cockpit panel occupies centre-bottom.
   return Stack(children: [
     IgnorePointer(child: _windshieldHud(state)),
     Align(
@@ -101,7 +96,8 @@ Widget buildCockpitHud(
           onAnnunciatorChange: onAnnunciatorChange,
           onThrottleModeToggle: onThrottleModeToggle,
           onThrottleChange: onThrottleChange,
-          onAuxPage: onAuxPage, onAuxMirrorScroll: onAuxMirrorScroll, onAuxVideoScroll: onAuxVideoScroll),
+          onAuxPage: onAuxPage, onAuxMirrorScroll: onAuxMirrorScroll, onAuxVideoScroll: onAuxVideoScroll,
+          onManeuverScroll: onManeuverScroll, onManeuverExecute: onManeuverExecute, onManeuverStop: onManeuverStop),
     ),
     // Persistent gauges — spec §7: these survive the cockpit ↔ third-person
     // transition. Corner positions clear the centred cockpit panel.
@@ -121,7 +117,7 @@ Widget buildCockpitHud(
   ]);
 }
 
-/// Mode badge — shows TAXI / FLIGHT / LANDING in a colour-coded chip.
+// Mode badge
 Widget _modeBadge(GameMode mode) {
   final (String label, Color color) = switch (mode) {
     GameMode.taxi    => ('TAXI',    const Color(0xFF00CC44)),
@@ -140,7 +136,7 @@ Widget _modeBadge(GameMode mode) {
   );
 }
 
-/// Small top-right badge showing the active view mode (Tab to toggle).
+// View badge
 Widget _viewBadge(String label) {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -156,145 +152,11 @@ Widget _viewBadge(String label) {
   );
 }
 
-// ── Windshield HUD (glass overlay) ────────────────────────────────────────────
+// Windshield HUD — delegates to hud_cockpit.dart
 
-Widget _windshieldHud(GameState state) {
-  return Stack(children: [
-    // Speed readout — left edge, vertically centred in windshield area
-    Positioned(left: 24, top: 0, bottom: 300,
-        child: Center(child: _hudReadout('SPD',
-            state.flightSpeed.toStringAsFixed(1), 'u/s'))),
-    // Altitude readout — right edge
-    Positioned(right: 24, top: 0, bottom: 300,
-        child: Center(child: _hudReadout('ALT',
-            state.flightAltitude.toStringAsFixed(1), 'm'))),
-    // Heading / pitch strip — top centre
-    Align(
-      alignment: const Alignment(0, -0.80),
-      child: _headingStrip(state),
-    ),
-    // Autopilot engaged banner
-    if (state.autopilotEnabled)
-      Align(
-        alignment: const Alignment(0, -0.68),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-          color: const Color(0xFF003300),
-          child: Text(
-            state.flightPlan.isEmpty
-              ? '◆  A/P  ENGAGED  —  NO WAYPOINTS'
-              : () {
-                  final idx = state.flightPlanIndex.clamp(0, state.flightPlan.length - 1);
-                  return '◆  A/P  ENGAGED  —  ${state.flightPlan[idx].$1}';
-                }(),
-            style: const TextStyle(
-              color: Color(0xFF00FF88), fontSize: 18,
-              fontWeight: FontWeight.bold, letterSpacing: 2,
-            ),
-          ),
-        ),
-      ),
-    // Waypoint bearing readout (bottom-left of glass)
-    if (state.lockedWaypoint >= 0)
-      Positioned(left: 24, bottom: 310, child: _waypointHudReadout(state)),
-    // Centre reticle
-    Align(
-      alignment: const Alignment(0, -0.10),
-      child: CustomPaint(painter: _ReticlePainter(), size: const Size(60, 60)),
-    ),
-    // Barrel-roll warning
-    if (state.isBarrelRolling)
-      Align(
-        alignment: const Alignment(0, -0.30),
-        child: const Text('◀  BARREL ROLL  ▶',
-            style: TextStyle(
-              color: _kWarn, fontSize: 36,
-              fontWeight: FontWeight.bold, letterSpacing: 4,
-            )),
-      ),
-  ]);
-}
+Widget _windshieldHud(GameState state) => buildCockpitWindshieldHud(state);
 
-Widget _waypointHudReadout(GameState state) {
-  final (name, wx, wz) = GameState.kWaypoints[state.lockedWaypoint];
-  final dx  = wx - state.playerPosition.x;
-  final dz  = wz - state.playerPosition.z;
-  final dist = math.sqrt(dx * dx + dz * dz);
-  final brg  = ((math.atan2(dx, dz) * 180 / math.pi) + 360) % 360;
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: Colors.black.withValues(alpha: 0.35),
-      border: Border.all(color: const Color(0xFF00FF88).withValues(alpha: 0.4), width: 1),
-    ),
-    child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('◆ $name', style: const TextStyle(color: Color(0xFF00FF88), fontSize: 16, letterSpacing: 1)),
-      Text('BRG ${brg.toStringAsFixed(0)}°  DIST ${dist.toStringAsFixed(0)}',
-          style: const TextStyle(color: Color(0xFF00CC66), fontSize: 16)),
-    ]),
-  );
-}
-
-Widget _hudReadout(String label, String value, String unit) {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: Colors.black.withValues(alpha: 0.35),
-      border: Border.all(color: _kHudGreen.withValues(alpha: 0.4), width: 1),
-    ),
-    child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Text(label, style: TextStyle(color: _kHudGreen.withValues(alpha: 0.6), fontSize: 16)),
-      Text(value,  style: const TextStyle(color: _kHudGreen, fontSize: 28, fontWeight: FontWeight.bold)),
-      Text(unit,   style: const TextStyle(color: _kHudDim, fontSize: 16)),
-    ]),
-  );
-}
-
-Widget _headingStrip(GameState state) {
-  final hdg = ((state.playerRotation.y % 360) + 360) % 360;
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-    decoration: BoxDecoration(
-      color: Colors.black.withValues(alpha: 0.35),
-      border: Border.all(color: _kHudGreen.withValues(alpha: 0.4), width: 1),
-    ),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Text('HDG ', style: const TextStyle(color: _kHudDim, fontSize: 16)),
-      Text('${hdg.toStringAsFixed(0)}°',
-          style: const TextStyle(color: _kHudGreen, fontSize: 20, fontWeight: FontWeight.bold)),
-      const Text('   PCH ', style: TextStyle(color: _kHudDim, fontSize: 8)),
-      Text('${state.flightPitchAngle.toStringAsFixed(0)}°',
-          style: const TextStyle(color: _kHudGreen, fontSize: 20, fontWeight: FontWeight.bold)),
-      const Text('   BNK ', style: TextStyle(color: _kHudDim, fontSize: 8)),
-      Text('${state.flightBankAngle.toStringAsFixed(0)}°',
-          style: const TextStyle(color: _kHudGreen, fontSize: 20, fontWeight: FontWeight.bold)),
-    ]),
-  );
-}
-
-class _ReticlePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = Offset(size.width / 2, size.height / 2);
-    final stroke = Paint()..style = PaintingStyle.stroke;
-    // Dim outer ring
-    canvas.drawCircle(c, 24, stroke..color = _kHudDim..strokeWidth = 1);
-    // Inner dot
-    canvas.drawCircle(c, 2.5,
-        Paint()..color = _kHudGreen..style = PaintingStyle.fill);
-    // Cross hairs
-    stroke.color = _kHudGreen; stroke.strokeWidth = 1.5;
-    canvas.drawLine(Offset(c.dx - 30, c.dy), Offset(c.dx - 10, c.dy), stroke);
-    canvas.drawLine(Offset(c.dx + 10, c.dy), Offset(c.dx + 30, c.dy), stroke);
-    canvas.drawLine(Offset(c.dx, c.dy - 30), Offset(c.dx, c.dy - 10), stroke);
-    canvas.drawLine(Offset(c.dx, c.dy + 10), Offset(c.dx, c.dy + 30), stroke);
-  }
-
-  @override
-  bool shouldRepaint(_ReticlePainter _) => false;
-}
-
-// ── Cockpit Panel ─────────────────────────────────────────────────────────────
+// Cockpit Panel
 
 Widget _cockpitPanel(GameState state, {
   void Function(int)? onAbilityActivate,
@@ -320,6 +182,7 @@ Widget _cockpitPanel(GameState state, {
   VoidCallback?                  onThrottleModeToggle,
   void Function(double)?         onThrottleChange,
   void Function(int)? onAuxPage, void Function(int)? onAuxMirrorScroll, void Function(int)? onAuxVideoScroll,
+  void Function(int)? onManeuverScroll, void Function()? onManeuverExecute, void Function()? onManeuverStop,
 }) {
   final lp       = state.leftMfdPage;
   final rp       = state.rightMfdPage;
@@ -423,12 +286,13 @@ Widget _cockpitPanel(GameState state, {
         const SizedBox(width: 20),
         // Aux display — CHAT / VID / MAP / MIRROR
         drag('auxDisp', 'Aux Display', buildAuxDisplay(state,
-            onPage: onAuxPage, onMirrorScroll: onAuxMirrorScroll, onVideoScroll: onAuxVideoScroll)),
+            onPage: onAuxPage, onMirrorScroll: onAuxMirrorScroll, onVideoScroll: onAuxVideoScroll,
+            onManeuverScroll: onManeuverScroll, onManeuverExecute: onManeuverExecute, onManeuverStop: onManeuverStop)),
       ]),
   );
 }
 
-// ── OSB helpers ───────────────────────────────────────────────────────────────
+// OSB helpers
 
 class _Osb {
   final String label;
@@ -490,8 +354,7 @@ Widget _abilityOsbRow(GameState state, void Function(int)? onActivate) {
 
 /// Derive a ≤4-char OSB label from an ability name.
 ///
-/// Prefers the first word when it is 4+ characters (e.g. "Fire" → "FIRE"),
-/// otherwise falls back to the last word (e.g. "Ice" → "NOVA").
+/// Prefers the first word (4+ chars), otherwise falls back to the last word.
 String _abilityOsbLabel(String name) {
   final parts = name.split(' ');
   final word  = (parts.first.length >= 4) ? parts.first : parts.last;
