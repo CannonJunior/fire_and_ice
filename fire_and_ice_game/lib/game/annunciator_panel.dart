@@ -100,8 +100,8 @@ Widget buildAnnunciatorPanel(GameState state, {VoidCallback? onChanged}) {
 
 // ── Cell dimensions (match OSB buttons) ──────────────────────────────────────
 
-const double _w = 38;
-const double _h = 28;
+const double _w = 76;
+const double _h = 56;
 
 // ── Interactive engine-fire light with glass shield ───────────────────────────
 
@@ -176,7 +176,7 @@ class _EngineFireLightState extends State<_EngineFireLight>
         animation: _ctrl,
         builder: (_, __) {
           // Shield slides from full height (closed) down to a 4px guard tab (open).
-          const tab     = 4.0;
+          const tab     = 8.0;
           final shieldH = tab + (_h - tab) * (1.0 - _ctrl.value);
           final closed  = _ctrl.value < 0.5;
           return Stack(
@@ -199,11 +199,11 @@ class _EngineFireLightState extends State<_EngineFireLight>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(label, textAlign: TextAlign.center,
-                          style: TextStyle(color: fg, fontSize: 6.5,
+                          style: TextStyle(color: fg, fontSize: 13,
                               fontWeight: FontWeight.bold, letterSpacing: 0.3)),
                       Text(widget.halonFired ? 'OUT' : 'FIRE',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: fg, fontSize: 6.5,
+                          style: TextStyle(color: fg, fontSize: 13,
                               fontWeight: FontWeight.bold, letterSpacing: 0.3)),
                     ],
                   ),
@@ -228,11 +228,11 @@ class _EngineFireLightState extends State<_EngineFireLight>
                         ),
                       ),
                     ),
-                    child: closed && shieldH > 14
+                    child: closed && shieldH > 28
                         ? const Text('SAFE',
                             style: TextStyle(
                               color: Color(0xFF00CCDD),
-                              fontSize: 5.5,
+                              fontSize: 11,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 0.5,
                             ))
@@ -269,10 +269,10 @@ Widget _cell(_Light light, bool active) {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(light.line1, textAlign: TextAlign.center,
-            style: TextStyle(color: fg, fontSize: 6.5,
+            style: TextStyle(color: fg, fontSize: 13,
                 fontWeight: FontWeight.bold, letterSpacing: 0.3)),
         Text(light.line2, textAlign: TextAlign.center,
-            style: TextStyle(color: fg, fontSize: 6.5,
+            style: TextStyle(color: fg, fontSize: 13,
                 fontWeight: FontWeight.bold, letterSpacing: 0.3)),
       ],
     ),

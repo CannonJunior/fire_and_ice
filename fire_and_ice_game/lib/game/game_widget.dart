@@ -457,7 +457,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             onNavMapTap:    (wx, wz) => setState(() => _state.addWaypoint(wx, wz)),
             onDeleteWaypoint:    (i) => setState(() => _state.removeWaypoint(i)),
             onAnnunciatorChange: () => setState(() {}),
-            onThrottleModeToggle: () => setState(_state.stepThrottleMode), onThrottleChange: (v) => setState(() => _state.throttle = v.clamp(0.0, 1.0)), onAuxPage: (p) => setState(() => _state.auxDisplayPage = p), onAuxMirrorScroll: (d) => setState(() => _state.scrollAuxMirror(d)),
+            onThrottleModeToggle: () => setState(_state.stepThrottleMode), onThrottleChange: (v) => setState(() => _state.throttle = v.clamp(0.0, 1.0)), onAuxPage: (p) => setState(() => _state.auxDisplayPage = p), onAuxMirrorScroll: (d) => setState(() => _state.scrollAuxMirror(d)), onAuxVideoScroll: (d) => setState(() => _state.scrollAuxVideo(d)),
           ),
 
           // ── Top-right menu buttons ─────────────────────────────────────────

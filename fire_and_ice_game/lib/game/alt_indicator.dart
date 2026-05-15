@@ -34,22 +34,22 @@ Widget buildAltIndicator(GameState state) {
   final ms        = fireBelow ? DateTime.now().millisecondsSinceEpoch : 0;
 
   return Container(
-    width: 44,
+    width: 88,
     decoration: BoxDecoration(
       color: _kBg, border: Border.all(color: _kBorder, width: 2)),
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       // Header — turns amber when fire detected below
-      Container(height: 14, color: _kHeader,
+      Container(height: 28, color: _kHeader,
         child: Center(child: Text('ALT',
           style: TextStyle(
             color: fireBelow ? const Color(0xFFFF8800) : _kDimTxt,
-            fontSize: 6.5, fontWeight: FontWeight.bold, letterSpacing: 1.5)))),
+            fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.5)))),
       // Scale ceiling
       Padding(padding: const EdgeInsets.only(top: 2, bottom: 1),
         child: Text(_fmt(scale), textAlign: TextAlign.center,
-          style: const TextStyle(color: _kDimTxt, fontSize: 5.5))),
+          style: const TextStyle(color: _kDimTxt, fontSize: 11))),
       // Bar
-      SizedBox(height: 80, child: Padding(
+      SizedBox(height: 160, child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 5),
         child: CustomPaint(
           painter: _AltBarPainter(
@@ -59,7 +59,7 @@ Widget buildAltIndicator(GameState state) {
       // Scale floor
       const Padding(padding: EdgeInsets.only(bottom: 2),
         child: Text('0', textAlign: TextAlign.center,
-          style: TextStyle(color: _kDimTxt, fontSize: 5.5))),
+          style: TextStyle(color: _kDimTxt, fontSize: 11))),
       _readout('MSL', msl),
       _readout('AGL', agl),
       // Fire zone label — only shown when fire is detected
@@ -68,7 +68,7 @@ Widget buildAltIndicator(GameState state) {
           padding: EdgeInsets.only(bottom: 3),
           child: Text('▲ FIRE', textAlign: TextAlign.center,
             style: TextStyle(color: Color(0xFFFF6600),
-                fontSize: 5.5, letterSpacing: 0.5, fontWeight: FontWeight.bold)),
+                fontSize: 11, letterSpacing: 0.5, fontWeight: FontWeight.bold)),
         )
       else
         const SizedBox(height: 2),
@@ -90,11 +90,11 @@ String _fmt(double v) =>
 Widget _readout(String label, double v) => Padding(
   padding: const EdgeInsets.fromLTRB(4, 0, 4, 2),
   child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-    Text(label, style: const TextStyle(color: _kDimTxt, fontSize: 6.5)),
+    Text(label, style: const TextStyle(color: _kDimTxt, fontSize: 13)),
     Flexible(child: Text(_fmt(v), textAlign: TextAlign.right,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(
-            color: _kAirTxt, fontSize: 6.5, fontWeight: FontWeight.bold))),
+            color: _kAirTxt, fontSize: 13, fontWeight: FontWeight.bold))),
   ]),
 );
 

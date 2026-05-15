@@ -15,15 +15,15 @@ const _kWarn  = Color(0xFFFF6600);
 
 Widget _hdr(String title, String mode, Color fg, Color dim) {
   return Container(
-    height: 20,
+    height: 40,
     padding: const EdgeInsets.symmetric(horizontal: 6),
     color: dim.withValues(alpha: 0.4),
     child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text(title, style: TextStyle(color: fg, fontSize: 9, letterSpacing: 1)),
+      Text(title, style: TextStyle(color: fg, fontSize: 18, letterSpacing: 1)),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
         color: fg.withValues(alpha: 0.2),
-        child: Text(mode, style: TextStyle(color: fg, fontSize: 8, fontWeight: FontWeight.bold)),
+        child: Text(mode, style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.bold)),
       ),
     ]),
   );
@@ -52,12 +52,12 @@ Widget buildStatPage(GameState state) {
     Expanded(child: Padding(
       padding: const EdgeInsets.all(8),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('VITALS', style: TextStyle(color: _kLDim, fontSize: 7, letterSpacing: 2)),
+        Text('VITALS', style: TextStyle(color: _kLDim, fontSize: 14, letterSpacing: 2)),
         const SizedBox(height: 4),
         _vitalRow('HEALTH', '$hpPct%', hpStatus, hpCol, hpF),
         _vitalRow('MANA  ', '$mpPct%', mpStatus, mpCol, mpF),
         const SizedBox(height: 8),
-        Text('FLIGHT', style: TextStyle(color: _kLDim, fontSize: 7, letterSpacing: 2)),
+        Text('FLIGHT', style: TextStyle(color: _kLDim, fontSize: 14, letterSpacing: 2)),
         const SizedBox(height: 4),
         _dataLine('ALTITUDE', '${state.flightAltitude.toStringAsFixed(1)} m'),
         _dataLine('SPEED   ', '${state.flightSpeed.toStringAsFixed(1)} u/s'),
@@ -66,7 +66,7 @@ Widget buildStatPage(GameState state) {
       ]),
     )),
     Container(
-      height: 22,
+      height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       color: _kLDim.withValues(alpha: 0.3),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -82,20 +82,20 @@ Widget _vitalRow(String label, String pct, String status, Color col, double f) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 5),
     child: Row(children: [
-      SizedBox(width: 48,
-          child: Text(label, style: TextStyle(color: _kLDim, fontSize: 7))),
+      SizedBox(width: 96,
+          child: Text(label, style: TextStyle(color: _kLDim, fontSize: 14))),
       Expanded(child: Stack(children: [
-        Container(height: 5, color: _kLDim.withValues(alpha: 0.2)),
+        Container(height: 10, color: _kLDim.withValues(alpha: 0.2)),
         FractionallySizedBox(
           widthFactor: f.clamp(0.0, 1.0),
           alignment: Alignment.centerLeft,
-          child: Container(height: 5, color: col),
+          child: Container(height: 10, color: col),
         ),
       ])),
       const SizedBox(width: 4),
-      SizedBox(width: 26, child: Text(pct, style: TextStyle(color: col, fontSize: 7))),
-      SizedBox(width: 28, child: Text(status,
-          style: TextStyle(color: col, fontSize: 7, fontWeight: FontWeight.bold))),
+      SizedBox(width: 52, child: Text(pct, style: TextStyle(color: col, fontSize: 14))),
+      SizedBox(width: 56, child: Text(status,
+          style: TextStyle(color: col, fontSize: 14, fontWeight: FontWeight.bold))),
     ]),
   );
 }
@@ -130,7 +130,7 @@ Widget buildModePage(GameState state) {
       ]),
     )),
     Container(
-      height: 22,
+      height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       color: _kLDim.withValues(alpha: 0.3),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -149,7 +149,7 @@ Widget _modeRow(String label, String value) {
       starred ? label.substring(1).trim() : label.trim(),
       style: TextStyle(color: fg, fontSize: 8),
     )),
-    Text(value, style: TextStyle(color: fg, fontSize: 8, fontWeight: FontWeight.bold)),
+    Text(value, style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.bold)),
   ]);
 }
 
@@ -170,7 +170,7 @@ Widget buildTerrPage(GameState state) {
       child: Container(),
     )),
     Container(
-      height: 38,
+      height: 76,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       color: _kRDim.withValues(alpha: 0.3),
       child: Column(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
@@ -179,7 +179,7 @@ Widget buildTerrPage(GameState state) {
               style: const TextStyle(color: _kRFg, fontSize: 8)),
           Text('CLR:${clearance.toStringAsFixed(1)}m',
               style: TextStyle(color: gpwsCol, fontSize: 8)),
-          Text(gpws, style: TextStyle(color: gpwsCol, fontSize: 8, fontWeight: FontWeight.bold)),
+          Text(gpws, style: TextStyle(color: gpwsCol, fontSize: 16, fontWeight: FontWeight.bold)),
         ]),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('GND:${state.terrainHeight.toStringAsFixed(1)}m',
@@ -222,7 +222,7 @@ class _CompassPainter extends CustomPainter {
         final lbl = cardinals[i ~/ 2];
         final tp = TextPainter(
           text: TextSpan(text: lbl,
-              style: TextStyle(color: _kRFg, fontSize: 10, fontWeight: FontWeight.bold)),
+              style: TextStyle(color: _kRFg, fontSize: 20, fontWeight: FontWeight.bold)),
           textDirection: TextDirection.ltr,
         )..layout();
         tp.paint(canvas, Offset(cx + cos * (r - 22) - tp.width / 2, cy + sin * (r - 22) - tp.height / 2));
@@ -261,7 +261,7 @@ Widget buildFirePage(GameState state) {
       child: Container(),
     )),
     Container(
-      height: 38,
+      height: 76,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       color: _kRDim.withValues(alpha: 0.3),
       child: Column(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
@@ -269,7 +269,7 @@ Widget buildFirePage(GameState state) {
           const Text('MODE:THERM', style: TextStyle(color: _kRFg, fontSize: 8)),
           const Text('RNG:50km',   style: TextStyle(color: _kRFg, fontSize: 8)),
           Text('FIRES:${_fireHotspots.length}',
-              style: const TextStyle(color: _kWarn, fontSize: 8, fontWeight: FontWeight.bold)),
+              style: const TextStyle(color: _kWarn, fontSize: 16, fontWeight: FontWeight.bold)),
         ]),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('SCAN:ACTIVE', style: TextStyle(color: _kRFg, fontSize: 8)),
@@ -368,17 +368,17 @@ Widget buildMarkPage(GameState state, {Function(int)? onDeleteWaypoint}) {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       color: _kRDim.withValues(alpha: 0.15),
       child: Row(children: [
-        SizedBox(width: 18, child: Text('#', style: TextStyle(color: _kRDim, fontSize: 7))),
-        Expanded(child: Text('NAME', style: TextStyle(color: _kRDim, fontSize: 7))),
-        SizedBox(width: 28, child: Text('RNG', style: TextStyle(color: _kRDim, fontSize: 7), textAlign: TextAlign.right)),
-        SizedBox(width: 28, child: Text('BRG', style: TextStyle(color: _kRDim, fontSize: 7), textAlign: TextAlign.right)),
-        const SizedBox(width: 22),
+        SizedBox(width: 36, child: Text('#', style: TextStyle(color: _kRDim, fontSize: 14))),
+        Expanded(child: Text('NAME', style: TextStyle(color: _kRDim, fontSize: 14))),
+        SizedBox(width: 56, child: Text('RNG', style: TextStyle(color: _kRDim, fontSize: 14), textAlign: TextAlign.right)),
+        SizedBox(width: 56, child: Text('BRG', style: TextStyle(color: _kRDim, fontSize: 14), textAlign: TextAlign.right)),
+        const SizedBox(width: 44),
       ]),
     ),
     // Waypoint list
     Expanded(child: plan.isEmpty
       ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('NO WAYPOINTS', style: TextStyle(color: _kRDim, fontSize: 9, letterSpacing: 1)),
+          Text('NO WAYPOINTS', style: TextStyle(color: _kRDim, fontSize: 18, letterSpacing: 1)),
           const SizedBox(height: 4),
           Text('TAP NAV MAP TO ADD', style: TextStyle(color: _kRDim.withValues(alpha: 0.5), fontSize: 7)),
         ]))
@@ -394,26 +394,26 @@ Widget buildMarkPage(GameState state, {Function(int)? onDeleteWaypoint}) {
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             child: Row(children: [
-              SizedBox(width: 18, child: Text(
+              SizedBox(width: 36, child: Text(
                 isTgt ? '▶' : '${(i + 1).toString().padLeft(2, '0')}',
-                style: TextStyle(color: dim, fontSize: 8),
+                style: TextStyle(color: dim, fontSize: 16),
               )),
-              Expanded(child: Text(name, style: TextStyle(color: col, fontSize: 8))),
-              SizedBox(width: 28, child: Text(rng.toStringAsFixed(0),
-                  style: TextStyle(color: col, fontSize: 8), textAlign: TextAlign.right)),
-              SizedBox(width: 28, child: Text('${brg.toStringAsFixed(0)}°',
-                  style: TextStyle(color: dim, fontSize: 8), textAlign: TextAlign.right)),
+              Expanded(child: Text(name, style: TextStyle(color: col, fontSize: 16))),
+              SizedBox(width: 56, child: Text(rng.toStringAsFixed(0),
+                  style: TextStyle(color: col, fontSize: 16), textAlign: TextAlign.right)),
+              SizedBox(width: 56, child: Text('${brg.toStringAsFixed(0)}°',
+                  style: TextStyle(color: dim, fontSize: 16), textAlign: TextAlign.right)),
               const SizedBox(width: 4),
               GestureDetector(
                 onTap: () => onDeleteWaypoint?.call(i),
                 child: Container(
-                  width: 18, height: 14,
+                  width: 36, height: 28,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: const Color(0xFF1A0808),
                     border: Border.all(color: const Color(0xFF662222), width: 0.5),
                   ),
-                  child: const Text('×', style: TextStyle(color: Color(0xFFCC4444), fontSize: 10)),
+                  child: const Text('×', style: TextStyle(color: Color(0xFFCC4444), fontSize: 20)),
                 ),
               ),
             ]),
@@ -422,7 +422,7 @@ Widget buildMarkPage(GameState state, {Function(int)? onDeleteWaypoint}) {
     ),
     // Footer: active target
     Container(
-      height: 22,
+      height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       color: _kRDim.withValues(alpha: 0.3),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [

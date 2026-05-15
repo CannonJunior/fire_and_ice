@@ -36,15 +36,15 @@ Widget buildLoadoutPage(GameState state) {
 
 Widget _header() {
   return Container(
-    height: 20,
+    height: 40,
     padding: const EdgeInsets.symmetric(horizontal: 6),
     color: _kDim.withValues(alpha: 0.4),
     child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text('STORES MANAGEMENT', style: const TextStyle(color: _kFg, fontSize: 9, letterSpacing: 1)),
+      Text('STORES MANAGEMENT', style: const TextStyle(color: _kFg, fontSize: 18, letterSpacing: 1)),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
         color: _kFg.withValues(alpha: 0.2),
-        child: const Text('LOAD', style: TextStyle(color: _kFg, fontSize: 8, fontWeight: FontWeight.bold)),
+        child: const Text('LOAD', style: TextStyle(color: _kFg, fontSize: 16, fontWeight: FontWeight.bold)),
       ),
     ]),
   );
@@ -55,11 +55,11 @@ Widget _footer(int totalLeft, int totalMax, bool armed, GameState state) {
   final armText = armed ? 'ARMED' : 'SAFE ';
   final retrLbl = const ['25%', '50%', '75%', 'MAX'][state.retardantLevel];
   return Container(
-    height: 28,
+    height: 56,
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
     color: _kDim.withValues(alpha: 0.3),
     child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text('SUPR:$armText', style: TextStyle(color: armCol, fontSize: 8, fontWeight: FontWeight.bold)),
+      Text('SUPR:$armText', style: TextStyle(color: armCol, fontSize: 16, fontWeight: FontWeight.bold)),
       Text('STORES:$totalLeft/$totalMax', style: const TextStyle(color: _kFg, fontSize: 8)),
       Text('RETR:$retrLbl', style: const TextStyle(color: _kDim, fontSize: 8)),
     ]),

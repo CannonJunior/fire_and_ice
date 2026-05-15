@@ -12,11 +12,15 @@ class TerrainChunk {
   final Mesh      mesh;
   final Transform3d transform;
 
+  /// Grid resolution this chunk was generated at (32 = full, 16 = LOD).
+  final int gridSize;
+
   const TerrainChunk({
     required this.chunkX,
     required this.chunkZ,
     required this.mesh,
     required this.transform,
+    required this.gridSize,
   });
 
   /// World position of this chunk's (0, 0) corner.

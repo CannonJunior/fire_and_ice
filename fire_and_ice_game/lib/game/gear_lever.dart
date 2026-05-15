@@ -37,7 +37,7 @@ Widget buildGearLever(GameState state, {VoidCallback? onTap}) {
   return GestureDetector(
     onTap: state.gameMode == GameMode.taxi ? null : onTap,
     child: Container(
-      width: 46,
+      width: 92,
       decoration: BoxDecoration(
         color: _kBg,
         border: Border.all(color: _kBevel, width: 2),
@@ -45,14 +45,14 @@ Widget buildGearLever(GameState state, {VoidCallback? onTap}) {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         // Header
         Container(
-          height: 14,
+          height: 28,
           color: _kDim.withValues(alpha: 0.4),
           child: Center(child: Text('GEAR',
-              style: TextStyle(color: _kDim, fontSize: 6.5, fontWeight: FontWeight.bold, letterSpacing: 1))),
+              style: TextStyle(color: _kDim, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1))),
         ),
         // Lever slot + knob
         SizedBox(
-          height: 60,
+          height: 120,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: CustomPaint(
@@ -77,7 +77,7 @@ Widget buildGearLever(GameState state, {VoidCallback? onTap}) {
 
 Widget _light(String label, bool active, Color color) {
   return Container(
-    height: 12,
+    height: 24,
     decoration: BoxDecoration(
       color: active ? color.withValues(alpha: 0.2) : Colors.transparent,
       border: Border.all(color: active ? color : _kDim, width: 1),
@@ -85,7 +85,7 @@ Widget _light(String label, bool active, Color color) {
     child: Center(child: Text(label,
         style: TextStyle(
           color: active ? color : _kDim,
-          fontSize: 6.5, fontWeight: FontWeight.bold,
+          fontSize: 13, fontWeight: FontWeight.bold,
         ))),
   );
 }
@@ -100,7 +100,7 @@ class _LeverPainter extends CustomPainter {
     final cx      = size.width / 2;
     final trackH  = size.height - 14;
     const trackW  = 4.0;
-    const knobR   = 7.0;
+    const knobR   = 14.0;
 
     // Pivot point (top centre)
     final pivotY  = knobR;
@@ -132,14 +132,14 @@ class _LeverPainter extends CustomPainter {
         Paint()..color = color.withValues(alpha: 0.4)..style = PaintingStyle.stroke..strokeWidth = 2);
 
     // UP / DN labels
-    const lblStyle = TextStyle(color: _kDim, fontSize: 7);
+    const lblStyle = TextStyle(color: _kDim, fontSize: 14);
     void drawLbl(String txt, double y) {
       final tp = TextPainter(text: TextSpan(text: txt, style: lblStyle), textDirection: TextDirection.ltr)
         ..layout();
       tp.paint(canvas, Offset(cx - tp.width / 2, y));
     }
     drawLbl('UP', 0);
-    drawLbl('DN', size.height - 10);
+    drawLbl('DN', size.height - 20);
   }
 
   @override
@@ -168,7 +168,7 @@ Widget buildFlapsLever(GameState state, {VoidCallback? onTap}) {
   return GestureDetector(
     onTap: onTap,
     child: Container(
-      width: 46,
+      width: 92,
       decoration: BoxDecoration(
         color: _kBg,
         border: Border.all(color: _kBevel, width: 2),
@@ -176,15 +176,15 @@ Widget buildFlapsLever(GameState state, {VoidCallback? onTap}) {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         // Header
         Container(
-          height: 14,
+          height: 28,
           color: _kDim.withValues(alpha: 0.4),
           child: Center(child: Text('FLAP',
-              style: TextStyle(color: _kDim, fontSize: 6.5,
+              style: TextStyle(color: _kDim, fontSize: 13,
                   fontWeight: FontWeight.bold, letterSpacing: 1))),
         ),
         // Lever slot with 4 detent notches
         SizedBox(
-          height: 60,
+          height: 120,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: CustomPaint(
@@ -228,7 +228,7 @@ class _FlapsLeverPainter extends CustomPainter {
     final tp = Paint()..color = _kDim..strokeWidth = 1.5;
     for (int i = 0; i <= 3; i++) {
       final y = knobR + trackH * (i / 3);
-      canvas.drawLine(Offset(cx - 6, y), Offset(cx + 6, y), tp);
+      canvas.drawLine(Offset(cx - 12, y), Offset(cx + 12, y), tp);
     }
 
     // Knob at current detent
@@ -240,7 +240,7 @@ class _FlapsLeverPainter extends CustomPainter {
               ..style = PaintingStyle.stroke..strokeWidth = 2);
 
     // Labels
-    const lblStyle = TextStyle(color: _kDim, fontSize: 7);
+    const lblStyle = TextStyle(color: _kDim, fontSize: 14);
     void drawLbl(String txt, double y) {
       final painter = TextPainter(
           text: TextSpan(text: txt, style: lblStyle),
@@ -249,7 +249,7 @@ class _FlapsLeverPainter extends CustomPainter {
       painter.paint(canvas, Offset(cx - painter.width / 2, y));
     }
     drawLbl('UP',  0);
-    drawLbl('FUL', size.height - 10);
+    drawLbl('FUL', size.height - 20);
   }
 
   @override
@@ -274,19 +274,19 @@ Widget buildThrottleGauge(GameState state, {VoidCallback? onModeToggle}) {
     return GestureDetector(
       onTap: onModeToggle,
       child: Container(
-        width: 52,
+        width: 104,
         decoration: BoxDecoration(color: bg, border: Border.all(color: bev, width: 2)),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(height: 14, color: const Color(0xFF1A1200).withValues(alpha: 0.5),
+          Container(height: 28, color: const Color(0xFF1A1200).withValues(alpha: 0.5),
             child: const Center(child: Text('THR',
-              style: TextStyle(color: Color(0xFF554400), fontSize: 6.5,
+              style: TextStyle(color: Color(0xFF554400), fontSize: 13,
                   fontWeight: FontWeight.bold, letterSpacing: 1)))),
           Padding(padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text('$pct',
               style: const TextStyle(color: Color(0xFFFFAA00),
-                  fontSize: 26, fontWeight: FontWeight.bold))),
+                  fontSize: 52, fontWeight: FontWeight.bold))),
           const Padding(padding: EdgeInsets.only(bottom: 4),
-            child: Text('%', style: TextStyle(color: Color(0xFF554400), fontSize: 8))),
+            child: Text('%', style: TextStyle(color: Color(0xFF554400), fontSize: 16))),
         ]),
       ),
     );
@@ -294,26 +294,26 @@ Widget buildThrottleGauge(GameState state, {VoidCallback? onModeToggle}) {
 
   final showEng = mode == 1;
   return Container(
-    width: showEng ? 86 : 48,
+    width: showEng ? 172 : 96,
     decoration: BoxDecoration(color: bg, border: Border.all(color: bev, width: 2)),
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       // Header — mode toggle button on left
       Row(children: [
         GestureDetector(
           onTap: onModeToggle,
-          child: Container(width: 18, height: 14,
+          child: Container(width: 36, height: 28,
             color: const Color(0xFF111120),
             child: Center(child: Text(showEng ? '≡+' : '≡',
-              style: const TextStyle(color: Color(0xFF6688AA), fontSize: 7)))),
+              style: const TextStyle(color: Color(0xFF6688AA), fontSize: 14)))),
         ),
-        Expanded(child: Container(height: 14,
+        Expanded(child: Container(height: 28,
           color: const Color(0xFF1A1200).withValues(alpha: 0.5),
           child: const Center(child: Text('THR',
-            style: TextStyle(color: Color(0xFF554400), fontSize: 6.5,
+            style: TextStyle(color: Color(0xFF554400), fontSize: 13,
                 fontWeight: FontWeight.bold, letterSpacing: 1))))),
       ]),
       SizedBox(
-        height: 60,
+        height: 120,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
           child: Row(children: [
@@ -322,7 +322,7 @@ Widget buildThrottleGauge(GameState state, {VoidCallback? onModeToggle}) {
                 child: const SizedBox.expand())),
             if (showEng) ...[
               const SizedBox(width: 3),
-              SizedBox(width: 38, child: CustomPaint(
+              SizedBox(width: 76, child: CustomPaint(
                   painter: _EngineBarsPainter(
                       n1: state.engineN1, egt: state.engineEgt, n2: state.engineN2),
                   child: const SizedBox.expand())),
@@ -333,7 +333,7 @@ Widget buildThrottleGauge(GameState state, {VoidCallback? onModeToggle}) {
       Padding(padding: const EdgeInsets.only(bottom: 4),
         child: Text('$pct%',
           style: const TextStyle(color: Color(0xFFFFAA00),
-              fontSize: 7, fontWeight: FontWeight.bold))),
+              fontSize: 14, fontWeight: FontWeight.bold))),
     ]),
   );
 }

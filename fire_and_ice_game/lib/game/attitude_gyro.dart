@@ -6,19 +6,19 @@ const _kBevel = Color(0xFF30303C);
 
 Widget buildAttitudeGyro(GameState state) {
   return Container(
-    width: 180,
+    width: 360,
     decoration: BoxDecoration(
       color: const Color(0xFF000810),
       border: Border.all(color: _kBevel, width: 2),
     ),
     child: Column(children: [
       Container(
-        height: 16,
+        height: 32,
         padding: const EdgeInsets.symmetric(horizontal: 6),
         color: const Color(0xFF0D1F33).withValues(alpha: 0.7),
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('ATTITUDE GYR',
-              style: TextStyle(color: Color(0xFF4477AA), fontSize: 7, letterSpacing: 1)),
+              style: TextStyle(color: Color(0xFF4477AA), fontSize: 14, letterSpacing: 1)),
           Text(
             'P:${state.flightPitchAngle.toStringAsFixed(0)}°'
             '  B:${state.flightBankAngle.toStringAsFixed(0)}°',
@@ -27,7 +27,7 @@ Widget buildAttitudeGyro(GameState state) {
         ]),
       ),
       SizedBox(
-        height: 86,
+        height: 172,
         child: ClipRect(child: CustomPaint(
           painter: _AttitudeGyroPainter(
             pitch: state.flightPitchAngle,
@@ -55,7 +55,7 @@ class _AttitudeGyroPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final cx = size.width  / 2;
     final cy = size.height / 2;
-    const pixPerDeg = 1.7;
+    const pixPerDeg = 3.4;
     final pitchPx = pitch * pixPerDeg;
     final bankRad = bank * math.pi / 180;
 
@@ -75,7 +75,7 @@ class _AttitudeGyroPainter extends CustomPainter {
     for (int d = -30; d <= 30; d += 10) {
       if (d == 0) continue;
       final y  = -d * pixPerDeg;
-      final hw = d.abs() == 20 ? 26.0 : 17.0;
+      final hw = d.abs() == 20 ? 52.0 : 34.0;
       canvas.drawLine(Offset(-hw, y), Offset(-5, y), lp);
       canvas.drawLine(Offset(  5, y), Offset(hw, y), lp);
       final tick = d > 0 ? 4.0 : -4.0;
@@ -86,13 +86,13 @@ class _AttitudeGyroPainter extends CustomPainter {
     canvas.restore();
 
     final wp = Paint()..color = _kWings..strokeWidth = 2..style = PaintingStyle.stroke;
-    canvas.drawLine(Offset(cx - 30, cy), Offset(cx - 7, cy), wp);
-    canvas.drawLine(Offset(cx -  7, cy), Offset(cx - 7, cy + 5), wp);
-    canvas.drawLine(Offset(cx +  7, cy), Offset(cx + 30, cy), wp);
-    canvas.drawLine(Offset(cx +  7, cy), Offset(cx + 7, cy + 5), wp);
-    canvas.drawCircle(Offset(cx, cy), 2, Paint()..color = _kWings..style = PaintingStyle.fill);
+    canvas.drawLine(Offset(cx - 60, cy), Offset(cx - 14, cy), wp);
+    canvas.drawLine(Offset(cx - 14, cy), Offset(cx - 14, cy + 10), wp);
+    canvas.drawLine(Offset(cx + 14, cy), Offset(cx + 60, cy), wp);
+    canvas.drawLine(Offset(cx + 14, cy), Offset(cx + 14, cy + 10), wp);
+    canvas.drawCircle(Offset(cx, cy), 4, Paint()..color = _kWings..style = PaintingStyle.fill);
 
-    const arcR = 42.0;
+    const arcR = 84.0;
     canvas.drawArc(
       Rect.fromCircle(center: Offset(cx, cy), radius: arcR),
       -math.pi * 0.85, math.pi * 0.7, false,
@@ -102,7 +102,7 @@ class _AttitudeGyroPainter extends CustomPainter {
     for (final d in [-60, -45, -30, -20, -10, 10, 20, 30, 45, 60]) {
       final a     = -math.pi / 2 + d * math.pi / 180;
       final major = d.abs() % 30 == 0;
-      final inner = arcR - (major ? 7.0 : 4.0);
+      final inner = arcR - (major ? 14.0 : 8.0);
       canvas.drawLine(
         Offset(cx + math.cos(a) * inner, cy + math.sin(a) * inner),
         Offset(cx + math.cos(a) * arcR,  cy + math.sin(a) * arcR),
@@ -116,10 +116,10 @@ class _AttitudeGyroPainter extends CustomPainter {
     final back = pa + math.pi;
     final tri  = Path()
       ..moveTo(tip.dx, tip.dy)
-      ..lineTo(tip.dx + math.cos(perp) * 3.5 + math.cos(back) * 7,
-               tip.dy + math.sin(perp) * 3.5 + math.sin(back) * 7)
-      ..lineTo(tip.dx - math.cos(perp) * 3.5 + math.cos(back) * 7,
-               tip.dy - math.sin(perp) * 3.5 + math.sin(back) * 7)
+      ..lineTo(tip.dx + math.cos(perp) * 7.0 + math.cos(back) * 14,
+               tip.dy + math.sin(perp) * 7.0 + math.sin(back) * 14)
+      ..lineTo(tip.dx - math.cos(perp) * 7.0 + math.cos(back) * 14,
+               tip.dy - math.sin(perp) * 7.0 + math.sin(back) * 14)
       ..close();
     canvas.drawPath(tri, Paint()..color = _kWings..style = PaintingStyle.fill);
   }

@@ -122,6 +122,12 @@ class ShaderProgram {
     if (loc != null) gl.uniformMatrix4fv(loc, false, m.storage);
   }
 
+  /// Upload a column-major 3×3 matrix uniform.
+  void setUniformMatrix3(String name, Matrix3 m) {
+    final loc = _getUniformLocation(name);
+    if (loc != null) gl.uniformMatrix3fv(loc, false, m.storage);
+  }
+
   /// Upload a vec3 uniform.
   void setUniformVector3(String name, Vector3 v) {
     final loc = _getUniformLocation(name);
@@ -151,25 +157,29 @@ class ShaderProgram {
 // ── GLSL shader sources ──────────────────────────────────────────────────────
 
 /// Default vertex shader: transforms position + normal through MVP matrices.
+///
+/// uViewProj = projection * view, pre-multiplied on the CPU once per frame.
+/// uNormalMatrix = mat3(uModel), pre-computed on the CPU once per draw call.
+/// Both eliminate per-vertex matrix operations from the GPU.
 const String defaultVertexShader = '''
 attribute vec3 aPosition;
 attribute vec3 aNormal;
 attribute vec4 aColor;
 
-uniform mat4 uProjection;
-uniform mat4 uView;
+uniform mat4 uViewProj;
 uniform mat4 uModel;
+uniform mat3 uNormalMatrix;
 
 varying vec3 vNormal;
 varying vec4 vColor;
 varying vec3 vFragPos;
 
 void main() {
-  vec4 worldPos = uModel * vec4(aPosition, 1.0);
-  vFragPos  = worldPos.xyz;
-  vNormal   = mat3(uModel) * aNormal;
-  vColor    = aColor;
-  gl_Position = uProjection * uView * worldPos;
+  vec4 worldPos   = uModel * vec4(aPosition, 1.0);
+  vFragPos        = worldPos.xyz;
+  vNormal         = uNormalMatrix * aNormal;
+  vColor          = aColor;
+  gl_Position     = uViewProj * worldPos;
 }
 ''';
 

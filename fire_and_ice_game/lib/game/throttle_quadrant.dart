@@ -48,7 +48,7 @@ class _TQState extends State<_ThrottleQuadrant> {
   double _tStart     = 0.0; // throttle at drag start
 
   // Track height in local pixels — set from layout
-  static const double _trackH = 72.0;
+  static const double _trackH = 144.0;
 
   double get _throttle => widget.state.throttle;
 
@@ -82,7 +82,7 @@ class _TQState extends State<_ThrottleQuadrant> {
     final gateColor = _gateLifted ? _kGateLifted : _kGate;
 
     return Container(
-      width: 88,
+      width: 176,
       decoration: BoxDecoration(
         color: _kHousing,
         border: Border.all(color: _kChrome, width: 2),
@@ -91,22 +91,22 @@ class _TQState extends State<_ThrottleQuadrant> {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         // Header
         Container(
-          height: 14,
+          height: 28,
           decoration: BoxDecoration(
             color: const Color(0xFF0E1018),
             border: const Border(bottom: BorderSide(color: _kChrome)),
           ),
           child: const Center(child: Text('THROTTLE QUAD',
-            style: TextStyle(color: _kText, fontSize: 6, letterSpacing: 1.5,
+            style: TextStyle(color: _kText, fontSize: 12, letterSpacing: 1.5,
                 fontWeight: FontWeight.bold))),
         ),
         // Gate status indicator
         Container(
-          height: 11,
+          height: 22,
           color: const Color(0xFF0A0C10),
           child: Center(child: Text(
             _gateLifted ? '⚠  GATE LIFTED  ⚠' : 'IDLE GATE LOCKED',
-            style: TextStyle(color: gateColor, fontSize: 6, letterSpacing: 0.8))),
+            style: TextStyle(color: gateColor, fontSize: 12, letterSpacing: 0.8))),
         ),
         // Lever area
         Padding(
@@ -116,7 +116,7 @@ class _TQState extends State<_ThrottleQuadrant> {
             onPanUpdate: _onPanUpdate,
             onPanEnd:    _onPanEnd,
             child: SizedBox(
-              height: _trackH + 30, // extra 30 for labels
+              height: _trackH + 60, // extra 60 for labels
               child: CustomPaint(
                 painter: _TQPainter(
                   throttle:   _throttle,
@@ -130,7 +130,7 @@ class _TQState extends State<_ThrottleQuadrant> {
         ),
         // N1 readout strip
         Container(
-          height: 14,
+          height: 28,
           decoration: const BoxDecoration(
             color: Color(0xFF0A0C10),
             border: Border(top: BorderSide(color: _kChrome)),
@@ -140,11 +140,11 @@ class _TQState extends State<_ThrottleQuadrant> {
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Text('N1 ', style: const TextStyle(color: _kDim, fontSize: 7)),
               Text('${(widget.state.engineN1 * 100).toStringAsFixed(0)}%',
-                  style: const TextStyle(color: Color(0xFF00CC44), fontSize: 7,
+                  style: const TextStyle(color: Color(0xFF00CC44), fontSize: 14,
                       fontWeight: FontWeight.bold)),
               const Text('  EGT ', style: TextStyle(color: _kDim, fontSize: 7)),
               Text('${(widget.state.engineEgt * 850 + 200).toStringAsFixed(0)}°',
-                  style: const TextStyle(color: Color(0xFFFFAA00), fontSize: 7,
+                  style: const TextStyle(color: Color(0xFFFFAA00), fontSize: 14,
                       fontWeight: FontWeight.bold)),
             ]),
           ),
@@ -169,10 +169,10 @@ class _TQPainter extends CustomPainter {
 
   // Track metrics
   static const _trackH   = _TQState._trackH;
-  static const _trackTop = 8.0;   // Y where TOGA is
-  static const _trackW   = 10.0;
-  static const _gripW    = 22.0;
-  static const _gripH    = 12.0;
+  static const _trackTop = 16.0;  // Y where TOGA is
+  static const _trackW   = 20.0;
+  static const _gripW    = 44.0;
+  static const _gripH    = 24.0;
   static const _gateY    = _trackTop + _trackH * (1 - _kIdleThresh);
 
   double _leverY(double t) => _trackTop + _trackH * (1 - t);
@@ -198,42 +198,42 @@ class _TQPainter extends CustomPainter {
     // Grip serration lines
     final sp = Paint()..color = const Color(0xFF333344)..strokeWidth = 1;
     for (int i = 0; i < 3; i++) {
-      final gx = lx - 7.0 + i * 7.0;
-      canvas.drawLine(Offset(gx, ly - _gripH + 3), Offset(gx, ly - 3), sp);
+      final gx = lx - 14.0 + i * 14.0;
+      canvas.drawLine(Offset(gx, ly - _gripH + 6), Offset(gx, ly - 6), sp);
     }
   }
 
   @override
   void paint(Canvas canvas, Size size) {
-    const cx1 = 18.0; // left lever X
-    final cx2 = size.width - 18.0; // right lever X
+    const cx1 = 36.0; // left lever X
+    final cx2 = size.width - 36.0; // right lever X
 
     for (final cx in [cx1, cx2]) {
       // Track slot
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTRB(cx - _trackW / 2, _trackTop, cx + _trackW / 2, _trackTop + _trackH + 14),
+          Rect.fromLTRB(cx - _trackW / 2, _trackTop, cx + _trackW / 2, _trackTop + _trackH + 28),
           const Radius.circular(2)),
         Paint()..color = _kTrack,
       );
 
       // Cutoff zone (below gate) — red tint
       canvas.drawRect(
-        Rect.fromLTRB(cx - _trackW / 2, _gateY, cx + _trackW / 2, _trackTop + _trackH + 14),
+        Rect.fromLTRB(cx - _trackW / 2, _gateY, cx + _trackW / 2, _trackTop + _trackH + 28),
         Paint()..color = _kCutZone,
       );
     }
 
     // Scale markings (right side of right track)
-    final scaleX = cx2 + _trackW / 2 + 3;
+    final scaleX = cx2 + _trackW / 2 + 6;
     final markStyle = const TextStyle(color: _kDim, fontSize: 6);
     void mark(String lbl, double t) {
       final y = _leverY(t) - 3;
-      canvas.drawLine(Offset(scaleX, y + 3), Offset(scaleX + 4, y + 3),
+      canvas.drawLine(Offset(scaleX, y + 3), Offset(scaleX + 8, y + 3),
           Paint()..color = _kDim..strokeWidth = 0.8);
       final tp = TextPainter(text: TextSpan(text: lbl, style: markStyle),
           textDirection: TextDirection.ltr)..layout();
-      tp.paint(canvas, Offset(scaleX + 5, y - 1));
+      tp.paint(canvas, Offset(scaleX + 10, y - 1));
     }
     mark('MCT',  0.95);
     mark('CLB',  0.75);
@@ -243,18 +243,18 @@ class _TQPainter extends CustomPainter {
     final tp = TextPainter(
         text: TextSpan(text: 'CUT', style: const TextStyle(color: Color(0xFFAA3322), fontSize: 6)),
         textDirection: TextDirection.ltr)..layout();
-    tp.paint(canvas, Offset(scaleX + 5, _gateY + 4));
+    tp.paint(canvas, Offset(scaleX + 10, _gateY + 8));
 
     // Gate line — across both tracks
     final gp = Paint()..color = gateColor..strokeWidth = 1.2;
-    canvas.drawLine(Offset(cx1 - _trackW / 2 - 2, _gateY),
-        Offset(cx2 + _trackW / 2 + 2, _gateY), gp);
+    canvas.drawLine(Offset(cx1 - _trackW / 2 - 4, _gateY),
+        Offset(cx2 + _trackW / 2 + 4, _gateY), gp);
     // Gate "latch" markers
     for (final cx in [cx1, cx2]) {
       final latchR = const Radius.circular(2);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-            Rect.fromCenter(center: Offset(cx, _gateY), width: _trackW + 4, height: 4), latchR),
+            Rect.fromCenter(center: Offset(cx, _gateY), width: _trackW + 8, height: 8), latchR),
         Paint()..color = gateLifted ? _kGateLifted : _kGate,
       );
     }
@@ -267,10 +267,10 @@ class _TQPainter extends CustomPainter {
     if (!gateLifted && throttle < _kIdleThresh + 0.10) {
       final hint = TextPainter(
           text: const TextSpan(text: '← SHIFT →',
-              style: TextStyle(color: _kGate, fontSize: 5.5)),
+              style: TextStyle(color: _kGate, fontSize: 11)),
           textDirection: TextDirection.ltr)..layout();
       hint.paint(canvas,
-          Offset((size.width - hint.width) / 2, _gateY + 6));
+          Offset((size.width - hint.width) / 2, _gateY + 12));
     }
 
     // Left label column

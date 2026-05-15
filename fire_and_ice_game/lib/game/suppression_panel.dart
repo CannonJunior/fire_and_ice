@@ -58,12 +58,12 @@ Widget _panelSwitch(String label, bool active, Color activeCol, {VoidCallback? o
     onTap: onTap,
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       Container(
-        width: 5, height: 3,
+        width: 10, height: 6,
         color: active ? activeCol : const Color(0xFF181820),
       ),
       const SizedBox(height: 1),
       Container(
-        width: 26, height: 17,
+        width: 52, height: 34,
         decoration: BoxDecoration(
           color: const Color(0xFF111118),
           border: Border.all(
@@ -78,7 +78,7 @@ Widget _panelSwitch(String label, bool active, Color activeCol, {VoidCallback? o
           label,
           style: TextStyle(
             color: active ? activeCol : const Color(0xFF3A3A55),
-            fontSize: 5.5, fontWeight: FontWeight.bold,
+            fontSize: 11, fontWeight: FontWeight.bold,
           ),
         )),
       ),
@@ -94,14 +94,14 @@ Widget _knobControl(String label, int position, {VoidCallback? onTap}) {
     onTap: onTap,
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       SizedBox(
-        width: 30, height: 30,
+        width: 60, height: 60,
         child: CustomPaint(painter: _KnobPainter(position: position)),
       ),
       const SizedBox(height: 1),
       Text(label, style: const TextStyle(
-          color: Color(0xFF445566), fontSize: 5.5, fontWeight: FontWeight.bold)),
+          color: Color(0xFF445566), fontSize: 11, fontWeight: FontWeight.bold)),
       Text(posLabel[position], style: const TextStyle(
-          color: Color(0xFF5577AA), fontSize: 5.0)),
+          color: Color(0xFF5577AA), fontSize: 10)),
     ]),
   );
 }

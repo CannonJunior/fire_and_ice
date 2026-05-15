@@ -26,6 +26,9 @@ class InfiniteTerrainManager {
   /// 3 → 7×7 = 49 chunks visible, covering ±192 world units.
   static const int renderDistance = 3;
 
+  /// Half-resolution grid size for outermost LOD ring (distance == renderDistance).
+  static const int chunkLODGridSize = 16;
+
   static const double _maxHeight  = 12.0;
   static const int    _seed       = 1337;
 
@@ -59,7 +62,7 @@ class InfiniteTerrainManager {
     final cz = worldToChunk(playerPos.z);
     for (int dx = -renderDistance; dx <= renderDistance; dx++) {
       for (int dz = -renderDistance; dz <= renderDistance; dz++) {
-        _generate(cx + dx, cz + dz);
+        _generate(cx + dx, cz + dz, _lodGridSize(dx, dz));
       }
     }
     _lastCX = cx;
@@ -91,11 +94,17 @@ class InfiniteTerrainManager {
   // ── Private ───────────────────────────────────────────────────────────────
 
   void _loadAround(int cx, int cz) {
-    // Collect chunks that still need to be generated
     final needed = <(int, int, int)>[]; // (dist², dx, dz)
     for (int dx = -renderDistance; dx <= renderDistance; dx++) {
       for (int dz = -renderDistance; dz <= renderDistance; dz++) {
-        if (!_chunks.containsKey(_key(cx + dx, cz + dz))) {
+        final key           = _key(cx + dx, cz + dz);
+        final targetGrid    = _lodGridSize(dx, dz);
+        final existing      = _chunks[key];
+        // Evict if LOD level changed (e.g. player moved toward an outer chunk).
+        if (existing != null && existing.gridSize != targetGrid) {
+          _chunks.remove(key);
+        }
+        if (!_chunks.containsKey(key)) {
           needed.add((dx * dx + dz * dz, dx, dz));
         }
       }
@@ -107,8 +116,18 @@ class InfiniteTerrainManager {
     final limit = math.min(_maxPerFrame, needed.length);
     for (int i = 0; i < limit; i++) {
       final (_, dx, dz) = needed[i];
-      _generate(cx + dx, cz + dz);
+      _generate(cx + dx, cz + dz, _lodGridSize(dx, dz));
     }
+  }
+
+  /// Returns the grid resolution for a chunk at offset (dx, dz) from the player.
+  ///
+  /// Only the outermost ring (Chebyshev distance == renderDistance) is
+  /// downsampled — this limits the LOD transition zone to the far edge of the
+  /// visible area, minimising pop when the player crosses a chunk boundary.
+  int _lodGridSize(int dx, int dz) {
+    final dist = math.max(dx.abs(), dz.abs());
+    return dist < renderDistance ? chunkGridSize : chunkLODGridSize;
   }
 
   void _unloadDistant(int cx, int cz) {
@@ -119,22 +138,23 @@ class InfiniteTerrainManager {
         (chunk.chunkZ - cz).abs() > buffer);
   }
 
-  void _generate(int cx, int cz) {
+  void _generate(int cx, int cz, int gridSize) {
     final key = _key(cx, cz);
     if (_chunks.containsKey(key)) return;
 
     final mesh = TerrainGenerator.generateChunk(
-      chunkX:   cx,    chunkZ:   cz,
-      gridSize: chunkGridSize,
-      tileSize: chunkTileSize,
+      chunkX:    cx,    chunkZ:    cz,
+      gridSize:  gridSize,
+      tileSize:  chunkTileSize,
       maxHeight: _maxHeight,
-      seed:     _seed,
+      seed:      _seed,
     );
 
     _chunks[key] = TerrainChunk(
       chunkX:    cx,
       chunkZ:    cz,
       mesh:      mesh,
+      gridSize:  gridSize,
       transform: Transform3d(
           position: Vector3(cx * chunkWorldSize, 0, cz * chunkWorldSize)),
     );

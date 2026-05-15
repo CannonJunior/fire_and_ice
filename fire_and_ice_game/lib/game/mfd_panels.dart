@@ -35,7 +35,7 @@ Widget buildLeftMFD(GameState state, {int page = 0}) {
     _ => Column(children: [
         _header('ELEMENTAL TACTICAL', 'ENRGY', _kLFg, _kLDim),
         Expanded(child: Row(children: [
-          SizedBox(width: 90, child: _manaGauge(state)),
+          SizedBox(width: 180, child: _manaGauge(state)),
           Container(width: 1, color: _kLDim),
           Expanded(child: _abilityList(state)),
         ])),
@@ -43,7 +43,7 @@ Widget buildLeftMFD(GameState state, {int page = 0}) {
       ]),
   };
   return Container(
-    width: 280, height: 200,
+    width: 560, height: 400,
     decoration: BoxDecoration(color: _kLBg, border: Border.all(color: _kBevel, width: 2)),
     child: body,
   );
@@ -51,17 +51,17 @@ Widget buildLeftMFD(GameState state, {int page = 0}) {
 
 Widget _header(String title, String mode, Color fg, Color dim) {
   return Container(
-    height: 20,
+    height: 40,
     padding: const EdgeInsets.symmetric(horizontal: 6),
     color: dim.withValues(alpha: 0.4),
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: TextStyle(color: fg, fontSize: 9, letterSpacing: 1)),
+        Text(title, style: TextStyle(color: fg, fontSize: 18, letterSpacing: 1)),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
           color: fg.withValues(alpha: 0.2),
-          child: Text(mode, style: TextStyle(color: fg, fontSize: 8, fontWeight: FontWeight.bold)),
+          child: Text(mode, style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.bold)),
         ),
       ],
     ),
@@ -75,13 +75,13 @@ Widget _manaGauge(GameState state) {
     padding: const EdgeInsets.all(6),
     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       SizedBox(
-        width: 56, height: 56,
+        width: 112, height: 112,
         child: CustomPaint(painter: _ArcGauge(fraction: mf, fg: _kLFg, dim: _kLDim)),
       ),
       const SizedBox(height: 3),
-      Text('ENRGY', style: TextStyle(color: _kLDim, fontSize: 7)),
+      Text('ENRGY', style: TextStyle(color: _kLDim, fontSize: 14)),
       Text('${(mf * 100).toInt()}%',
-          style: TextStyle(color: _kLFg, fontSize: 10, fontWeight: FontWeight.bold)),
+          style: TextStyle(color: _kLFg, fontSize: 20, fontWeight: FontWeight.bold)),
       const SizedBox(height: 6),
       _miniBar('HP', hf),
     ]),
@@ -90,9 +90,9 @@ Widget _manaGauge(GameState state) {
 
 Widget _miniBar(String label, double f) {
   return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(label, style: TextStyle(color: _kLDim, fontSize: 7)),
+    Text(label, style: TextStyle(color: _kLDim, fontSize: 14)),
     Container(
-      height: 5,
+      height: 10,
       decoration: BoxDecoration(
         color: _kLDim.withValues(alpha: 0.2),
         border: Border.all(color: _kLDim, width: 0.5),
@@ -134,10 +134,10 @@ Widget _abilityList(GameState state) {
           const SizedBox(width: 3),
           Expanded(child: Text(
             ab.name.split(' ').last.toUpperCase(),
-            style: TextStyle(color: nameCol, fontSize: 7.5),
+            style: TextStyle(color: nameCol, fontSize: 14.5),
           )),
           Text(status, style: TextStyle(
-            color: statusCol, fontSize: 7,
+            color: statusCol, fontSize: 14,
             fontWeight: ready || depleted ? FontWeight.bold : FontWeight.normal,
           )),
         ]);
@@ -149,7 +149,7 @@ Widget _abilityList(GameState state) {
 Widget _leftFooter(GameState state) {
   final rolling = state.isBarrelRolling;
   return Container(
-    height: 22,
+    height: 44,
     padding: const EdgeInsets.symmetric(horizontal: 6),
     color: _kLDim.withValues(alpha: 0.3),
     child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -160,7 +160,7 @@ Widget _leftFooter(GameState state) {
         rolling ? '!ROLL!' : 'FLT',
         style: TextStyle(
           color: rolling ? const Color(0xFFFF6600) : _kLDim,
-          fontSize: 8, fontWeight: FontWeight.bold,
+          fontSize: 16, fontWeight: FontWeight.bold,
         ),
       ),
     ]),
@@ -262,7 +262,7 @@ Widget buildRightMFD(
       ]),
   };
   return Container(
-    width: 280, height: 200,
+    width: 560, height: 400,
     decoration: BoxDecoration(color: _kRBg, border: Border.all(color: _kBevel, width: 2)),
     child: body,
   );
@@ -272,7 +272,7 @@ Widget _navFooter(GameState state) {
   final hdg  = ((state.playerRotation.y % 360) + 360) % 360;
   final zoom = const ['1×', '2×', '½×'][state.mapZoom.clamp(0, 2)];
   return Container(
-    height: 22,
+    height: 44,
     padding: const EdgeInsets.symmetric(horizontal: 6),
     color: _kRDim.withValues(alpha: 0.3),
     child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -371,7 +371,7 @@ class _TerrainMap extends CustomPainter {
           Paint()..color = color..style = PaintingStyle.fill);
       final tp = TextPainter(
         text: TextSpan(text: name,
-            style: TextStyle(color: color, fontSize: 6,
+            style: TextStyle(color: color, fontSize: 12,
                 fontWeight: isTgt ? FontWeight.bold : FontWeight.normal)),
         textDirection: TextDirection.ltr,
       )..layout();
@@ -436,7 +436,7 @@ class _TerrainMap extends CustomPainter {
 
 Widget buildCenterMFD(GameState state) {
   return Container(
-    width: 200, height: 148,
+    width: 400, height: 296,
     decoration: BoxDecoration(
       color: _kCBg,
       border: Border.all(color: _kBevel, width: 2),
@@ -471,15 +471,15 @@ Widget buildCenterMFD(GameState state) {
 Widget _dataRow(String label, String value) {
   return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
     Text(label, style: const TextStyle(color: _kCDim, fontSize: 9)),
-    Text(value,  style: const TextStyle(color: _kCAmber, fontSize: 9, fontWeight: FontWeight.bold)),
+    Text(value,  style: const TextStyle(color: _kCAmber, fontSize: 18, fontWeight: FontWeight.bold)),
   ]);
 }
 
 Widget _centerBar(String label, double f, Color color) {
   return Row(children: [
-    SizedBox(width: 16, child: Text(label, style: const TextStyle(color: _kCDim, fontSize: 7))),
+    SizedBox(width: 32, child: Text(label, style: const TextStyle(color: _kCDim, fontSize: 14))),
     Expanded(child: Container(
-      height: 6,
+      height: 12,
       decoration: BoxDecoration(
         color: const Color(0xFF0A0A15),
         border: Border.all(color: const Color(0xFF223344), width: 0.5),
@@ -492,8 +492,8 @@ Widget _centerBar(String label, double f, Color color) {
     )),
     const SizedBox(width: 4),
     SizedBox(
-      width: 20,
-      child: Text('${(f * 100).toInt()}', style: const TextStyle(color: _kCDim, fontSize: 7)),
+      width: 40,
+      child: Text('${(f * 100).toInt()}', style: const TextStyle(color: _kCDim, fontSize: 14)),
     ),
   ]);
 }

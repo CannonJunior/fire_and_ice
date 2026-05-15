@@ -38,7 +38,9 @@ class GameState {
   int mapZoom      = 0;
   int auxDisplayPage = 0; // 0=CHAT 1=VID 2=MAP 3=MIRROR
   int auxMirrorIndex = 0; // 0..7 → ELMT/LOAD/STAT/MODE/NAV/TERR/FIRE/MARK
+  int auxVideoIndex  = 0; // 0=LISA HAYES  1=LIN MINMEI
   void scrollAuxMirror(int d) => auxMirrorIndex = (auxMirrorIndex + d + 8) % 8;
+  void scrollAuxVideo(int d)  => auxVideoIndex  = (auxVideoIndex  + d + 2) % 2;
 
   // ── Aircraft + Upgrade economy ────────────────────────────────────────────
 

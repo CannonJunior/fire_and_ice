@@ -56,7 +56,7 @@ Widget buildCockpitHud(
   VoidCallback?                  onAnnunciatorChange,
   VoidCallback?                  onThrottleModeToggle,
   void Function(double)?         onThrottleChange,
-  void Function(int)? onAuxPage, void Function(int)? onAuxMirrorScroll,
+  void Function(int)? onAuxPage, void Function(int)? onAuxMirrorScroll, void Function(int)? onAuxVideoScroll,
 }) {
   if (state.viewMode == ViewMode.thirdPerson) {
     return Stack(children: [
@@ -101,7 +101,7 @@ Widget buildCockpitHud(
           onAnnunciatorChange: onAnnunciatorChange,
           onThrottleModeToggle: onThrottleModeToggle,
           onThrottleChange: onThrottleChange,
-          onAuxPage: onAuxPage, onAuxMirrorScroll: onAuxMirrorScroll),
+          onAuxPage: onAuxPage, onAuxMirrorScroll: onAuxMirrorScroll, onAuxVideoScroll: onAuxVideoScroll),
     ),
     // Persistent gauges — spec §7: these survive the cockpit ↔ third-person
     // transition. Corner positions clear the centred cockpit panel.
@@ -136,7 +136,7 @@ Widget _modeBadge(GameMode mode) {
       border: Border.all(color: color.withValues(alpha: 0.6)),
     ),
     child: Text(label,
-        style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1)),
   );
 }
 
@@ -151,7 +151,7 @@ Widget _viewBadge(String label) {
     ),
     child: Text(
       label,
-      style: const TextStyle(color: Color(0xFF80DDFF), fontSize: 9, letterSpacing: 1),
+      style: const TextStyle(color: Color(0xFF80DDFF), fontSize: 18, letterSpacing: 1),
     ),
   );
 }
@@ -188,7 +188,7 @@ Widget _windshieldHud(GameState state) {
                   return '◆  A/P  ENGAGED  —  ${state.flightPlan[idx].$1}';
                 }(),
             style: const TextStyle(
-              color: Color(0xFF00FF88), fontSize: 9,
+              color: Color(0xFF00FF88), fontSize: 18,
               fontWeight: FontWeight.bold, letterSpacing: 2,
             ),
           ),
@@ -208,7 +208,7 @@ Widget _windshieldHud(GameState state) {
         alignment: const Alignment(0, -0.30),
         child: const Text('◀  BARREL ROLL  ▶',
             style: TextStyle(
-              color: _kWarn, fontSize: 18,
+              color: _kWarn, fontSize: 36,
               fontWeight: FontWeight.bold, letterSpacing: 4,
             )),
       ),
@@ -228,9 +228,9 @@ Widget _waypointHudReadout(GameState state) {
       border: Border.all(color: const Color(0xFF00FF88).withValues(alpha: 0.4), width: 1),
     ),
     child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('◆ $name', style: const TextStyle(color: Color(0xFF00FF88), fontSize: 8, letterSpacing: 1)),
+      Text('◆ $name', style: const TextStyle(color: Color(0xFF00FF88), fontSize: 16, letterSpacing: 1)),
       Text('BRG ${brg.toStringAsFixed(0)}°  DIST ${dist.toStringAsFixed(0)}',
-          style: const TextStyle(color: Color(0xFF00CC66), fontSize: 8)),
+          style: const TextStyle(color: Color(0xFF00CC66), fontSize: 16)),
     ]),
   );
 }
@@ -243,9 +243,9 @@ Widget _hudReadout(String label, String value, String unit) {
       border: Border.all(color: _kHudGreen.withValues(alpha: 0.4), width: 1),
     ),
     child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Text(label, style: TextStyle(color: _kHudGreen.withValues(alpha: 0.6), fontSize: 8)),
-      Text(value,  style: const TextStyle(color: _kHudGreen, fontSize: 14, fontWeight: FontWeight.bold)),
-      Text(unit,   style: const TextStyle(color: _kHudDim, fontSize: 8)),
+      Text(label, style: TextStyle(color: _kHudGreen.withValues(alpha: 0.6), fontSize: 16)),
+      Text(value,  style: const TextStyle(color: _kHudGreen, fontSize: 28, fontWeight: FontWeight.bold)),
+      Text(unit,   style: const TextStyle(color: _kHudDim, fontSize: 16)),
     ]),
   );
 }
@@ -259,15 +259,15 @@ Widget _headingStrip(GameState state) {
       border: Border.all(color: _kHudGreen.withValues(alpha: 0.4), width: 1),
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Text('HDG ', style: const TextStyle(color: _kHudDim, fontSize: 8)),
+      Text('HDG ', style: const TextStyle(color: _kHudDim, fontSize: 16)),
       Text('${hdg.toStringAsFixed(0)}°',
-          style: const TextStyle(color: _kHudGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+          style: const TextStyle(color: _kHudGreen, fontSize: 20, fontWeight: FontWeight.bold)),
       const Text('   PCH ', style: TextStyle(color: _kHudDim, fontSize: 8)),
       Text('${state.flightPitchAngle.toStringAsFixed(0)}°',
-          style: const TextStyle(color: _kHudGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+          style: const TextStyle(color: _kHudGreen, fontSize: 20, fontWeight: FontWeight.bold)),
       const Text('   BNK ', style: TextStyle(color: _kHudDim, fontSize: 8)),
       Text('${state.flightBankAngle.toStringAsFixed(0)}°',
-          style: const TextStyle(color: _kHudGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+          style: const TextStyle(color: _kHudGreen, fontSize: 20, fontWeight: FontWeight.bold)),
     ]),
   );
 }
@@ -319,7 +319,7 @@ Widget _cockpitPanel(GameState state, {
   VoidCallback?                  onAnnunciatorChange,
   VoidCallback?                  onThrottleModeToggle,
   void Function(double)?         onThrottleChange,
-  void Function(int)? onAuxPage, void Function(int)? onAuxMirrorScroll,
+  void Function(int)? onAuxPage, void Function(int)? onAuxMirrorScroll, void Function(int)? onAuxVideoScroll,
 }) {
   final lp       = state.leftMfdPage;
   final rp       = state.rightMfdPage;
@@ -423,7 +423,7 @@ Widget _cockpitPanel(GameState state, {
         const SizedBox(width: 20),
         // Aux display — CHAT / VID / MAP / MIRROR
         drag('auxDisp', 'Aux Display', buildAuxDisplay(state,
-            onPage: onAuxPage, onMirrorScroll: onAuxMirrorScroll)),
+            onPage: onAuxPage, onMirrorScroll: onAuxMirrorScroll, onVideoScroll: onAuxVideoScroll)),
       ]),
   );
 }
@@ -454,7 +454,7 @@ Widget _osbButton(_Osb b) {
   return GestureDetector(
     onTap: b.onTap,
     child: Container(
-      width: 38, height: 28,
+      width: 76, height: 56,
       decoration: BoxDecoration(
         color: _kOsbBg,
         border: Border.all(color: borderColor, width: 1),
@@ -462,7 +462,7 @@ Widget _osbButton(_Osb b) {
       child: Center(child: Text(
         b.label,
         style: TextStyle(
-          color: textColor, fontSize: 7.5,
+          color: textColor, fontSize: 15,
           fontWeight: FontWeight.bold, letterSpacing: 0.5,
         ),
       )),

@@ -1,4 +1,6 @@
+import 'dart:html' as html;
 import 'dart:math' as math;
+import 'dart:ui_web' as ui_web;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'game_state.dart';
@@ -12,8 +14,34 @@ const _kAFg   = Color(0xFFCC88FF);
 const _kADim  = Color(0xFF441166);
 const _kABord = Color(0xFF2A1040);
 
-// Mirror option labels across both MFDs (L: 0-3, R: 4-7)
 const _kOpts = ['ELMT', 'LOAD', 'STAT', 'MODE', 'NAV', 'TERR', 'FIRE', 'MARK'];
+
+// 2× uniform scale factor applied to all layout dimensions
+const double _kS = 2.0;
+
+// Video catalogue — index matches GameState.auxVideoIndex
+const _kVids = [
+  (id: 'fKHEt3jpSyo', name: 'LISA HAYES',  sub: 'TRIBUTE'),
+  (id: 'yh4swGLAL9o', name: 'LIN MINMEI', sub: 'DO YOU REMEMBER LOVE'),
+];
+final _kVidReg = <String>{};
+
+void _regYt(String id) {
+  if (_kVidReg.contains(id)) return;
+  _kVidReg.add(id);
+  ui_web.platformViewRegistry.registerViewFactory(
+    'yt-$id',
+    (int _) => html.IFrameElement()
+      ..src = 'https://www.youtube.com/embed/$id?rel=0&modestbranding=1'
+      ..style.width = '100%'
+      ..style.height = '100%'
+      ..style.border = 'none'
+      ..setAttribute('allow',
+          'accelerometer; autoplay; clipboard-write; '
+          'encrypted-media; gyroscope; picture-in-picture; web-share')
+      ..setAttribute('allowfullscreen', ''),
+  );
+}
 
 // Static radio log — shown on the CHAT page
 const _kLog = [
@@ -29,35 +57,38 @@ const _kLog = [
 
 // ── Public builder ────────────────────────────────────────────────────────────
 
-/// Auxiliary display: 280×200 content + 28px bottom OSB row.
+/// Auxiliary display: 560×400 content + 56px bottom OSB row (2× original).
 /// Pages: 0=CHAT  1=VID  2=MAP  3=MIRROR
 Widget buildAuxDisplay(GameState state, {
   void Function(int)? onPage,
   void Function(int)? onMirrorScroll,
+  void Function(int)? onVideoScroll,
 }) {
   final page = state.auxDisplayPage;
   final mi   = state.auxMirrorIndex.clamp(0, _kOpts.length - 1);
 
-  // All modes share one fixed 280×200 viewport.
-  // clipBehavior: Clip.hardEdge is critical for the VID page — the horizon
-  // painter draws rectangles extending ±2× the canvas size; without clipping
-  // they overflow the container and make the widget appear larger.
   final Widget pageContent = switch (page) {
-    1 => _vidPage(state),
+    1 => _vidPage(state, onVideoScroll),
     2 => _mapPage(state),
-    3 => mi < 4 ? buildLeftMFD(state, page: mi) : buildRightMFD(state, page: mi - 4),
+    3 => FittedBox(
+        fit: BoxFit.fill,
+        child: SizedBox(
+          width: 280, height: 200,
+          child: mi < 4 ? buildLeftMFD(state, page: mi) : buildRightMFD(state, page: mi - 4),
+        ),
+      ),
     _ => _chatPage(),
   };
 
   return Column(mainAxisSize: MainAxisSize.min, children: [
     Container(
-      width: 280, height: 200,
+      width: 280 * _kS, height: 200 * _kS,
       clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
-          color: _kABg, border: Border.all(color: _kABord, width: 2)),
+          color: _kABg, border: Border.all(color: _kABord, width: 4)),
       child: pageContent,
     ),
-    const SizedBox(height: 4),
+    SizedBox(height: 4 * _kS),
     _bottomRow(page, mi, onPage, onMirrorScroll),
   ]);
 }
@@ -81,13 +112,13 @@ Widget _osb(String label, bool active, VoidCallback? onTap) {
   return GestureDetector(
     onTap: onTap,
     child: Container(
-      width: 38, height: 28,
-      margin: const EdgeInsets.symmetric(horizontal: 2),
+      width: 38 * _kS, height: 28 * _kS,
+      margin: EdgeInsets.symmetric(horizontal: 2 * _kS),
       decoration: BoxDecoration(color: const Color(0xFF1A1A22),
           border: Border.all(color: brd, width: active ? 1.5 : 1.0)),
       child: Center(child: Text(label, style: TextStyle(
-          color: txt, fontSize: 7.5,
-          fontWeight: FontWeight.bold, letterSpacing: 0.5))),
+          color: txt, fontSize: 7.5 * _kS,
+          fontWeight: FontWeight.bold, letterSpacing: 2))),
     ),
   );
 }
@@ -117,17 +148,17 @@ class _MirrorOsb extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          width: 38, height: 28,
-          margin: const EdgeInsets.symmetric(horizontal: 2),
+          width: 38 * _kS, height: 28 * _kS,
+          margin: EdgeInsets.symmetric(horizontal: 2 * _kS),
           decoration: BoxDecoration(color: const Color(0xFF1A1A22),
               border: Border.all(color: brd, width: active ? 1.5 : 1.0)),
           child: Column(mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              Text('▲', style: TextStyle(color: arr, fontSize: 4.5,
+              Text('▲', style: TextStyle(color: arr, fontSize: 4.5 * _kS,
                   height: 1.0, fontWeight: FontWeight.bold)),
-              Text(label, style: TextStyle(color: txt, fontSize: 6.5,
-                  fontWeight: FontWeight.bold, letterSpacing: 0.3)),
-              Text('▼', style: TextStyle(color: arr, fontSize: 4.5,
+              Text(label, style: TextStyle(color: txt, fontSize: 6.5 * _kS,
+                  fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+              Text('▼', style: TextStyle(color: arr, fontSize: 4.5 * _kS,
                   height: 1.0, fontWeight: FontWeight.bold)),
             ]),
         ),
@@ -139,28 +170,28 @@ class _MirrorOsb extends StatelessWidget {
 // ── Shared header / footer ────────────────────────────────────────────────────
 
 Widget _hdr(String title, String badge) => Container(
-  height: 20,
-  padding: const EdgeInsets.symmetric(horizontal: 6),
+  height: 20 * _kS,
+  padding: EdgeInsets.symmetric(horizontal: 6 * _kS),
   color: _kADim.withValues(alpha: 0.4),
   child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-    Text(title, style: TextStyle(color: _kAFg, fontSize: 9, letterSpacing: 1)),
+    Text(title, style: TextStyle(color: _kAFg, fontSize: 9 * _kS, letterSpacing: 4)),
     Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      padding: EdgeInsets.symmetric(horizontal: 4 * _kS, vertical: 1 * _kS),
       color: _kAFg.withValues(alpha: 0.2),
       child: Text(badge, style: TextStyle(
-          color: _kAFg, fontSize: 8, fontWeight: FontWeight.bold)),
+          color: _kAFg, fontSize: 8 * _kS, fontWeight: FontWeight.bold)),
     ),
   ]),
 );
 
 Widget _ftr(String a, String b, String c) => Container(
-  height: 22,
-  padding: const EdgeInsets.symmetric(horizontal: 6),
+  height: 22 * _kS,
+  padding: EdgeInsets.symmetric(horizontal: 6 * _kS),
   color: _kADim.withValues(alpha: 0.3),
   child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-    Text(a, style: TextStyle(color: _kAFg, fontSize: 8)),
-    Text(b, style: TextStyle(color: _kAFg, fontSize: 8)),
-    Text(c, style: TextStyle(color: _kADim, fontSize: 8)),
+    Text(a, style: TextStyle(color: _kAFg, fontSize: 8 * _kS)),
+    Text(b, style: TextStyle(color: _kAFg, fontSize: 8 * _kS)),
+    Text(c, style: TextStyle(color: _kADim, fontSize: 8 * _kS)),
   ]),
 );
 
@@ -175,13 +206,13 @@ Widget _chatPage() => Column(children: [
       final (call, msg) = _kLog[i];
       final ctrl = call == 'CTRL';
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        padding: EdgeInsets.symmetric(horizontal: 5 * _kS, vertical: 1 * _kS),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 40, child: Text('[$call]',
+          SizedBox(width: 40 * _kS, child: Text('[$call]',
               style: TextStyle(color: ctrl ? _kAFg : _kADim,
-                  fontSize: 7, fontWeight: FontWeight.bold))),
+                  fontSize: 7 * _kS, fontWeight: FontWeight.bold))),
           Expanded(child: Text(msg,
-              style: TextStyle(color: ctrl ? _kADim : _kAFg, fontSize: 7))),
+              style: TextStyle(color: ctrl ? _kADim : _kAFg, fontSize: 7 * _kS))),
         ]),
       );
     },
@@ -191,72 +222,22 @@ Widget _chatPage() => Column(children: [
 
 // ── VIDEO page ────────────────────────────────────────────────────────────────
 
-Widget _vidPage(GameState s) => Column(children: [
-  _hdr('FORWARD CAM', 'VID'),
-  Expanded(child: CustomPaint(
-    painter: _VidPainter(pitch: s.flightPitchAngle, bank: s.flightBankAngle,
-        alt: s.flightAltitude, spd: s.flightSpeed),
-    child: const SizedBox.expand(),
-  )),
-  _ftr('CAM:FWD', 'ZOOM:1×', 'MODE:EO'),
-]);
-
-class _VidPainter extends CustomPainter {
-  final double pitch, bank, alt, spd;
-  const _VidPainter({required this.pitch, required this.bank,
-      required this.alt, required this.spd});
-
-  void _txt(Canvas c, String s, Offset o) {
-    (TextPainter(
-      text: TextSpan(text: s,
-          style: const TextStyle(color: Color(0xFF44FF44), fontSize: 7)),
-      textDirection: TextDirection.ltr,
-    )..layout()).paint(c, o);
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    canvas.drawRect(Offset.zero & size,
-        Paint()..color = const Color(0xFF071307));
-
-    canvas.save();
-    canvas.translate(cx, cy + pitch * 1.2);
-    canvas.rotate(bank * math.pi / 180);
-    canvas.drawRect(Rect.fromLTRB(-size.width * 2, 0, size.width * 2, size.height * 2),
-        Paint()..color = const Color(0xFF0A1A06));
-    canvas.drawRect(Rect.fromLTRB(-size.width * 2, -size.height * 2, size.width * 2, 0),
-        Paint()..color = const Color(0xFF0D2A0D));
-    canvas.drawLine(Offset(-size.width * 2, 0), Offset(size.width * 2, 0),
-        Paint()..color = const Color(0xFF44FF44)..strokeWidth = 0.8);
-    for (final d in [-10.0, -5.0, 5.0, 10.0]) {
-      canvas.drawLine(Offset(-16, d * 1.2), Offset(16, d * 1.2),
-          Paint()..color = const Color(0x7744FF44)..strokeWidth = 0.5);
-    }
-    canvas.restore();
-
-    final cp = Paint()..color = const Color(0xFF44FF44)..strokeWidth = 1.2;
-    canvas.drawLine(Offset(cx - 22, cy), Offset(cx - 7, cy), cp);
-    canvas.drawLine(Offset(cx + 7,  cy), Offset(cx + 22, cy), cp);
-    canvas.drawLine(Offset(cx, cy - 22), Offset(cx, cy - 7), cp);
-    canvas.drawLine(Offset(cx, cy + 7),  Offset(cx, cy + 22), cp);
-    canvas.drawCircle(Offset(cx, cy), 4,
-        Paint()..color = const Color(0xFF44FF44)
-            ..style = PaintingStyle.stroke..strokeWidth = 1.2);
-
-    _txt(canvas, 'ALT ${alt.toStringAsFixed(0)} m', const Offset(5, 5));
-    _txt(canvas, 'SPD ${spd.toStringAsFixed(1)} u/s', const Offset(5, 14));
-
-    final scan = Paint()..color = const Color(0x18000000);
-    for (double y = 0; y < size.height; y += 2) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), scan);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_VidPainter o) =>
-      o.pitch != pitch || o.bank != bank || o.alt != alt || o.spd != spd;
+Widget _vidPage(GameState s, void Function(int)? onScroll) {
+  final vi  = s.auxVideoIndex.clamp(0, _kVids.length - 1);
+  final vid = _kVids[vi];
+  _regYt(vid.id);
+  return Listener(
+    onPointerSignal: (ev) {
+      if (ev is PointerScrollEvent && onScroll != null) {
+        onScroll(ev.scrollDelta.dy > 0 ? 1 : -1);
+      }
+    },
+    child: Column(children: [
+      _hdr(vid.name, 'VID'),
+      Expanded(child: HtmlElementView(viewType: 'yt-${vid.id}')),
+      _ftr(vid.sub, '${vi + 1}/${_kVids.length}', '▲▼ SCROLL'),
+    ]),
+  );
 }
 
 // ── MAP page ──────────────────────────────────────────────────────────────────
@@ -305,14 +286,12 @@ class _MapPainter extends CustomPainter {
       }
     }
 
-    // Subtle grid overlay
     final gp = Paint()..color = const Color(0x22FFFFFF)..strokeWidth = 0.4;
     for (int i = 0; i <= grid; i++) {
       canvas.drawLine(Offset(i * cw, 0), Offset(i * cw, size.height), gp);
       canvas.drawLine(Offset(0, i * ch), Offset(size.width, i * ch), gp);
     }
 
-    // Aircraft marker
     final cx = size.width / 2;
     final cy = size.height / 2;
     final hr = heading * math.pi / 180.0;
