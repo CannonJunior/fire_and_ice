@@ -192,8 +192,14 @@ class GameState {
   /// Flap detent position: 0=UP  1=T/O  2=APPR  3=FULL.
   int flapsLevel = 3;
 
-  /// Cycle flaps through the four detents (UP → T/O → APPR → FULL → UP).
-  void cycleFlaps() { flapsLevel = (flapsLevel + 1) % 4; }
+  /// Direction of the next flaps step: +1 toward FULL, -1 toward UP.
+  int _flapsDir = -1;
+
+  /// Step flaps one detent in the current direction, reversing at UP and FULL.
+  void cycleFlaps() {
+    flapsLevel = (flapsLevel + _flapsDir).clamp(0, 3);
+    if (flapsLevel == 0 || flapsLevel == 3) _flapsDir = -_flapsDir;
+  }
 
   /// Toggle gear and update game mode. No-op in taxi (gear cannot retract on ground).
   void triggerGear() {

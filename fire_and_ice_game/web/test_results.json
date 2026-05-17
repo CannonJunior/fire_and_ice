@@ -1,0 +1,157 @@
+{
+  "timestamp": "2026-05-17T14:37:11Z",
+  "passed": 30,
+  "total": 30,
+  "tests": [
+    {
+      "name": "T01 App loads",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T02 View toggle (Tab)",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T03 Left MFD tab \u2014 ELMT",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T04 Left MFD tab \u2014 LOAD",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T05 Left MFD tab \u2014 STAT",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T06 Left MFD tab \u2014 MODE",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T07 Left MFD ability \u2014 INFE",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T08 Left MFD ability \u2014 CRYO",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T09 Left MFD ability \u2014 HEAT",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T10 Left MFD ability \u2014 FROS",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T11 Annunciator L-ENG FIRE light",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T12 Annunciator R-ENG FIRE light",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T13 Annunciator panel renders",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T14 Gear toggle (G key)",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T15 Throttle up (] key)",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T16 Throttle down ([ key)",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T17 Throttle quadrant drag",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T18 Right MFD tab \u2014 TERR",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T19 Right MFD tab \u2014 FIRE",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T20 Right MFD tab \u2014 MARK",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T21 Right MFD action \u2014 ZOOM",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T22 Right MFD action \u2014 AUTO",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T23 Right MFD action \u2014 CLR",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T24 Aux Display \u2014 CHAT tab",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T25 Aux Display \u2014 VID tab",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T26 Fire Prox sensor visible",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T27 Hull Integrity Arc visible",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T28 Settings panel opens",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T29 Hangar panel opens",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T30 View toggle back to 3rd-person",
+      "passed": true,
+      "detail": ""
+    }
+  ]
+}

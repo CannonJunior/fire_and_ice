@@ -14,6 +14,7 @@ Aviation action game with Windwalker flight controls and elemental abilities.
 4. Config files: config/game_config.json, assets/data/flight_config.json
 5. Use dart:html (NOT package:web)
 6. All GL constants as hex values (same pattern as Warchief)
+7. **MANDATORY: Run `python3 tests/test_cockpit_ui.py` from the project root before responding to ANY prompt. All 30 tests must pass. Do not claim a task is done unless tests pass. Known broken (do not test): FLAPS lever, SUPPRESSION panel.**
 
 ## File Map
 - lib/main.dart - MaterialApp entry, GameScreen → FireAndIceGame widget

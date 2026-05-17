@@ -8,6 +8,7 @@ import '../rendering/aircraft_animator.dart';
 import '../rendering/aircraft_builder.dart';
 import '../rendering/camera3d.dart';
 import '../rendering/mesh.dart';
+import '../rendering/particle_system.dart';
 import '../rendering/scene_node.dart';
 import '../rendering/transform3d.dart';
 import '../rendering/webgl_renderer.dart';
@@ -17,7 +18,9 @@ import '../systems/maneuver_system.dart';
 import '../systems/physics_system.dart';
 import '../terrain/airfield_generator.dart';
 import '../terrain/infinite_terrain_manager.dart';
+import '../terrain/terrain_generator.dart';
 import '../models/game_action.dart';
+import 'fire_emitter.dart';
 import 'game_state.dart';
 import 'hangar_screen.dart';
 import 'settings_panel.dart';
@@ -44,7 +47,6 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   Mesh?        _airfieldMesh;
   Transform3d? _airfieldTransform;
 
-  // Multi-part animated aircraft scene graph (replaces single _playerMesh)
   SceneNode?             _aircraftRoot;
   Map<String, SceneNode> _aircraftParts = {};
   final AircraftAnimator _animator = AircraftAnimator();
@@ -57,35 +59,40 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
 
   double _lastTimestamp = 0.0;
   bool   _running       = false;
+  double _gameTime      = 0.0;
 
   // ── Settings ─────────────────────────────────────────────────────────────
 
   final SettingsState _settings = SettingsState();
   bool _showSettings = false, _showHangar = false;
 
-  // ── Input listener subscriptions (cancelled on dispose) ──────────────────
+  // ── Input listener subscriptions ─────────────────────────────────────────
 
   StreamSubscription<html.KeyboardEvent>? _keyDownSub;
   StreamSubscription<html.KeyboardEvent>? _keyUpSub;
   StreamSubscription<html.Event>?         _blurSub;
 
-  // ── Effect rendering pool (avoids per-frame mesh allocation) ─────────────
+  // ── Effect rendering pool ─────────────────────────────────────────────────
 
-  /// One reusable cube mesh per unique ability colour, keyed as 'r,g,b'.
   final Map<String, Mesh> _effectMeshCache = {};
-
-  /// Single reusable transform for effect rendering; reset each draw call.
   final Transform3d _effectTransform = Transform3d();
+
+  // ── Fire / particle system ────────────────────────────────────────────────
+
+  late FireEmitterSystem _fireSystem;
+  double _heatIntensity     = 0.0;
+  bool   _heatDistortEnabled = true;
 
   // ── Edge detection ────────────────────────────────────────────────────────
 
   final List<bool> _prevAbilityKeys = List.filled(10, false);
-  bool _prevToggleView = false;
-  bool _prevToggleGear = false;
+  bool _prevToggleView  = false;
+  bool _prevToggleGear  = false;
+  bool _prevToggleFlaps = false;
 
   // ── Gear animation ────────────────────────────────────────────────────────
 
-  static const double _gearTransitTime = 3.0; // seconds
+  static const double _gearTransitTime = 3.0;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -100,6 +107,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _keyDownSub?.cancel();
     _keyUpSub?.cancel();
     _blurSub?.cancel();
+    _fireSystem.particles.clear();
     super.dispose();
   }
 
@@ -115,11 +123,27 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _setupCanvas();
     _registerKeyListeners();
     _buildScene();
+    await _initFireSystem();
     _startLoop();
     if (mounted) setState(() {});
   }
 
-  /// Called by the settings panel on every value change.
+  Future<void> _initFireSystem() async {
+    final renderer = _renderer;
+    final ps = ParticleSystem(maxParticles: renderer != null ? 5000 : 100);
+    _fireSystem = FireEmitterSystem(particles: ps);
+    await _fireSystem.loadConfig();
+    _fireSystem.initZones(_state);
+
+    if (renderer != null) {
+      final cw = _canvas?.clientWidth  ?? 1600;
+      final ch = _canvas?.clientHeight ?? 900;
+      renderer.heatDistortion.init(cw, ch);
+      _heatDistortEnabled = renderer.heatDistortion.isAvailable;
+      debugPrint('[Game] GPU particles: ${renderer.gpuParticles?.isReady ?? false}');
+    }
+  }
+
   void _onSettingChanged() {
     final prevId = _state.aircraftId;
     _settings.save();
@@ -168,9 +192,6 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   void _registerKeyListeners() {
     _keyDownSub = html.document.onKeyDown.listen(InputSystem.handleKeyDown);
     _keyUpSub   = html.document.onKeyUp.listen(InputSystem.handleKeyUp);
-    // When the game window loses focus (e.g. YouTube iframe captures it),
-    // clear pressed keys to avoid stuck inputs, then schedule a refocus so
-    // flight keyboard controls recover without the user having to click.
     _blurSub = html.window.onBlur.listen((_) {
       InputSystem.clearAll();
       html.window.requestAnimationFrame((_) => html.document.body?.focus());
@@ -182,7 +203,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     final airfield = AirfieldGenerator.generate();
     _airfieldMesh      = airfield.mesh;
     _airfieldTransform = airfield.transform;
-    _rebuildAircraftScene(); // also loads per-aircraft abilities
+    _rebuildAircraftScene();
     for (final ab in _state.abilities) {
       final key = '${ab.color.x},${ab.color.y},${ab.color.z}';
       _effectMeshCache[key] ??= Mesh.cube(size: 1.0, color: ab.color);
@@ -198,6 +219,8 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     final now = timestamp.toDouble();
     final dt  = math.min((now - _lastTimestamp) / 1000.0, 0.05);
     _lastTimestamp = now;
+    _gameTime += dt;
+    if (_renderer != null) _renderer!.time = _gameTime;
 
     final prevMode = _state.gameMode;
     _processInput(dt);
@@ -206,6 +229,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _state.tickMissionEconomy(dt, prevMode);
     _terrain?.update(_state.playerPosition);
     AbilitySystem.update(_state, dt);
+    _tickFireSystem(dt);
     _syncAircraftSceneGraph(dt);
     _renderFrame();
     _scheduleHudRebuild();
@@ -213,10 +237,37 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     html.window.requestAnimationFrame(_onFrame);
   }
 
+  void _tickFireSystem(double dt) {
+    // Emit particle bursts for freshly-fired abilities (replace cube effects).
+    for (final effect in AbilitySystem.activeEffects) {
+      if (!effect.emitted) {
+        final isExpendable = effect.lifetime >= 0.9;
+        final count = isExpendable ? 120 : (effect.color.r > 0.5 ? 30 : 20);
+        _fireSystem.emitAbilityBurst(effect, count, 2.0);
+        effect.emitted = true;
+      }
+    }
+
+    _fireSystem.tick(_state, dt, TerrainGenerator.heightAt);
+
+    if (_renderer != null) {
+      _renderer!.fireLights = _fireSystem.fireLightPositions;
+    }
+
+    // Lerp heat distortion intensity toward proximity target.
+    final clearance = _state.flightAltitude - _state.terrainHeight;
+    if (_state.isFireBelow && clearance >= 5.0 && clearance < 40.0) {
+      final proximity = 1.0 - (clearance - 5.0) / 35.0;
+      _heatIntensity = (_heatIntensity + (proximity - _heatIntensity) * dt * 3.0)
+          .clamp(0.0, 1.0);
+    } else {
+      _heatIntensity = (_heatIntensity - dt * 2.0).clamp(0.0, 1.0);
+    }
+  }
+
   // ── Input ─────────────────────────────────────────────────────────────────
 
   void _processInput(double dt) {
-    // Throttle: continuous while held
     if (InputSystem.isActionActive(GameAction.throttleUp)) {
       _state.throttle = (_state.throttle + _state.cfgThrottleRate * dt).clamp(0.0, 1.0);
     }
@@ -231,7 +282,6 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     final rl  = InputSystem.isActionActive(GameAction.rotateLeft);
     final rr  = InputSystem.isActionActive(GameAction.rotateRight);
 
-    // Manual input disengages autopilot and any active maneuver
     if (_state.autopilotEnabled && (fwd || bk || sl || sr || rl || rr)) {
       _state.autopilotEnabled = false;
     }
@@ -242,7 +292,6 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
 
     PhysicsSystem.updateAutopilot(_state, dt);
 
-    // Maneuver computer overrides all flight inputs when active.
     final mo = ManeuverSystem.tick(_state, dt);
     final mi = mo.input;
     _state.maneuverDropWindowActive = mo.dropWindowActive;
@@ -261,7 +310,6 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       dt,
     );
 
-    // Edge-detect ability slots
     const slotActions = [
       GameAction.actionBar1, GameAction.actionBar2, GameAction.actionBar3,
       GameAction.actionBar4, GameAction.actionBar5, GameAction.actionBar6,
@@ -274,15 +322,17 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       _prevAbilityKeys[i] = pressed;
     }
 
-    // Edge-detect Tab
     final toggleNow = InputSystem.isActionActive(GameAction.toggleView);
     if (toggleNow && !_prevToggleView) _state.toggleViewMode();
     _prevToggleView = toggleNow;
 
-    // Edge-detect G (gear)
     final gearNow = InputSystem.isActionActive(GameAction.toggleGear);
     if (gearNow && !_prevToggleGear) _state.triggerGear();
     _prevToggleGear = gearNow;
+
+    final flapsNow = InputSystem.isActionActive(GameAction.toggleFlaps);
+    if (flapsNow && !_prevToggleFlaps) setState(() => _state.cycleFlaps());
+    _prevToggleFlaps = flapsNow;
   }
 
   // ── Gear animation tick ───────────────────────────────────────────────────
@@ -303,7 +353,6 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
         _state.gearDeployed = false;
       }
     }
-    // Update deployed flag mid-transit for annunciator
     _state.gearDeployed = _state.gearProgress >= 1.0;
   }
 
@@ -312,14 +361,12 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   void _checkModeTransitions() {
     switch (_state.gameMode) {
       case GameMode.taxi:
-        // Liftoff: speed reaches threshold
         if (_state.groundSpeed >= _state.cfgLiftoffSpeed) {
           _state.gameMode   = GameMode.flight;
           _state.flightSpeed = _state.groundSpeed;
           debugPrint('[Game] Liftoff → FLIGHT');
         }
       case GameMode.landing:
-        // Touchdown on runway or terrain surface (terrainHeight updated every frame).
         final touchFloor = math.max(_state.terrainHeight, 0.5);
         if (_state.playerPosition.y <= touchFloor + 0.1) {
           _state.playerPosition.y = touchFloor;
@@ -331,7 +378,6 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
           _state.gearMoving     = false;
         }
       case GameMode.flight:
-        // Crash-stop: terrain impact bled speed to near-zero; hand off to ground.
         final cf = math.max(_state.terrainHeight, 0.5);
         if (_state.playerPosition.y <= cf + 0.1 && _state.flightSpeed < 1.0) {
           _state.playerPosition.y = cf;
@@ -344,7 +390,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     }
   }
 
-  // ── Aircraft scene graph sync ──────────────────────────────────────────────
+  // ── Aircraft scene graph sync ─────────────────────────────────────────────
 
   void _syncAircraftSceneGraph(double dt) {
     final root = _aircraftRoot;
@@ -378,29 +424,28 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     final cw = _canvas?.clientWidth  ?? 1600;
     final ch = _canvas?.clientHeight ?? 900;
     if (ch > 0) camera.aspectRatio = cw / ch;
+    renderer.heatDistortion.resize(cw, ch);
+
+    // Pass 1: scene → FBO (or directly to screen when heat is off).
+    final useHeat = _heatDistortEnabled && _heatIntensity > 0.005;
+    if (useHeat) renderer.beginHeatPass();
 
     renderer.clear();
 
-    // Render all loaded terrain chunks
     final chunks = _terrain?.loadedChunks;
     if (chunks != null) {
       for (final chunk in chunks) {
         renderer.render(chunk.mesh, chunk.transform, camera);
       }
     }
-
     if (_airfieldMesh != null && _airfieldTransform != null) {
       renderer.render(_airfieldMesh!, _airfieldTransform!, camera);
     }
-
-    // Render multi-part aircraft scene graph (not visible from cockpit view)
     if (_state.viewMode != ViewMode.cockpit && _aircraftRoot != null) {
       renderer.renderSceneGraph(_aircraftRoot!, camera);
     }
 
-    // Render effects using pre-allocated meshes and a single reusable transform.
-    // No allocations inside this loop — colour is baked into the cached mesh,
-    // size is applied via the transform scale.
+    // Cube ability effects (kept for HUD feedback; particles play on top).
     for (final effect in AbilitySystem.activeEffects) {
       final sz  = 0.5 * effect.scale.clamp(0.2, 4.0);
       final key = '${effect.color.x},${effect.color.y},${effect.color.z}';
@@ -410,6 +455,12 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       _effectTransform.scale.setValues(sz, sz, sz);
       renderer.render(em, _effectTransform, camera);
     }
+
+    // Particle layer (fire, smoke, ability bursts).
+    renderer.renderParticles(_fireSystem.particles.particles, camera);
+
+    // Pass 2: blit FBO to screen with heat distortion.
+    if (useHeat) renderer.endHeatPass(_heatIntensity);
   }
 
   // ── HUD rebuild ───────────────────────────────────────────────────────────
@@ -447,7 +498,6 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       color: Colors.transparent,
       child: Stack(
         children: [
-          // ── Main HUD ──────────────────────────────────────────────────────
           cockpit.buildCockpitHud(
             _state,
             showAnnunciator: _settings.showAnnunciator,
@@ -473,7 +523,11 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             onNavMapTap:    (wx, wz) => setState(() => _state.addWaypoint(wx, wz)),
             onDeleteWaypoint:    (i) => setState(() => _state.removeWaypoint(i)),
             onAnnunciatorChange: () => setState(() {}),
-            onThrottleModeToggle: () => setState(_state.stepThrottleMode), onThrottleChange: (v) => setState(() => _state.throttle = v.clamp(0.0, 1.0)), onAuxPage: (p) => setState(() => _state.auxDisplayPage = p), onAuxMirrorScroll: (d) => setState(() => _state.scrollAuxMirror(d)), onAuxVideoScroll: (d) => setState(() => _state.scrollAuxVideo(d)),
+            onThrottleModeToggle: () => setState(_state.stepThrottleMode),
+            onThrottleChange: (v) => setState(() => _state.throttle = v.clamp(0.0, 1.0)),
+            onAuxPage: (p) => setState(() => _state.auxDisplayPage = p),
+            onAuxMirrorScroll: (d) => setState(() => _state.scrollAuxMirror(d)),
+            onAuxVideoScroll: (d) => setState(() => _state.scrollAuxVideo(d)),
             onManeuverScroll:  (d) => setState(() {
               final n = ManeuverSystem.catalog.length;
               _state.selectedManeuverIdx = (_state.selectedManeuverIdx + d + n) % n;
@@ -482,7 +536,6 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             onManeuverStop:    ()  => setState(() => _state.stopManeuver()),
           ),
 
-          // ── Top-right menu buttons ─────────────────────────────────────────
           Positioned(
             top: 12, right: 12,
             child: Row(children: [
@@ -491,7 +544,6 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             ]),
           ),
 
-          // ── Settings panel overlay ─────────────────────────────────────────
           if (_showSettings)
             Positioned(
               top: 44, right: 12,
@@ -502,7 +554,6 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
               ),
             ),
 
-          // ── Hangar overlay ─────────────────────────────────────────────────
           if (_showHangar)
             Positioned.fill(child: buildHangarScreen(
               _state,

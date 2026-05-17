@@ -1,0 +1,26 @@
+{
+  "port": 8009,
+  "graphics": {
+    "canvasWidth": 1600,
+    "canvasHeight": 900,
+    "antialias": true,
+    "depth": true,
+    "fov": 90.0,
+    "nearClip": 0.1,
+    "farClip": 1000.0,
+    "lightPosition": [50, 80, 50],
+    "lightColor": [1.0, 0.95, 0.85],
+    "ambientColor": [0.25, 0.25, 0.35]
+  },
+  "camera": {
+    "thirdPersonDistance": 10.0,
+    "thirdPersonHeight": 4.0,
+    "thirdPersonPitch": 20.0,
+    "lerpSpeed": 8.0
+  },
+  "terrain": {
+    "gridSize": 64,
+    "tileSize": 2.0,
+    "maxHeight": 12.0
+  }
+}

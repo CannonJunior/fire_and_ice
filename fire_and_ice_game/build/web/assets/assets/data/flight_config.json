@@ -1,0 +1,52 @@
+{
+  "flight": {
+    "flightSpeed": 7.0,
+    "pitchRate": 60.0,
+    "maxPitchAngle": 45.0,
+    "boostMultiplier": 1.5,
+    "brakeMultiplier": 0.6,
+    "brakeJumpForce": 3.0,
+    "manaDrainRate": 3.0,
+    "lowManaThreshold": 10.0,
+    "lowManaDescentRate": 2.0,
+    "bankRate": 120.0,
+    "maxBankAngle": 60.0,
+    "autoLevelRate": 90.0,
+    "autoLevelThreshold": 90.0,
+    "bankToTurnMultiplier": 2.5,
+    "barrelRollRate": 360.0,
+    "startAltitude": 0.5,
+    "stallSpeed": 2.5,
+    "stallPitchAngle": 35.0,
+    "gpwsAltitude": 10.0,
+    "crashDamageRate": 80.0,
+    "landingMaxSpeed": 9.0,
+    "landingMaxPitchDeg": 10.0
+  },
+  "taxi": {
+    "maxGroundSpeed": 10.0,
+    "groundAccel": 3.0,
+    "groundBrake": 8.0,
+    "liftoffSpeed": 8.0,
+    "groundTurnRate": 55.0,
+    "runwayStartZ": 78.0,
+    "throttleRate": 0.45,
+    "flightSpeedAccel": 2.5
+  },
+  "aircraft": [
+    {
+      "id": "firefighter",
+      "displayName": "Firefighter",
+      "icon": "🔥",
+      "description": "Heavy tanker — stable platform, high-capacity retardant drop",
+      "gearLeverPosition": "center"
+    },
+    {
+      "id": "icefighter",
+      "displayName": "Icefighter",
+      "icon": "❄️",
+      "description": "Cryo interceptor — side-mounted gear lever, dual ice systems",
+      "gearLeverPosition": "leftOfLeft"
+    }
+  ]
+}

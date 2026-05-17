@@ -1,0 +1,1 @@
+ /home/junior/src/fire_and_ice/fire_and_ice_game/build/web/manifest.json /home/junior/src/fire_and_ice/fire_and_ice_game/build/web/controls_map.svg:  /home/junior/src/fire_and_ice/fire_and_ice_game/web/manifest.json /home/junior/src/fire_and_ice/fire_and_ice_game/web/controls_map.svg /home/junior/src/fire_and_ice/fire_and_ice_game/web/index.html

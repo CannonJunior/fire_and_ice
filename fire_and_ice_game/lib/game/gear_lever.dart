@@ -166,6 +166,7 @@ Widget buildFlapsLever(GameState state, {VoidCallback? onTap}) {
   final label  = labels[level];
 
   return GestureDetector(
+    behavior: HitTestBehavior.opaque,
     onTap: onTap,
     child: Container(
       width: 92,

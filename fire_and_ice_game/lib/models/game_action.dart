@@ -78,4 +78,7 @@ enum GameAction {
 
   /// G - toggle landing gear up/down
   toggleGear,
+
+  /// F - cycle flaps through four detents (UP → T/O → APPR → FULL → UP)
+  toggleFlaps,
 }

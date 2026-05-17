@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'aircraft_config.dart';
 import 'settings_state.dart';
+import 'test_status_widget.dart';
 
 // ── Palette (matches cockpit instrument aesthetic) ────────────────────────────
 
@@ -48,6 +49,7 @@ class _SettingsPanelState extends State<SettingsPanel> {
     'hud':      false,
     'controls': false,
     'bindings': false,
+    'tests':    false,
   };
 
   SettingsState get s => widget.settings;
@@ -84,6 +86,7 @@ class _SettingsPanelState extends State<SettingsPanel> {
                     _Section('HUD',          'hud',      _open['hud']!,      _toggle, _hudBody()),
                     _Section('CONTROLS',     'controls', _open['controls']!, _toggle, _controlsBody()),
                     _Section('KEY BINDINGS', 'bindings', _open['bindings']!, _toggle, _bindingsBody()),
+                    _Section('TEST STATUS',  'tests',    _open['tests']!,    _toggle, const TestStatusWidget()),
                   ],
                 ),
               ),
@@ -234,6 +237,7 @@ class _SettingsPanelState extends State<SettingsPanel> {
     _InfoRow('Ability slots', '1 – 0'),
     _InfoRow('Throttle', ']  /  ['),
     _InfoRow('Landing gear', 'G'),
+    _InfoRow('Flaps cycle', 'F'),
   ]);
 
   // ── Key bindings (detailed read-only) ───────────────────────────────────────
@@ -257,6 +261,7 @@ class _SettingsPanelState extends State<SettingsPanel> {
       (']',           'Throttle up',                 false),
       ('[',           'Throttle down',               false),
       ('G',           'Landing gear up / down',      false),
+      ('F',           'Step flaps (bounces UP↔FULL)',   false),
       // Meta
       ('⚙  button',  'Open / close settings',       true),
     ];

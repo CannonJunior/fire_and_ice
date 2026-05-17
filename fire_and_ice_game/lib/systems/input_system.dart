@@ -108,6 +108,9 @@ class InputSystem {
         return _pressedKeys.contains('[');
       case GameAction.toggleGear:
         return _pressedKeys.contains('g');
+
+      case GameAction.toggleFlaps:
+        return _pressedKeys.contains('f') || _pressedKeys.contains('F');
     }
   }
 
@@ -131,7 +134,7 @@ class InputSystem {
       ' ',      // Space
       '1', '2', '3', '4', '5',
       '6', '7', '8', '9', '0',
-      'Alt', 'Tab', 'g', 'G', '[', ']',
+      'Alt', 'Tab', 'f', 'F', 'g', 'G', '[', ']',
       'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
     };
 

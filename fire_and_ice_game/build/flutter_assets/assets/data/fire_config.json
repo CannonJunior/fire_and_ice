@@ -1,0 +1,46 @@
+{
+  "fire": {
+    "particlesPerZoneMax": 800,
+    "emitRatePerSecond": 60,
+    "fireLifetimeMin": 1.2,
+    "fireLifetimeMax": 2.8,
+    "smokeLifetimeMin": 3.0,
+    "smokeLifetimeMax": 6.0,
+    "fireSizeMin": 0.4,
+    "fireSizeMax": 1.8,
+    "smokeSizeMin": 1.2,
+    "smokeSizeMax": 4.5,
+    "buoyancy": 5.2,
+    "turbulenceStrength": 0.8,
+    "windInfluence": 0.55,
+    "windRadius": 40.0,
+    "smokeTransitionAge": 0.6,
+    "smokeFadeAltitude": 35.0,
+    "heatDistortionEnabled": true,
+    "dynamicLightingEnabled": true
+  },
+  "abilityBurst": {
+    "fireBoltCount": 30,
+    "flameWardCount": 60,
+    "expendableCount": 120,
+    "burstSpread": 2.0
+  },
+  "wyvern": {
+    "breathRange": 45.0,
+    "breathHalfAngle": 28.0,
+    "breathParticlesPerFrame": 200,
+    "breathDuration": 2.5,
+    "breathCooldown": 5.0,
+    "groundFireDuration": 10.0,
+    "directDamagePerSec": 15.0,
+    "edgeDamagePerSec": 6.0,
+    "directConeRadius": 5.0,
+    "edgeConeRadius": 15.0
+  },
+  "qualityPresets": {
+    "low":    { "maxParticles": 400,   "heatDistortion": false, "dynamicLighting": false },
+    "medium": { "maxParticles": 1500,  "heatDistortion": false, "dynamicLighting": true  },
+    "high":   { "maxParticles": 5000,  "heatDistortion": true,  "dynamicLighting": true  },
+    "ultra":  { "maxParticles": 20000, "heatDistortion": true,  "dynamicLighting": true, "gpuParticles": true }
+  }
+}
