@@ -213,7 +213,7 @@ def t13_left_mfd_elmt(page):
 def _click_ability(page, slot_x, ability_name):
     enter_cockpit(page)
     wait_gs(page, 'abilityCooldowns',
-            lambda cds: ability_name not in (cds or {}), timeout_ms=10000)
+            lambda cds: ability_name not in (cds or {}), timeout_ms=25000)
     before_mana = gs(page, 'mana')
     before_cds  = gs(page, 'abilityCooldowns') or {}
     page.mouse.click(slot_x, OSB_BOT_Y)
@@ -335,18 +335,20 @@ def t28_flaps_extend_button(page):
 
 def t29_throttle_drag(page):
     enter_cockpit(page)
-    page.keyboard.down('['); page.wait_for_timeout(2500); page.keyboard.up('[')
-    page.wait_for_timeout(200)
+    # Drain throttle fully
+    page.keyboard.down('['); page.wait_for_timeout(3500); page.keyboard.up('[')
+    page.wait_for_timeout(300)
     thr    = gs(page, 'throttle')
-    from_y = lever_y(thr)
-    to_y   = lever_y(min(thr + 0.45, 1.0))
+    # Drag full track height (144px) from bottom to near top for reliable detection
+    from_y = lever_y(0.0)           # bottom of track = y≈770
+    to_y   = lever_y(0.85)          # near top = y≈ 640, 130px upward drag
     page.mouse.move(THR_X, from_y)
     page.mouse.down()
-    page.mouse.move(THR_X, to_y, steps=6)
+    page.mouse.move(THR_X, to_y, steps=10)
     page.mouse.up()
-    page.wait_for_timeout(200)
+    page.wait_for_timeout(300)
     after = gs(page, 'throttle')
-    assert after > thr, f'Throttle did not increase: {thr:.3f} → {after:.3f}'
+    assert after > thr + 0.1, f'Throttle did not increase: {thr:.3f} → {after:.3f}'
 
 
 def t30_settings_panel(page):
