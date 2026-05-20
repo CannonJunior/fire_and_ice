@@ -4,12 +4,13 @@ import 'game_state.dart';
 
 // ── Shared colors (mirrored from mfd_panels.dart) ─────────────────────────────
 
-const _kLFg   = Color(0xFF00FF41);
-const _kLDim  = Color(0xFF005519);
-const _kRFg   = Color(0xFF00AAFF);
-const _kRDim  = Color(0xFF003366);
-const _kAmber = Color(0xFFFFB300);
-const _kWarn  = Color(0xFFFF6600);
+const _kLFg    = Color(0xFF00FF41);
+const _kLDim   = Color(0xFF005519);
+const _kRFg    = Color(0xFF00AAFF);
+const _kRDim   = Color(0xFF003366);
+const _kAmber  = Color(0xFFFFB300);
+const _kWarn   = Color(0xFFFF6600);
+const _kFireOut = Color(0xFF00FF88);
 
 // ── Shared header (matches mfd_panels.dart style) ─────────────────────────────
 
@@ -253,7 +254,10 @@ Widget buildFirePage(GameState state) {
   return Column(children: [
     _hdr('FIRE DETECTION', 'FIRE', _kRFg, _kRDim),
     Expanded(child: CustomPaint(
-      painter: _FireDetectPainter(state: state),
+      painter: _FireDetectPainter(
+        state: state,
+        gameTimeMs: DateTime.now().millisecondsSinceEpoch,
+      ),
       child: Container(),
     )),
     Container(
@@ -266,15 +270,15 @@ Widget buildFirePage(GameState state) {
           const Text('RNG:120u',   style: TextStyle(color: _kRFg, fontSize: 8)),
           Text('FIRES:$active',
               style: TextStyle(
-                color: allOut ? const Color(0xFF00FF88) : _kWarn,
+                color: allOut ? _kFireOut : _kWarn,
                 fontSize: 16, fontWeight: FontWeight.bold)),
         ]),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('SCAN:ACTIVE', style: TextStyle(color: _kRFg, fontSize: 8)),
           Text(allOut ? 'SUPRS:DONE' : 'SUPRS:RDY',
-              style: TextStyle(color: allOut ? const Color(0xFF00FF88) : _kRFg, fontSize: 8)),
+              style: TextStyle(color: allOut ? _kFireOut : _kRFg, fontSize: 8)),
           Text(allOut ? 'ALL OUT' : 'INTNS:HIGH',
-              style: TextStyle(color: allOut ? const Color(0xFF00FF88) : _kWarn, fontSize: 8)),
+              style: TextStyle(color: allOut ? _kFireOut : _kWarn, fontSize: 8)),
         ]),
       ]),
     ),
@@ -283,15 +287,16 @@ Widget buildFirePage(GameState state) {
 
 class _FireDetectPainter extends CustomPainter {
   final GameState state;
+  final int gameTimeMs;
   static const double _radarRange = 120.0;
-  const _FireDetectPainter({required this.state});
+  const _FireDetectPainter({required this.state, required this.gameTimeMs});
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
     final cy = size.height / 2;
     final r  = math.min(cx, cy) - 8;
-    final ms = DateTime.now().millisecondsSinceEpoch;
+    final ms = gameTimeMs;
     final px = state.playerPosition.x;
     final pz = state.playerPosition.z;
 

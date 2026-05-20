@@ -118,10 +118,8 @@ class AbilitySystem {
 
     _spawnEffect(ability, state.playerPosition);
 
-    final supRadius = _suppressionRadius(ability);
-    if (supRadius != null) {
-      final hit = state.suppressFiresInRadius(supRadius);
-      debugPrint('[AbilitySystem] ${ability.name} — fire suppressed: $hit');
+    if (ability.suppressRadius != null) {
+      state.suppressFiresInRadius(ability.suppressRadius!);
     }
 
     debugPrint('[AbilitySystem] Activated ${ability.name}');
@@ -158,18 +156,6 @@ class AbilitySystem {
       case 'Flame Ward':  return 2.5;
       case 'Wind Gust':   return 1.8;
       default:            return 1.0;
-    }
-  }
-
-  /// Suppression radius for abilities that directly extinguish fires (null = no effect).
-  static double? _suppressionRadius(AbilityData ability) {
-    switch (ability.name) {
-      case 'Cryo Bomb':      return 25.0;
-      case 'Inferno Strike': return 22.0;
-      case 'Frost Missile':  return 18.0;
-      case 'Heat Seeker':    return 15.0;
-      case 'Ice Shard':      return 10.0;
-      default:               return null;
     }
   }
 

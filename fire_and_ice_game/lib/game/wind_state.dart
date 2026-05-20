@@ -32,11 +32,19 @@ class WindState {
   double windStrength = 0.15;
   double _noiseTime   = 0.0;
 
+  // Pre-allocated scratch vector — avoids heap allocation on every windVector3 access.
+  final Vector3 _windVec = Vector3.zero();
+
   // ── Screen-space particle pool ────────────────────────────────────────────
   final List<_Streak> _streaks = [];
   final math.Random   _rng     = math.Random();
   bool _poolReady = false;
   double _screenW = 1600, _screenH = 900;
+
+  // Current screen-space direction vector — updated each frame by updateStreaks,
+  // read by the painter so it stays consistent with streak movement.
+  double streakSdx = 0.0;
+  double streakSdy = 1.0;
 
   // ── Simulation ────────────────────────────────────────────────────────────
 
@@ -64,11 +72,15 @@ class WindState {
   // ── Derived properties ────────────────────────────────────────────────────
 
   /// Wind as a world-space XZ vector (Y always 0 — no updraft model yet).
-  Vector3 get windVector3 => Vector3(
-    math.cos(windAngle) * windStrength,
-    0.0,
-    math.sin(windAngle) * windStrength,
-  );
+  /// Returns the pre-allocated scratch vector — do not store the reference.
+  Vector3 get windVector3 {
+    _windVec.setValues(
+      math.cos(windAngle) * windStrength,
+      0.0,
+      math.sin(windAngle) * windStrength,
+    );
+    return _windVec;
+  }
 
   double get windAngleDegrees => windAngle * (180.0 / math.pi);
 
@@ -83,9 +95,9 @@ class WindState {
 
   /// Push the aircraft slowly in the wind direction (crosswind drift).
   void applyDrift(Vector3 position, double dt) {
-    final v = windVector3;
-    position.x += v.x * cfgCrosswindFactor * dt;
-    position.z += v.z * cfgCrosswindFactor * dt;
+    final factor = cfgCrosswindFactor * dt;
+    position.x += math.cos(windAngle) * windStrength * factor;
+    position.z += math.sin(windAngle) * windStrength * factor;
   }
 
   // ── Screen-space streaks (cockpit windshield effect) ──────────────────────
@@ -101,7 +113,6 @@ class WindState {
         final s = _Streak(_rng.nextDouble() * screenW,
                           _rng.nextDouble() * screenH,
                           cfgParticleLifetime * (0.5 + _rng.nextDouble() * 0.5));
-        // Stagger initial ages so they don't all spawn at the same moment.
         s.age = _rng.nextDouble() * s.maxAge;
         _streaks.add(s);
       }
@@ -113,33 +124,34 @@ class WindState {
         .round().clamp(4, cfgParticleCount);
 
     // Screen direction: project wind angle relative to aircraft heading.
+    // Cache on the instance so the painter reads the same values without recomputing.
     final relAngle = windAngle - yawDeg * (math.pi / 180.0);
-    final sdx = math.sin(relAngle);
-    final sdy = -math.cos(relAngle);  // +y = downward on screen
+    streakSdx = math.sin(relAngle);
+    streakSdy = -math.cos(relAngle);  // +y = downward on screen
     final speed = cfgParticleSpeed * (windStrength / cfgMaxStrength);
 
     for (int i = 0; i < _streaks.length; i++) {
       final s = _streaks[i];
       if (i >= active) { s.age = s.maxAge; continue; }
 
-      s.x += sdx * speed * dt;
-      s.y += sdy * speed * dt;
+      s.x += streakSdx * speed * dt;
+      s.y += streakSdy * speed * dt;
       s.age += dt;
 
       final offScreen = s.x < -40 || s.x > screenW + 40 ||
                         s.y < -40 || s.y > screenH + 40;
-      if (s.age >= s.maxAge || offScreen) _respawnStreak(s, sdx, sdy);
+      if (s.age >= s.maxAge || offScreen) _respawnStreak(s);
     }
   }
 
-  void _respawnStreak(_Streak s, double sdx, double sdy) {
+  void _respawnStreak(_Streak s) {
     // Spawn at the upwind edge (opposite travel direction).
-    if (sdx.abs() >= sdy.abs()) {
-      s.x = sdx > 0 ? -10 : _screenW + 10;
+    if (streakSdx.abs() >= streakSdy.abs()) {
+      s.x = streakSdx > 0 ? -10 : _screenW + 10;
       s.y = _rng.nextDouble() * _screenH;
     } else {
       s.x = _rng.nextDouble() * _screenW;
-      s.y = sdy > 0 ? -10 : _screenH + 10;
+      s.y = streakSdy > 0 ? -10 : _screenH + 10;
     }
     s.age = 0;
     s.maxAge = cfgParticleLifetime * (0.5 + _rng.nextDouble() * 0.5);

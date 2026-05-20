@@ -84,11 +84,15 @@ class WyvernSystem {
     });
   }
 
+  // Scratch vector — reused each tick to avoid per-frame allocation.
+  static final Vector3 _toPlayer = Vector3.zero();
+
   static void _tickWyvern(Wyvern w, GameState state, double dt) {
-    w.stateTimer       += dt;
-    w.attackCooldown    = (w.attackCooldown - dt).clamp(0.0, double.infinity);
-    final toPlayer      = state.playerPosition - w.position;
-    final dist          = toPlayer.length;
+    w.stateTimer     += dt;
+    w.attackCooldown  = math.max(0.0, w.attackCooldown - dt);
+    _toPlayer.setFrom(state.playerPosition);
+    _toPlayer.sub(w.position);
+    final dist = _toPlayer.length;
 
     switch (w.state) {
       case WyvernState.patrol:
@@ -99,7 +103,7 @@ class WyvernSystem {
         }
 
       case WyvernState.chase:
-        _chase(w, toPlayer, dist, dt);
+        _chase(w, dist, dt);
         if (dist < cfgAttackRange) {
           w.state = WyvernState.attack; w.stateTimer = 0.0;
           debugPrint('[WyvernSystem] ${w.id} CHASE→ATTACK');
@@ -109,37 +113,51 @@ class WyvernSystem {
         }
 
       case WyvernState.attack:
-        _attack(w, state, toPlayer, dist, dt);
+        _attack(w, state, dist, dt);
         if (dist > cfgAttackRange * 1.6) {
           w.state = WyvernState.chase; w.stateTimer = 0.0;
         }
 
       case WyvernState.dying:
         w.velocity.y -= 5.0 * dt;
-        w.velocity    = w.velocity * (1.0 - 1.5 * dt).clamp(0.0, 1.0);
-        w.position   += w.velocity * dt;
+        w.velocity.scale((1.0 - 1.5 * dt).clamp(0.0, 1.0));
+        w.position.addScaled(w.velocity, dt);
     }
   }
 
   static void _patrol(Wyvern w, double dt) {
     w.patrolAngle += (cfgSpeed / w.patrolRadius) * dt;
-    final tx  = w.patrolCenter.x + math.cos(w.patrolAngle) * w.patrolRadius;
-    final tz  = w.patrolCenter.z + math.sin(w.patrolAngle) * w.patrolRadius;
-    final dir = Vector3(tx, w.patrolCenter.y, tz) - w.position;
-    if (dir.length > 0.1) w.velocity = dir.normalized() * cfgSpeed;
-    w.position += w.velocity * dt;
+    // Set velocity toward the next patrol waypoint — no heap allocation.
+    w.velocity.setValues(
+      w.patrolCenter.x + math.cos(w.patrolAngle) * w.patrolRadius,
+      w.patrolCenter.y,
+      w.patrolCenter.z + math.sin(w.patrolAngle) * w.patrolRadius,
+    );
+    w.velocity.sub(w.position);
+    if (w.velocity.length > 0.1) {
+      w.velocity.normalize();
+      w.velocity.scale(cfgSpeed);
+    }
+    w.position.addScaled(w.velocity, dt);
   }
 
-  static void _chase(Wyvern w, Vector3 toPlayer, double dist, double dt) {
-    if (dist > 0.1) w.velocity = toPlayer.normalized() * cfgChaseSpeed;
-    w.position += w.velocity * dt;
+  static void _chase(Wyvern w, double dist, double dt) {
+    if (dist > 0.1) {
+      w.velocity.setFrom(_toPlayer);
+      w.velocity.normalize();
+      w.velocity.scale(cfgChaseSpeed);
+    }
+    w.position.addScaled(w.velocity, dt);
   }
 
-  static void _attack(
-      Wyvern w, GameState state, Vector3 toPlayer, double dist, double dt) {
+  static void _attack(Wyvern w, GameState state, double dist, double dt) {
     // Drift slowly toward player while attacking
-    if (dist > 0.1) w.velocity = toPlayer.normalized() * cfgChaseSpeed * 0.25;
-    w.position += w.velocity * dt;
+    if (dist > 0.1) {
+      w.velocity.setFrom(_toPlayer);
+      w.velocity.normalize();
+      w.velocity.scale(cfgChaseSpeed * 0.25);
+    }
+    w.position.addScaled(w.velocity, dt);
 
     if (w.attackCooldown > 0.0) return;
     w.attackCooldown = cfgAttackCooldown;
@@ -173,7 +191,7 @@ class WyvernSystem {
         if (dist >= hitRadius) continue;
 
         // Ice effects (dominant blue, low red) deal bonus damage to fire wyvern
-        final isIce = effect.color.b > 0.5 && effect.color.r < 0.5;
+        final isIce = effect.color.b > 0.5 && effect.color.r <= 0.5;
         final dmg   = cfgDmgBase * (isIce ? cfgDmgIceBonus : 1.0);
         w.takeDamage(dmg);
         debugPrint('[WyvernSystem] Hit ${w.id} for ${dmg.toStringAsFixed(1)} '

@@ -260,11 +260,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _checkModeTransitions();
     _state.tickMissionEconomy(dt, prevMode);
     _terrain?.update(_state.playerPosition);
-    final cw = _canvas?.clientWidth  ?? 1600.0;
-    final ch = _canvas?.clientHeight ?? 900.0;
     _state.windState.update(dt);
-    _state.windState.updateStreaks(dt, cw.toDouble(), ch.toDouble(),
-        _state.playerRotation.y);
     AbilitySystem.update(_state, dt);
     WyvernSystem.tick(_state, dt);
     _tickFireSystem(dt);
@@ -272,7 +268,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _checkMissionCompletion();
     if (_state.rtbActive && !_state.autopilotEnabled) _state.rtbActive = false;
     _syncAircraftSceneGraph(dt);
-    _renderFrame();
+    _renderFrame(dt);
     _scheduleHudRebuild();
     writeGameStateBridge(_state, _frameCount++);
 
@@ -453,7 +449,11 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
 
   // ── WebGL rendering ───────────────────────────────────────────────────────
 
-  void _renderFrame() {
+  void _renderFrame(double dt) {
+    final cw = (_canvas?.clientWidth  ?? 1600).toDouble();
+    final ch = (_canvas?.clientHeight ?? 900).toDouble();
+    _state.windState.updateStreaks(dt, cw, ch, _state.playerRotation.y);
+
     final renderer = _renderer;
     final camera   = _camera;
     if (renderer == null || camera == null) return;
@@ -474,10 +474,8 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       );
     }
 
-    final cw = _canvas?.clientWidth  ?? 1600;
-    final ch = _canvas?.clientHeight ?? 900;
     if (ch > 0) camera.aspectRatio = cw / ch;
-    renderer.heatDistortion.resize(cw, ch);
+    renderer.heatDistortion.resize(cw.toInt(), ch.toInt());
 
     // Pass 1: scene → FBO (or directly to screen when heat is off).
     final useHeat = _heatDistortEnabled && _heatIntensity > 0.005;

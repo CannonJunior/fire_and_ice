@@ -16,6 +16,9 @@ class AbilityData {
   /// Maximum charges for expendable stores (0 = rechargeable).
   final int maxCharges;
 
+  /// World-unit radius within which this ability extinguishes fires (null = no suppression).
+  final double? suppressRadius;
+
   AbilityData({
     required this.name,
     required this.description,
@@ -23,8 +26,9 @@ class AbilityData {
     required this.manaCost,
     required this.color,
     required this.icon,
-    this.isExpendable = false,
-    this.maxCharges   = 0,
+    this.isExpendable  = false,
+    this.maxCharges    = 0,
+    this.suppressRadius,
   });
 }
 
@@ -37,7 +41,7 @@ final _infernoStrike = AbilityData(
   description: 'Precision fire-suppression bomb — drops retardant on target.',
   cooldown: 20.0, manaCost: 30.0, icon: '🚀',
   color: Vector3(1.0, 0.35, 0.0),
-  isExpendable: true, maxCharges: 4,
+  isExpendable: true, maxCharges: 4, suppressRadius: 22.0,
 );
 
 final _cryoBomb = AbilityData(
@@ -45,7 +49,7 @@ final _cryoBomb = AbilityData(
   description: 'Cryo-suppression pod — flash-freezes a fire zone.',
   cooldown: 20.0, manaCost: 30.0, icon: '💥',
   color: Vector3(0.0, 0.8, 1.0),
-  isExpendable: true, maxCharges: 4,
+  isExpendable: true, maxCharges: 4, suppressRadius: 25.0,
 );
 
 final _heatSeeker = AbilityData(
@@ -53,7 +57,7 @@ final _heatSeeker = AbilityData(
   description: 'Heat-guided fire burst — creates controlled firebreaks.',
   cooldown: 25.0, manaCost: 25.0, icon: '🔥',
   color: Vector3(1.0, 0.2, 0.0),
-  isExpendable: true, maxCharges: 3,
+  isExpendable: true, maxCharges: 3, suppressRadius: 15.0,
 );
 
 final _frostMissile = AbilityData(
@@ -61,7 +65,7 @@ final _frostMissile = AbilityData(
   description: 'Targeted cryo burst — suppresses concentrated fire columns.',
   cooldown: 25.0, manaCost: 25.0, icon: '❄️',
   color: Vector3(0.3, 0.7, 1.0),
-  isExpendable: true, maxCharges: 3,
+  isExpendable: true, maxCharges: 3, suppressRadius: 18.0,
 );
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -79,7 +83,7 @@ final _iceShard = AbilityData(
   name: 'Ice Shard',
   description: 'Quick ice projectile — punctures fire curtains.',
   cooldown: 2.5, manaCost: 15.0, icon: '🌀',
-  color: Vector3(0.5, 0.9, 1.0),
+  color: Vector3(0.5, 0.9, 1.0), suppressRadius: 10.0,
 );
 
 final _windGust = AbilityData(

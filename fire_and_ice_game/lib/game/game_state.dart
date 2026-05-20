@@ -272,10 +272,11 @@ class GameState {
     return false;
   }
 
+  double get _dropRangeRadius => const [20.0, 32.0, 46.0, 64.0][dropRange.clamp(0, 3)];
+
   bool dropRetardant() {
     if (!suppressionArmed) return false;
-    final d2 = [20.0, 32.0, 46.0, 64.0][dropRange.clamp(0, 3)];
-    return suppressFiresInRadius(d2);
+    return suppressFiresInRadius(_dropRangeRadius);
   }
 
   /// Extinguish any fire zones within [radius] world units (ability-based, no arm required).
@@ -344,7 +345,7 @@ class GameState {
     _autoDropTimer += dt;
     if (_autoDropTimer < 5.0) return false;
     _autoDropTimer = 0.0;
-    return suppressFiresInRadius([20.0, 32.0, 46.0, 64.0][dropRange.clamp(0, 3)]);
+    return suppressFiresInRadius(_dropRangeRadius);
   }
 
   // ── Dual-engine fire suppression ─────────────────────────────────────────

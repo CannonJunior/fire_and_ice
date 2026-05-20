@@ -35,13 +35,16 @@ class FireProximitySensor extends StatelessWidget {
     final px = state.playerPosition.x;
     final pz = state.playerPosition.z;
 
-    // Threat is max of altitude-based proximity and nearest active fire distance.
     double minFireDist = double.infinity;
+    final fireContacts = <_RadarContact>[];
     for (int i = 0; i < GameState.firePositions.length; i++) {
       if (state.fireExtinguished[i]) continue;
       final (fx, fz) = GameState.firePositions[i];
-      final d = math.sqrt(math.pow(fx - px, 2) + math.pow(fz - pz, 2));
+      final dx = fx - px, dz = fz - pz;
+      final d  = math.sqrt(dx * dx + dz * dz);
       if (d < minFireDist) minFireDist = d;
+      fireContacts.add(_RadarContact(
+        Offset((dx / _radarRange).clamp(-1.0, 1.0), (dz / _radarRange).clamp(-1.0, 1.0)), 1.0));
     }
     final fireThreat = minFireDist.isFinite
         ? (1.0 - (minFireDist / _radarRange).clamp(0.0, 1.0))
@@ -56,14 +59,6 @@ class FireProximitySensor extends StatelessWidget {
       final nz = ((w.position.z - pz) / _radarRange).clamp(-1.0, 1.0);
       wyvContacts.add(_RadarContact(Offset(nx, nz), w.healthFraction));
     }
-    final fireContacts = <_RadarContact>[];
-    for (int i = 0; i < GameState.firePositions.length; i++) {
-      if (state.fireExtinguished[i]) continue;
-      final (fx, fz) = GameState.firePositions[i];
-      final nx = ((fx - px) / _radarRange).clamp(-1.0, 1.0);
-      final nz = ((fz - pz) / _radarRange).clamp(-1.0, 1.0);
-      fireContacts.add(_RadarContact(Offset(nx, nz), 1.0));
-    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -74,6 +69,7 @@ class FireProximitySensor extends StatelessWidget {
           child: CustomPaint(
             painter: _FpsPainter(
               threat: threat,
+              gameTimeMs: DateTime.now().millisecondsSinceEpoch,
               wyvernContacts: wyvContacts,
               fireContacts: fireContacts,
             ),
@@ -115,7 +111,8 @@ class _FpsPainter extends CustomPainter {
   final double threat;
   final List<_RadarContact> wyvernContacts;
   final List<_RadarContact> fireContacts;
-  const _FpsPainter({required this.threat, this.wyvernContacts = const [], this.fireContacts = const []});
+  final int gameTimeMs;
+  const _FpsPainter({required this.threat, required this.gameTimeMs, this.wyvernContacts = const [], this.fireContacts = const []});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -158,8 +155,7 @@ class _FpsPainter extends CustomPainter {
     }
 
     // Fire zone contacts — pulsing orange diamonds
-    final ms = DateTime.now().millisecondsSinceEpoch;
-    final pulse = (math.sin(ms / 500.0) + 1) / 2;
+    final pulse = (math.sin(gameTimeMs / 500.0) + 1) / 2;
     for (final c in fireContacts) {
       final ex = cx + c.pos.dx * r;
       final ey = cy + c.pos.dy * r;
@@ -218,10 +214,7 @@ class _FpsPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_FpsPainter o) =>
-      o.threat != threat ||
-      o.wyvernContacts.length != wyvernContacts.length ||
-      o.fireContacts.length != fireContacts.length;
+  bool shouldRepaint(_FpsPainter o) => true;
 }
 
 // ── Hull Integrity Arc ────────────────────────────────────────────────────────
