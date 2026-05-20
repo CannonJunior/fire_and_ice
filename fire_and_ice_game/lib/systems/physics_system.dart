@@ -221,6 +221,7 @@ class PhysicsSystem {
     );
 
     state.playerPosition.addScaled(_fwd, state.flightSpeed * dt);
+    state.windState.applyDrift(state.playerPosition, dt);
     state.flightAltitude = state.playerPosition.y;
   }
 

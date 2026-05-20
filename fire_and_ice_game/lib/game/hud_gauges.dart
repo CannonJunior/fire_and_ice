@@ -22,17 +22,48 @@ const Color kColdViolet  = Color(0xFFCC44FF);
 
 /// Circular elemental-threat display — replaces traditional radar.
 ///
-/// [threatLevel] 0–1 drives the outer heat arc and danger ring brightness.
-/// [contacts] are normalised positions in -1..1 sensor space (fire elementals).
-/// When no enemies exist, threat derives from [GameState.flightAltitude].
+/// Fire zones and wyvern contacts are plotted in world-space XZ relative to
+/// the player.  [radarRange] world units map to the sensor edge.
 class FireProximitySensor extends StatelessWidget {
   final GameState state;
   const FireProximitySensor({super.key, required this.state});
 
+  static const double _radarRange = 120.0;
+
   @override
   Widget build(BuildContext context) {
-    // Derive threat from altitude proxy: alt < 10 = danger, > 30 = safe.
-    final threat = (1.0 - (state.flightAltitude / 30.0)).clamp(0.0, 1.0);
+    final px = state.playerPosition.x;
+    final pz = state.playerPosition.z;
+
+    // Threat is max of altitude-based proximity and nearest active fire distance.
+    double minFireDist = double.infinity;
+    for (int i = 0; i < GameState.firePositions.length; i++) {
+      if (state.fireExtinguished[i]) continue;
+      final (fx, fz) = GameState.firePositions[i];
+      final d = math.sqrt(math.pow(fx - px, 2) + math.pow(fz - pz, 2));
+      if (d < minFireDist) minFireDist = d;
+    }
+    final fireThreat = minFireDist.isFinite
+        ? (1.0 - (minFireDist / _radarRange).clamp(0.0, 1.0))
+        : 0.0;
+    final altThreat  = (1.0 - (state.flightAltitude / 30.0)).clamp(0.0, 1.0);
+    final threat     = state.allFiresOut ? 0.0 : math.max(fireThreat, altThreat);
+
+    final wyvContacts = <_RadarContact>[];
+    for (final w in state.wyverns) {
+      if (w.isDying) continue;
+      final nx = ((w.position.x - px) / _radarRange).clamp(-1.0, 1.0);
+      final nz = ((w.position.z - pz) / _radarRange).clamp(-1.0, 1.0);
+      wyvContacts.add(_RadarContact(Offset(nx, nz), w.healthFraction));
+    }
+    final fireContacts = <_RadarContact>[];
+    for (int i = 0; i < GameState.firePositions.length; i++) {
+      if (state.fireExtinguished[i]) continue;
+      final (fx, fz) = GameState.firePositions[i];
+      final nx = ((fx - px) / _radarRange).clamp(-1.0, 1.0);
+      final nz = ((fz - pz) / _radarRange).clamp(-1.0, 1.0);
+      fireContacts.add(_RadarContact(Offset(nx, nz), 1.0));
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -41,12 +72,22 @@ class FireProximitySensor extends StatelessWidget {
         SizedBox(
           width: 120, height: 120,
           child: CustomPaint(
-            painter: _FpsPainter(threat: threat),
+            painter: _FpsPainter(
+              threat: threat,
+              wyvernContacts: wyvContacts,
+              fireContacts: fireContacts,
+            ),
           ),
         ),
       ],
     );
   }
+}
+
+class _RadarContact {
+  final Offset pos;    // normalised −1..1 in XZ sensor space
+  final double health; // 0–1 fraction
+  const _RadarContact(this.pos, this.health);
 }
 
 class _FpsLabel extends StatelessWidget {
@@ -71,8 +112,10 @@ final _kEmberDists = List.unmodifiable(() {
 }());
 
 class _FpsPainter extends CustomPainter {
-  final double threat; // 0–1
-  const _FpsPainter({required this.threat});
+  final double threat;
+  final List<_RadarContact> wyvernContacts;
+  final List<_RadarContact> fireContacts;
+  const _FpsPainter({required this.threat, this.wyvernContacts = const [], this.fireContacts = const []});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -114,6 +157,41 @@ class _FpsPainter extends CustomPainter {
       }
     }
 
+    // Fire zone contacts — pulsing orange diamonds
+    final ms = DateTime.now().millisecondsSinceEpoch;
+    final pulse = (math.sin(ms / 500.0) + 1) / 2;
+    for (final c in fireContacts) {
+      final ex = cx + c.pos.dx * r;
+      final ey = cy + c.pos.dy * r;
+      final alpha = 0.6 + pulse * 0.4;
+      final fp = Paint()..color = kEmber.withValues(alpha: alpha)..style = PaintingStyle.fill;
+      final fd = Path()
+        ..moveTo(ex,     ey - 4)
+        ..lineTo(ex + 4, ey)
+        ..lineTo(ex,     ey + 4)
+        ..lineTo(ex - 4, ey)
+        ..close();
+      canvas.drawPath(fd, fp);
+    }
+
+    // Wyvern contacts — orange hostile triangles
+    for (final c in wyvernContacts) {
+      final ex = cx + c.pos.dx * r;
+      final ey = cy + c.pos.dy * r;
+      final col = Color.lerp(kDanger, kHeatAmber, c.health)!;
+      final wp = Paint()..color = col..style = PaintingStyle.fill;
+      final tri = Path()
+        ..moveTo(ex, ey - 5)
+        ..lineTo(ex + 4, ey + 3)
+        ..lineTo(ex - 4, ey + 3)
+        ..close();
+      canvas.drawPath(tri, wp);
+      canvas.drawPath(tri, Paint()
+        ..color = Colors.white.withValues(alpha: 0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8);
+    }
+
     // Player marker — white diamond at centre
     final mp = Paint()..color = Colors.white..style = PaintingStyle.fill;
     final path = Path()
@@ -140,7 +218,10 @@ class _FpsPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_FpsPainter o) => o.threat != threat;
+  bool shouldRepaint(_FpsPainter o) =>
+      o.threat != threat ||
+      o.wyvernContacts.length != wyvernContacts.length ||
+      o.fireContacts.length != fireContacts.length;
 }
 
 // ── Hull Integrity Arc ────────────────────────────────────────────────────────
@@ -285,13 +366,16 @@ class WarningTextZone extends StatelessWidget {
     if (state.health < 20)                    warnings.add('HULL CRITICAL');
     if (state.flightSpeed < 1.0 && state.flightAltitude > 2) warnings.add('STALL');
     if (state.flightAltitude < 3)             warnings.add('PULL UP');
-    if (warnings.isEmpty) return const SizedBox.shrink();
 
     return Align(
       alignment: const Alignment(0, -0.72),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        children: warnings.map((w) => _WarningChip(text: w)).toList(),
+        children: [
+          if (state.allFiresOut)
+            _WarningChip(text: 'ALL FIRES OUT', color: const Color(0xFF00FF88)),
+          ...warnings.map((w) => _WarningChip(text: w)),
+        ],
       ),
     );
   }
@@ -299,20 +383,24 @@ class WarningTextZone extends StatelessWidget {
 
 class _WarningChip extends StatelessWidget {
   final String text;
-  const _WarningChip({required this.text});
+  final Color? color;
+  const _WarningChip({required this.text, this.color});
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.symmetric(vertical: 2),
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-    decoration: BoxDecoration(
-      color: kDanger.withValues(alpha: 0.18),
-      border: Border.all(color: kDanger.withValues(alpha: 0.7)),
-      borderRadius: BorderRadius.circular(3),
-    ),
-    child: Text(text,
-      style: const TextStyle(color: kDanger, fontSize: 12,
-          fontWeight: FontWeight.bold, letterSpacing: 2)),
-  );
+  Widget build(BuildContext context) {
+    final c = color ?? kDanger;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.18),
+        border: Border.all(color: c.withValues(alpha: 0.7)),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(text,
+        style: TextStyle(color: c, fontSize: 12,
+            fontWeight: FontWeight.bold, letterSpacing: 2)),
+    );
+  }
 }
 
 // ── Cockpit Windshield HUD ────────────────────────────────────────────────────

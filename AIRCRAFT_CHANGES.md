@@ -46,6 +46,17 @@ Record of modifications to aircraft configurations, cockpit layouts, and related
 
 ---
 
+## 2026-05-19
+
+### Fire proximity sensor updated with wyvern contact display
+
+- `lib/game/hud_gauges.dart` — `FireProximitySensor` and `_FpsPainter` updated.
+- Living fire wyverns now appear as **orange hostile triangles** on the FIRE PROX radar display.
+- Triangle colour lerps from red (healthy) to amber (damaged) based on wyvern health fraction.
+- Player remains white diamond at radar centre; radar range is 120 world units (configurable via `wyvern.radarRange` in `flight_config.json`).
+
+---
+
 ## Template for future entries
 
 ```

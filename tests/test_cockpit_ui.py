@@ -224,8 +224,8 @@ def _click_ability(page, slot_x, ability_name):
     assert changed, f'Ability OSB at x={slot_x} had no effect'
 
 
-def t14_ability_osb_0(page): _click_ability(page, L_ELMT, 'Fire Blast')
-def t15_ability_osb_1(page): _click_ability(page, L_ABLT, 'Ice Nova')
+def t14_ability_osb_0(page): _click_ability(page, L_ELMT, 'Inferno Strike')
+def t15_ability_osb_1(page): _click_ability(page, L_ABLT, 'Cryo Bomb')
 
 
 def t16_right_mfd_terr(page):

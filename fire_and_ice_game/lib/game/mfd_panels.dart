@@ -153,7 +153,8 @@ Widget _leftFooter(GameState state) {
     padding: const EdgeInsets.symmetric(horizontal: 6),
     color: _kLDim.withValues(alpha: 0.3),
     child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text('SYS:WIND', style: TextStyle(color: _kLDim, fontSize: 8)),
+      Text('W${state.windState.windFromDeg.toString().padLeft(3, '0')}°/${state.windState.windStrengthPct}%',
+          style: TextStyle(color: _kLFg, fontSize: 8)),
       Text('ALT:${state.flightAltitude.toStringAsFixed(0)}m',
           style: TextStyle(color: _kLFg, fontSize: 8)),
       Text(
