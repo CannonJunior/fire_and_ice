@@ -3,6 +3,7 @@ import 'dart:async' show StreamSubscription;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:vector_math/vector_math.dart' hide Colors;
 
 import '../rendering/aircraft_animator.dart';
 import '../rendering/aircraft_builder.dart';
@@ -16,16 +17,22 @@ import '../systems/ability_system.dart';
 import '../systems/input_system.dart';
 import '../systems/maneuver_system.dart';
 import '../systems/physics_system.dart';
+import '../systems/wyvern_system.dart';
+import '../terrain/airbase_generator.dart';
 import '../terrain/airfield_generator.dart';
 import '../terrain/infinite_terrain_manager.dart';
 import '../terrain/terrain_generator.dart';
 import '../models/game_action.dart';
+import '../rendering/wind_particles.dart';
 import 'fire_emitter.dart';
 import 'game_state.dart';
 import 'hangar_screen.dart';
+import 'mission_screen.dart';
+import 'mission_state.dart';
 import 'settings_panel.dart';
 import 'settings_state.dart';
 import 'cockpit_hud.dart' as cockpit;
+import 'game_state_bridge.dart';
 
 class FireAndIceGame extends StatefulWidget {
   const FireAndIceGame({super.key});
@@ -47,6 +54,13 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   Mesh?        _airfieldMesh;
   Transform3d? _airfieldTransform;
 
+  // Airbase buildings
+  Mesh? _apronMesh;      Transform3d? _apronTransform;
+  Mesh? _mainHgrMesh;    Transform3d? _mainHgrTransform;
+  Mesh? _secHgrMesh;     Transform3d? _secHgrTransform;
+  Mesh? _tocMesh;        Transform3d? _tocTransform;
+  Mesh? _towerMesh;      Transform3d? _towerTransform;
+
   SceneNode?             _aircraftRoot;
   Map<String, SceneNode> _aircraftParts = {};
   final AircraftAnimator _animator = AircraftAnimator();
@@ -60,11 +74,12 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   double _lastTimestamp = 0.0;
   bool   _running       = false;
   double _gameTime      = 0.0;
+  int    _frameCount    = 0;
 
   // ── Settings ─────────────────────────────────────────────────────────────
 
   final SettingsState _settings = SettingsState();
-  bool _showSettings = false, _showHangar = false;
+  bool _showSettings = false, _showHangar = false, _showMission = false;
 
   // ── Input listener subscriptions ─────────────────────────────────────────
 
@@ -75,6 +90,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   // ── Effect rendering pool ─────────────────────────────────────────────────
 
   final Map<String, Mesh> _effectMeshCache = {};
+  late final Mesh _wyvernMesh;
   final Transform3d _effectTransform = Transform3d();
 
   // ── Fire / particle system ────────────────────────────────────────────────
@@ -124,6 +140,8 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _registerKeyListeners();
     _buildScene();
     await _initFireSystem();
+    await WyvernSystem.loadConfig();
+    WyvernSystem.spawnDefault(_state);
     _startLoop();
     if (mounted) setState(() {});
   }
@@ -203,11 +221,25 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     final airfield = AirfieldGenerator.generate();
     _airfieldMesh      = airfield.mesh;
     _airfieldTransform = airfield.transform;
+
+    // Airbase complex
+    final apron  = AirbaseGenerator.generateApron();
+    _apronMesh = apron.mesh; _apronTransform = apron.transform;
+    final mh = AirbaseGenerator.generateMainHangar();
+    _mainHgrMesh = mh.mesh; _mainHgrTransform = mh.transform;
+    final sh = AirbaseGenerator.generateSecondaryHangar();
+    _secHgrMesh = sh.mesh; _secHgrTransform = sh.transform;
+    final toc = AirbaseGenerator.generateTOC();
+    _tocMesh = toc.mesh; _tocTransform = toc.transform;
+    final ct = AirbaseGenerator.generateControlTower();
+    _towerMesh = ct.mesh; _towerTransform = ct.transform;
+
     _rebuildAircraftScene();
     for (final ab in _state.abilities) {
       final key = '${ab.color.x},${ab.color.y},${ab.color.z}';
       _effectMeshCache[key] ??= Mesh.cube(size: 1.0, color: ab.color);
     }
+    _wyvernMesh = Mesh.cube(size: 2.5, color: Vector3(1.0, 0.25, 0.05));
   }
 
   // ── Game loop ─────────────────────────────────────────────────────────────
@@ -228,11 +260,21 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _checkModeTransitions();
     _state.tickMissionEconomy(dt, prevMode);
     _terrain?.update(_state.playerPosition);
+    final cw = _canvas?.clientWidth  ?? 1600.0;
+    final ch = _canvas?.clientHeight ?? 900.0;
+    _state.windState.update(dt);
+    _state.windState.updateStreaks(dt, cw.toDouble(), ch.toDouble(),
+        _state.playerRotation.y);
     AbilitySystem.update(_state, dt);
+    WyvernSystem.tick(_state, dt);
     _tickFireSystem(dt);
+    _state.tickAirbaseThreat(dt);
+    _checkMissionCompletion();
+    if (_state.rtbActive && !_state.autopilotEnabled) _state.rtbActive = false;
     _syncAircraftSceneGraph(dt);
     _renderFrame();
     _scheduleHudRebuild();
+    writeGameStateBridge(_state, _frameCount++);
 
     html.window.requestAnimationFrame(_onFrame);
   }
@@ -249,6 +291,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     }
 
     _fireSystem.tick(_state, dt, TerrainGenerator.heightAt);
+    _state.tickAutoSuppress(dt);
 
     if (_renderer != null) {
       _renderer!.fireLights = _fireSystem.fireLightPositions;
@@ -263,6 +306,16 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     } else {
       _heatIntensity = (_heatIntensity - dt * 2.0).clamp(0.0, 1.0);
     }
+  }
+
+  // ── Mission completion ────────────────────────────────────────────────────
+
+  void _checkMissionCompletion() {
+    if (_state.missions.status != MissionStatus.active) return;
+    if (!_state.missions.isComplete(_state.fireExtinguished)) return;
+    final rp = _state.missions.active?.rpReward ?? 0;
+    _state.earnResearchPoints(rp);
+    _state.missions.status = MissionStatus.complete;
   }
 
   // ── Input ─────────────────────────────────────────────────────────────────
@@ -441,8 +494,30 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     if (_airfieldMesh != null && _airfieldTransform != null) {
       renderer.render(_airfieldMesh!, _airfieldTransform!, camera);
     }
+    // Airbase buildings
+    for (final pair in [
+      (_apronMesh,   _apronTransform),
+      (_mainHgrMesh, _mainHgrTransform),
+      (_secHgrMesh,  _secHgrTransform),
+      (_tocMesh,     _tocTransform),
+      (_towerMesh,   _towerTransform),
+    ]) {
+      if (pair.$1 != null && pair.$2 != null) {
+        renderer.render(pair.$1!, pair.$2!, camera);
+      }
+    }
     if (_state.viewMode != ViewMode.cockpit && _aircraftRoot != null) {
       renderer.renderSceneGraph(_aircraftRoot!, camera);
+    }
+
+    // Wyvern entities — orange cubes scaled by health (shrink as damaged).
+    for (final w in _state.wyverns) {
+      final s = w.isDying
+          ? (0.5 + w.healthFraction).clamp(0.1, 1.0)
+          : (0.7 + w.healthFraction * 0.3);
+      _effectTransform.position.setFrom(w.position);
+      _effectTransform.scale.setValues(s * 2.5, s * 2.5, s * 2.5);
+      renderer.render(_wyvernMesh, _effectTransform, camera);
     }
 
     // Cube ability effects (kept for HUD feedback; particles play on top).
@@ -498,6 +573,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       color: Colors.transparent,
       child: Stack(
         children: [
+          WindParticleOverlay(state: _state),
           cockpit.buildCockpitHud(
             _state,
             showAnnunciator: _settings.showAnnunciator,
@@ -539,8 +615,9 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
           Positioned(
             top: 12, right: 12,
             child: Row(children: [
-              _menuButton('⊞ HANGAR',   _showHangar,   () { setState(() { _showHangar   = !_showHangar;  _showSettings = false; }); }),
-              _menuButton('⚙ SETTINGS', _showSettings, () { setState(() { _showSettings = !_showSettings; _showHangar  = false;  }); }),
+              _menuButton('⊞ HANGAR',   _showHangar,   () { setState(() { _showHangar   = !_showHangar;  _showSettings = false; _showMission = false; }); }),
+              _menuButton('⚡ TOC',     _showMission,  () { setState(() { _showMission  = !_showMission; _showHangar   = false;  _showSettings = false; }); }),
+              _menuButton('⚙ SETTINGS', _showSettings, () { setState(() { _showSettings = !_showSettings; _showHangar  = false; _showMission  = false; }); }),
             ]),
           ),
 
@@ -565,6 +642,15 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
               },
               onEquipUpgrade:   (ac, up) => setState(() => _state.equipUpgrade(ac, up)),
               onUnequipUpgrade: (ac, up) => setState(() => _state.unequipUpgrade(ac, up)),
+            )),
+
+          if (_showMission)
+            Positioned.fill(child: buildMissionScreen(
+              _state,
+              onClose:         () => setState(() => _showMission = false),
+              onDispatch:      (id) => setState(() => _state.missions.dispatch(id)),
+              onRTB:           () => setState(() => _state.activateRTB()),
+              onCancelMission: () => setState(() => _state.missions.cancel()),
             )),
         ],
       ),

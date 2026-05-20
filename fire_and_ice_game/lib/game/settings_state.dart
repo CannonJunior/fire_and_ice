@@ -74,6 +74,24 @@ class SettingsState {
   /// Clear all element positions for [aircraftId] (Restore Defaults).
   void resetCockpitLayout(String aircraftId) => cockpitLayouts.remove(aircraftId);
 
+  // ── Per-aircraft cockpit element sizes ────────────────────────────────────
+  // Layout: aircraftId → elementId → [scaleX, scaleY]
+  Map<String, Map<String, List<double>>> _cockpitSizes = {};
+
+  (double, double) cockpitScale(String aircraftId, String elementId) {
+    final s = _cockpitSizes[aircraftId]?[elementId];
+    return (s != null && s.length >= 2) ? (s[0], s[1]) : (1.0, 1.0);
+  }
+
+  void setCockpitScale(String aircraftId, String elementId, double sx, double sy) =>
+      _cockpitSizes.putIfAbsent(aircraftId, () => {})[elementId] = [sx, sy];
+
+  void resetCockpitSize(String aircraftId, String elementId) =>
+      _cockpitSizes[aircraftId]?.remove(elementId);
+
+  void resetAllCockpitSizes(String aircraftId) =>
+      _cockpitSizes.remove(aircraftId);
+
   // ── Persistence ────────────────────────────────────────────────────────────
   static const _p = 'fai_';
 

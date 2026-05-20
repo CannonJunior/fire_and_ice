@@ -73,6 +73,18 @@ class ShaderProgram {
     return ShaderProgram._(gl, prog);
   }
 
+  /// Compile a transform-feedback shader (WebGL2 only).
+  ///
+  /// Throws [UnsupportedError] if the context doesn't support transform feedback.
+  factory ShaderProgram.fromSourceWithVaryings(
+    dynamic gl,
+    String vertexSource,
+    String fragmentSource,
+    List<String> varyings,
+  ) {
+    throw UnsupportedError('Transform feedback not supported on this context');
+  }
+
   /// Compile a single shader stage. Returns null and logs on error.
   static dynamic _compileShader(dynamic gl, int type, String source) {
     final shader = gl.createShader(type);

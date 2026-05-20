@@ -301,6 +301,22 @@ class WebGLRenderer {
     gl.viewport(0, 0, width, height);
   }
 
+  // ── Feature stubs (not yet implemented in this renderer) ─────────────────
+
+  final _HeatDistortion heatDistortion = _HeatDistortion();
+
+  set time(double t) {}
+
+  _GpuParticleStub? get gpuParticles => null;
+
+  set fireLights(List<(double, double, double, double)> v) {}
+
+  void beginHeatPass() {}
+
+  void endHeatPass(double intensity) {}
+
+  void renderParticles(List<dynamic> particles, Camera3D camera) {}
+
   /// Release all GPU resources.
   void dispose() {
     for (final b in _meshBuffers.values) {
@@ -314,6 +330,17 @@ class WebGLRenderer {
     shader.dispose();
     debugPrint('[WebGLRenderer] disposed');
   }
+}
+
+class _GpuParticleStub {
+  bool get isReady => false;
+}
+
+/// Stub for the heat-distortion post-process pass (not yet implemented).
+class _HeatDistortion {
+  bool get isAvailable => false;
+  void init(int w, int h) {}
+  void resize(int w, int h) {}
 }
 
 /// GPU buffer handles for one Mesh.

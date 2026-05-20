@@ -36,7 +36,7 @@ if [ ! -z "$DEFUNCT_PIDS" ]; then
     echo "Stale Dart subprocesses killed"
 fi
 
-# Check if port 8009 is still in use after cleanup
+# Check if port is still in use after cleanup
 echo "Checking if port $PORT is available..."
 PORT_PID=$(lsof -ti:$PORT 2>/dev/null || echo "")
 

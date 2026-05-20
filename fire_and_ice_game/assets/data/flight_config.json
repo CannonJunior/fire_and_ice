@@ -15,7 +15,7 @@
     "autoLevelThreshold": 90.0,
     "bankToTurnMultiplier": 2.5,
     "barrelRollRate": 360.0,
-    "startAltitude": 0.5,
+    "startAltitude": 20.0,
     "stallSpeed": 2.5,
     "stallPitchAngle": 35.0,
     "gpwsAltitude": 10.0,
@@ -32,6 +32,34 @@
     "runwayStartZ": 78.0,
     "throttleRate": 0.45,
     "flightSpeedAccel": 2.5
+  },
+  "wyvern": {
+    "speed": 4.5,
+    "chaseSpeed": 7.0,
+    "chaseRange": 80.0,
+    "attackRange": 18.0,
+    "attackDmg": 10.0,
+    "attackCooldown": 3.0,
+    "hitboxRadius": 22.0,
+    "missileRadius": 55.0,
+    "dmgBase": 25.0,
+    "dmgIceBonus": 2.0,
+    "deathTimer": 2.5,
+    "health": 100.0,
+    "rpReward": 50.0,
+    "radarRange": 120.0
+  },
+  "wind": {
+    "baseStrength":     0.15,
+    "maxStrength":      0.60,
+    "gustFrequency":    0.04,
+    "gustAmplitude":    0.30,
+    "dirDriftSpeed":    0.06,
+    "crosswindFactor":  0.04,
+    "particleCount":    60,
+    "particleSpeed":    280.0,
+    "particleLifetime": 0.9,
+    "particleLength":   20.0
   },
   "aircraft": [
     {

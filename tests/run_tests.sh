@@ -8,7 +8,7 @@
 #   pip install playwright
 #   playwright install chromium
 #
-# The game must be running at http://localhost:8009.
+# The game must be running at http://localhost:8011.
 # Start it with:  ./start.sh  (from the repo root)
 
 set -euo pipefail
@@ -41,8 +41,8 @@ if ! "$PYTHON" -c "import playwright" 2>/dev/null; then
 fi
 
 # Soft-check that the server is reachable (non-fatal; game may need a moment)
-echo -n "Checking http://localhost:8009 ... "
-if curl -sf --max-time 5 http://localhost:8009 > /dev/null 2>&1; then
+echo -n "Checking http://localhost:8011 ... "
+if curl -sf --max-time 5 http://localhost:8011 > /dev/null 2>&1; then
     echo "OK"
 else
     echo "WARNING: server did not respond. Tests may fail on T01."

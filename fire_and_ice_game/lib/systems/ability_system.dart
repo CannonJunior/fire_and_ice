@@ -36,6 +36,12 @@ class VisualEffect {
 
   /// Whether this effect has expired
   bool get isExpired => remaining <= 0.0;
+
+  /// True once the particle burst for this effect has been emitted.
+  bool emitted = false;
+
+  /// True once WyvernSystem has processed this effect for hit-detection.
+  bool damageTick = false;
 }
 
 /// AbilitySystem - Manages ability cooldowns, activation, and visual effects.
@@ -112,6 +118,12 @@ class AbilitySystem {
 
     _spawnEffect(ability, state.playerPosition);
 
+    final supRadius = _suppressionRadius(ability);
+    if (supRadius != null) {
+      final hit = state.suppressFiresInRadius(supRadius);
+      debugPrint('[AbilitySystem] ${ability.name} — fire suppressed: $hit');
+    }
+
     debugPrint('[AbilitySystem] Activated ${ability.name}');
   }
 
@@ -146,6 +158,18 @@ class AbilitySystem {
       case 'Flame Ward':  return 2.5;
       case 'Wind Gust':   return 1.8;
       default:            return 1.0;
+    }
+  }
+
+  /// Suppression radius for abilities that directly extinguish fires (null = no effect).
+  static double? _suppressionRadius(AbilityData ability) {
+    switch (ability.name) {
+      case 'Cryo Bomb':      return 25.0;
+      case 'Inferno Strike': return 22.0;
+      case 'Frost Missile':  return 18.0;
+      case 'Heat Seeker':    return 15.0;
+      case 'Ice Shard':      return 10.0;
+      default:               return null;
     }
   }
 
