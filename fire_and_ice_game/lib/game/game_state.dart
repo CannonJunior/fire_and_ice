@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:vector_math/vector_math.dart';
@@ -221,6 +222,18 @@ class GameState {
   double flightAltitude   = 0.0;
   double groundSpeed      = 0.0;
   bool   isBarrelRolling  = false;
+
+  /// Apparent wind vector: player's velocity through the air (forward × speed).
+  Vector3 get apparentWind {
+    final yaw   = playerRotation.y * (math.pi / 180.0);
+    final pitch = flightPitchAngle  * (math.pi / 180.0);
+    final cosP  = math.cos(pitch);
+    return Vector3(
+      -math.sin(yaw) * cosP,
+       math.sin(pitch),
+      -math.cos(yaw) * cosP,
+    )..scale(flightSpeed);
+  }
 
   // ── Terrain / hazard state (updated each frame by PhysicsSystem) ──────────
 

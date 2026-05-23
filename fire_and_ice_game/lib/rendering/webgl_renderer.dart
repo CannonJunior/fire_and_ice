@@ -1,8 +1,11 @@
 import 'dart:html' as html;
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:vector_math/vector_math.dart';
 import 'camera3d.dart';
+import 'heat_distortion.dart';
 import 'mesh.dart';
+import 'particle_system.dart';
 import 'scene_node.dart';
 import 'shader_program.dart';
 import 'transform3d.dart';
@@ -40,6 +43,47 @@ class WebGLRenderer {
 
   /// Ambient light (fills in shadow areas)
   Vector3 ambientColor = Vector3(0.25, 0.25, 0.35);
+
+  /// Heat distortion post-process pass (optional; degrades gracefully).
+  late HeatDistortionPass heatDistortion;
+
+  /// GPU particle system (WebGL2 only; null if unavailable).
+  GpuParticleSystem? gpuParticles;
+
+  /// Elapsed game time in seconds, used by animated shader effects.
+  double _time = 0.0;
+  set time(double v) => _time = v;
+
+  /// Fire light positions for dynamic lighting (set each frame by FireEmitter).
+  List<(double, double, double, double)>? _fireLights;
+  set fireLights(List<(double, double, double, double)> v) => _fireLights = v;
+
+  // ── Particle render state ────────────────────────────────────────────────
+
+  ShaderProgram? _particleShader;
+  dynamic _particleVbo;
+
+  static const String _particleVertSrc = '''
+attribute vec3 aPos;
+attribute vec4 aColor;
+attribute float aSize;
+uniform mat4 uViewProj;
+varying vec4 vColor;
+void main() {
+  vColor = aColor;
+  gl_Position = uViewProj * vec4(aPos, 1.0);
+  gl_PointSize = aSize;
+}
+''';
+  static const String _particleFragSrc = '''
+precision mediump float;
+varying vec4 vColor;
+void main() {
+  vec2 c = gl_PointCoord - 0.5;
+  if (dot(c, c) > 0.25) discard;
+  gl_FragColor = vColor;
+}
+''';
 
   /// Per-mesh GPU buffer cache. Avoids re-uploading static geometry each frame.
   final Map<Mesh, _MeshBuffers> _meshBuffers = {};
@@ -110,6 +154,8 @@ class WebGLRenderer {
       _vaoExt = gl.getExtension('OES_vertex_array_object');
       if (_vaoExt != null) _supportsVAO = true;
     }
+
+    heatDistortion = HeatDistortionPass(gl);
 
     debugPrint('[WebGLRenderer] initialized (VAO: $_supportsVAO)');
   }
@@ -294,6 +340,72 @@ class WebGLRenderer {
     if (bufs.colorBuffer  != null) gl.deleteBuffer(bufs.colorBuffer);
   }
 
+  // ── Heat distortion pass ──────────────────────────────────────────────────
+
+  /// Redirect subsequent scene draws into the heat FBO.
+  void beginHeatPass() => heatDistortion.bindFbo();
+
+  /// Blit the heat FBO to screen with distortion.
+  void endHeatPass(double intensity) => heatDistortion.apply(intensity, _time);
+
+  // ── CPU particle rendering ────────────────────────────────────────────────
+
+  /// Render CPU particles as additive GL_POINTS billboards.
+  void renderParticles(List<Particle> particles, Camera3D camera) {
+    if (particles.isEmpty) return;
+    _particleShader ??= ShaderProgram.fromSource(gl, _particleVertSrc, _particleFragSrc);
+    _particleVbo ??= gl.createBuffer();
+
+    const stride = 8; // x,y,z, r,g,b,a, size
+    final data = Float32List(particles.length * stride);
+    for (int i = 0; i < particles.length; i++) {
+      final p = particles[i];
+      final c = p.color;
+      final b = i * stride;
+      data[b]     = p.position.x;
+      data[b + 1] = p.position.y;
+      data[b + 2] = p.position.z;
+      data[b + 3] = c.r;
+      data[b + 4] = c.g;
+      data[b + 5] = c.b;
+      data[b + 6] = c.a;
+      data[b + 7] = p.size;
+    }
+
+    gl.bindBuffer(0x8892, _particleVbo); // ARRAY_BUFFER
+    gl.bufferData(0x8892, data, 0x88E8); // DYNAMIC_DRAW
+
+    _particleShader!.use();
+    _activeProgram = _particleShader!.program;
+
+    if (_viewProjDirty) {
+      _scratchViewProj.setFrom(camera.getProjectionMatrix());
+      _scratchViewProj.multiply(camera.getViewMatrix());
+      _viewProjDirty = false;
+    }
+    _particleShader!.setUniformMatrix4('uViewProj', _scratchViewProj);
+
+    final posLoc   = _particleShader!.getAttribLocation('aPos');
+    final colorLoc = _particleShader!.getAttribLocation('aColor');
+    final sizeLoc  = _particleShader!.getAttribLocation('aSize');
+
+    const byteStride = stride * 4;
+    if (posLoc   >= 0) { gl.enableVertexAttribArray(posLoc);   gl.vertexAttribPointer(posLoc,   3, 0x1406, false, byteStride, 0);  }
+    if (colorLoc >= 0) { gl.enableVertexAttribArray(colorLoc); gl.vertexAttribPointer(colorLoc, 4, 0x1406, false, byteStride, 12); }
+    if (sizeLoc  >= 0) { gl.enableVertexAttribArray(sizeLoc);  gl.vertexAttribPointer(sizeLoc,  1, 0x1406, false, byteStride, 28); }
+
+    gl.enable(0x0BE2); // BLEND
+    gl.blendFunc(0x0302, 0x0303); // SRC_ALPHA, ONE_MINUS_SRC_ALPHA
+    gl.drawArrays(0x0000, 0, particles.length); // POINTS
+    gl.disable(0x0BE2);
+
+    if (posLoc   >= 0) gl.disableVertexAttribArray(posLoc);
+    if (colorLoc >= 0) gl.disableVertexAttribArray(colorLoc);
+    if (sizeLoc  >= 0) gl.disableVertexAttribArray(sizeLoc);
+    gl.bindBuffer(0x8892, null);
+    _activeProgram = null;
+  }
+
   /// Update canvas + viewport dimensions on window resize.
   void resize(int width, int height) {
     canvas.width  = width;
@@ -312,6 +424,9 @@ class WebGLRenderer {
     }
     _meshBuffers.clear();
     shader.dispose();
+    _particleShader?.dispose();
+    if (_particleVbo != null) gl.deleteBuffer(_particleVbo);
+    heatDistortion.dispose();
     debugPrint('[WebGLRenderer] disposed');
   }
 }

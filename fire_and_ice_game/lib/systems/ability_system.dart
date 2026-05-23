@@ -23,6 +23,9 @@ class VisualEffect {
   /// Current scale (grows outward then fades)
   double scale;
 
+  /// True once the particle burst has been emitted for this effect
+  bool emitted = false;
+
   VisualEffect({
     required this.position,
     required this.color,

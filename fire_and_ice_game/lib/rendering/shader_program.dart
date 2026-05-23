@@ -73,6 +73,36 @@ class ShaderProgram {
     return ShaderProgram._(gl, prog);
   }
 
+  /// Compile shaders with transform feedback varyings (WebGL2 only).
+  factory ShaderProgram.fromSourceWithVaryings(
+    dynamic gl,
+    String vertexSource,
+    String fragmentSource,
+    List<String> varyings,
+  ) {
+    final vs = _compileShader(gl, 0x8B31, vertexSource);
+    if (vs == null) throw Exception('Failed to compile vertex shader');
+    final fs = _compileShader(gl, 0x8B30, fragmentSource);
+    if (fs == null) { gl.deleteShader(vs); throw Exception('Failed to compile fragment shader'); }
+    final prog = gl.createProgram();
+    if (prog == null) {
+      gl.deleteShader(vs); gl.deleteShader(fs);
+      throw Exception('Failed to create shader program');
+    }
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.transformFeedbackVaryings(prog, varyings, 0x8C8C); // INTERLEAVED_ATTRIBS
+    gl.linkProgram(prog);
+    if (gl.getProgramParameter(prog, 0x8B82) == 0) {
+      final err = gl.getProgramInfoLog(prog);
+      gl.deleteProgram(prog); gl.deleteShader(vs); gl.deleteShader(fs);
+      throw Exception('Shader link error: $err');
+    }
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    return ShaderProgram._(gl, prog);
+  }
+
   /// Compile a single shader stage. Returns null and logs on error.
   static dynamic _compileShader(dynamic gl, int type, String source) {
     final shader = gl.createShader(type);
