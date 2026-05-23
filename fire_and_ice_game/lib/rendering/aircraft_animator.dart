@@ -86,6 +86,13 @@ class AircraftAnimator {
     _set(parts, 'bay_l', (n) => n.rotation.z = -_bayAngle);
     _set(parts, 'bay_r', (n) => n.rotation.z =  _bayAngle);
 
+    // ── Refueling probe — slides forward from nose as probeProgress increases ─
+    // IceFighter hl = 2.0; strut is rotated +π/2 around X so it extends in -Z.
+    _set(parts, 'probe', (n) {
+      n.visible    = state.probeProgress > 0.04;
+      n.position.z = -(2.0 + state.probeProgress * 1.5);
+    });
+
     // ── Cascade world matrices ───────────────────────────────────────────────
     root.updateWorldMatrix();
   }

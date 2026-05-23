@@ -14,18 +14,21 @@ const _kFireOut = Color(0xFF00FF88);
 
 // ── Shared header (matches mfd_panels.dart style) ─────────────────────────────
 
-Widget _hdr(String title, String mode, Color fg, Color dim) {
+Widget _hdr(String title, String mode, Color fg, Color dim, {Widget? action}) {
   return Container(
     height: 40,
     padding: const EdgeInsets.symmetric(horizontal: 6),
     color: dim.withValues(alpha: 0.4),
     child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
       Text(title, style: TextStyle(color: fg, fontSize: 18, letterSpacing: 1)),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-        color: fg.withValues(alpha: 0.2),
-        child: Text(mode, style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.bold)),
-      ),
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        if (action != null) ...[action, const SizedBox(width: 6)],
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+          color: fg.withValues(alpha: 0.2),
+          child: Text(mode, style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.bold)),
+        ),
+      ]),
     ]),
   );
 }
@@ -160,14 +163,21 @@ Widget _modeRow(String label, String value) {
 
 // ── TERR – Terrain Proximity / Compass Rose ───────────────────────────────────
 
-Widget buildTerrPage(GameState state) {
+Widget buildTerrPage(GameState state, {VoidCallback? onOrientToggle}) {
   final clearance = state.flightAltitude - state.terrainHeight;
   final gpws    = clearance < 3.0 ? 'WARNING' : clearance < state.cfgGpwsAltitude ? 'CAUTION' : 'CLEAR';
   final gpwsCol = clearance < 3.0 ? _kWarn    : clearance < state.cfgGpwsAltitude ? _kAmber  : _kRFg;
   return Column(children: [
-    _hdr('TERRAIN PROX', 'TERR', _kRFg, _kRDim),
+    _hdr('TERRAIN PROX', 'TERR', _kRFg, _kRDim, action: GestureDetector(
+      onTap: onOrientToggle,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+        decoration: BoxDecoration(color: _kRDim.withValues(alpha: 0.5), border: Border.all(color: _kRFg.withValues(alpha: 0.7))),
+        child: Text(state.mapNorthUp ? 'N↑' : 'HDG↑', style: const TextStyle(color: _kRFg, fontSize: 12, fontWeight: FontWeight.bold)),
+      ),
+    )),
     Expanded(child: CustomPaint(
-      painter: _CompassPainter(heading: state.playerRotation.y),
+      painter: _CompassPainter(heading: state.playerRotation.y, northUp: state.mapNorthUp),
       child: Container(),
     )),
     Container(
@@ -195,7 +205,8 @@ Widget buildTerrPage(GameState state) {
 
 class _CompassPainter extends CustomPainter {
   final double heading;
-  const _CompassPainter({required this.heading});
+  final bool northUp;
+  const _CompassPainter({required this.heading, this.northUp = true});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -203,15 +214,19 @@ class _CompassPainter extends CustomPainter {
     final cy = size.height / 2;
     final r  = math.min(cx, cy) - 16;
 
-    final dim  = Paint()..color = _kRDim..strokeWidth = 1..style = PaintingStyle.stroke;
+    final dim    = Paint()..color = _kRDim..strokeWidth = 1..style = PaintingStyle.stroke;
     final bright = Paint()..color = _kRFg..strokeWidth = 1.5..style = PaintingStyle.stroke;
 
-    // Outer ring
     canvas.drawCircle(Offset(cx, cy), r, dim);
-    // Inner ring
     canvas.drawCircle(Offset(cx, cy), r * 0.55, dim..strokeWidth = 0.5);
 
-    // Cardinal tick marks and labels
+    // Cardinal ticks and labels — rotate entire rose for heading-up
+    canvas.save();
+    if (!northUp) {
+      canvas.translate(cx, cy);
+      canvas.rotate(-heading * math.pi / 180);
+      canvas.translate(-cx, -cy);
+    }
     const cardinals = ['N', 'E', 'S', 'W'];
     for (int i = 0; i < 8; i++) {
       final angle = i * math.pi / 4 - math.pi / 2;
@@ -229,13 +244,15 @@ class _CompassPainter extends CustomPainter {
         tp.paint(canvas, Offset(cx + cos * (r - 22) - tp.width / 2, cy + sin * (r - 22) - tp.height / 2));
       }
     }
+    canvas.restore();
 
-    // Heading arrow (points toward current heading)
-    final headRad = heading * math.pi / 180 - math.pi / 2;
-    final arrowTip = Offset(cx + math.cos(headRad) * (r * 0.7), cy + math.sin(headRad) * (r * 0.7));
+    // Heading arrow: rotates in north-up, fixed at top in heading-up
+    final Offset arrowTip = northUp
+        ? Offset(cx + math.cos(heading * math.pi / 180 - math.pi / 2) * (r * 0.7),
+                 cy + math.sin(heading * math.pi / 180 - math.pi / 2) * (r * 0.7))
+        : Offset(cx, cy - r * 0.7);
     canvas.drawLine(Offset(cx, cy), arrowTip, bright..color = const Color(0xFF00DDFF)..strokeWidth = 2);
 
-    // Aircraft symbol at centre
     final ap = Paint()..color = _kRFg..strokeWidth = 1.5..style = PaintingStyle.stroke;
     canvas.drawCircle(Offset(cx, cy), 5, ap);
     canvas.drawLine(Offset(cx - 10, cy), Offset(cx + 10, cy), ap);
@@ -243,20 +260,28 @@ class _CompassPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_CompassPainter o) => o.heading != heading;
+  bool shouldRepaint(_CompassPainter o) => o.heading != heading || o.northUp != northUp;
 }
 
 // ── FIRE – Thermal Fire Detection ─────────────────────────────────────────────
 
-Widget buildFirePage(GameState state) {
+Widget buildFirePage(GameState state, {VoidCallback? onOrientToggle}) {
   final active = state.activeFires;
   final allOut = state.allFiresOut;
   return Column(children: [
-    _hdr('FIRE DETECTION', 'FIRE', _kRFg, _kRDim),
+    _hdr('FIRE DETECTION', 'FIRE', _kRFg, _kRDim, action: GestureDetector(
+      onTap: onOrientToggle,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+        decoration: BoxDecoration(color: _kRDim.withValues(alpha: 0.5), border: Border.all(color: _kRFg.withValues(alpha: 0.7))),
+        child: Text(state.mapNorthUp ? 'N↑' : 'HDG↑', style: const TextStyle(color: _kRFg, fontSize: 12, fontWeight: FontWeight.bold)),
+      ),
+    )),
     Expanded(child: CustomPaint(
       painter: _FireDetectPainter(
         state: state,
         gameTimeMs: DateTime.now().millisecondsSinceEpoch,
+        northUp: state.mapNorthUp,
       ),
       child: Container(),
     )),
@@ -288,8 +313,9 @@ Widget buildFirePage(GameState state) {
 class _FireDetectPainter extends CustomPainter {
   final GameState state;
   final int gameTimeMs;
+  final bool northUp;
   static const double _radarRange = 120.0;
-  const _FireDetectPainter({required this.state, required this.gameTimeMs});
+  const _FireDetectPainter({required this.state, required this.gameTimeMs, this.northUp = true});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -327,14 +353,16 @@ class _FireDetectPainter extends CustomPainter {
         Offset(cx + math.cos(sweepAngle) * r, cy + math.sin(sweepAngle) * r),
         Paint()..color = const Color(0xFFFF8800)..strokeWidth = 1.5);
 
-    // Fire hotspots — world-space positions relative to player
     final pulse = (math.sin(ms / 400.0) + 1) / 2;
+    final headRad = northUp ? 0.0 : state.playerRotation.y * math.pi / 180;
     for (int i = 0; i < GameState.firePositions.length; i++) {
       final (fx, fz) = GameState.firePositions[i];
       final dx = (fx - px) / _radarRange;
       final dz = (fz - pz) / _radarRange;
-      final hx = cx + dx * r;
-      final hy = cy + dz * r;
+      final hx = northUp ? cx + dx * r
+          : cx + (dx * math.cos(headRad) - dz * math.sin(headRad)) * r;
+      final hy = northUp ? cy + dz * r
+          : cy + (dx * math.sin(headRad) + dz * math.cos(headRad)) * r;
       if (math.sqrt(math.pow(hx - cx, 2) + math.pow(hy - cy, 2)) > r) continue;
       if (state.fireExtinguished[i]) {
         // Suppressed: dim grey cross

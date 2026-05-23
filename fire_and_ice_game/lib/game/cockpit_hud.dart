@@ -7,6 +7,7 @@ import 'cockpit_drag.dart';
 import 'game_state.dart';
 import 'settings_state.dart';
 import 'gear_lever.dart';
+import 'probe_lever.dart';
 import 'hud_gauges.dart';
 import 'hud_tutorial.dart';
 import 'hud_widgets.dart' as hud;
@@ -34,6 +35,7 @@ Widget buildCockpitHud(
   VoidCallback?             onMapZoom,
   VoidCallback?             onGearToggle,
   VoidCallback?             onFlapsToggle,
+  VoidCallback?             onProbeToggle,
   VoidCallback?             onAutopilot,
   VoidCallback?             onWaypointLock,
   VoidCallback?             onClear,
@@ -55,6 +57,7 @@ Widget buildCockpitHud(
   void Function(double)?         onThrottleChange,
   void Function(int)? onAuxPage, void Function(int)? onAuxMirrorScroll, void Function(int)? onAuxVideoScroll,
   void Function(int)? onManeuverScroll, void Function()? onManeuverExecute, void Function()? onManeuverStop,
+  VoidCallback? onOrientToggle,
 }) {
   if (state.viewMode == ViewMode.thirdPerson) {
     return Stack(children: [
@@ -82,6 +85,7 @@ Widget buildCockpitHud(
           onMapZoom: onMapZoom,
           onGearToggle: onGearToggle,
           onFlapsToggle: onFlapsToggle,
+          onProbeToggle: onProbeToggle,
           onAutopilot: onAutopilot,
           onWaypointLock: onWaypointLock,
           onClear: onClear,
@@ -99,7 +103,8 @@ Widget buildCockpitHud(
           onThrottleModeToggle: onThrottleModeToggle,
           onThrottleChange: onThrottleChange,
           onAuxPage: onAuxPage, onAuxMirrorScroll: onAuxMirrorScroll, onAuxVideoScroll: onAuxVideoScroll,
-          onManeuverScroll: onManeuverScroll, onManeuverExecute: onManeuverExecute, onManeuverStop: onManeuverStop),
+          onManeuverScroll: onManeuverScroll, onManeuverExecute: onManeuverExecute, onManeuverStop: onManeuverStop,
+          onOrientToggle: onOrientToggle),
     ),
     // Persistent gauges — spec §7: these survive the cockpit ↔ third-person
     // transition. Corner positions clear the centred cockpit panel.
@@ -181,6 +186,7 @@ Widget _cockpitPanel(GameState state, {
   VoidCallback?       onMapZoom,
   VoidCallback?       onGearToggle,
   VoidCallback?       onFlapsToggle,
+  VoidCallback?       onProbeToggle,
   VoidCallback?       onAutopilot,
   VoidCallback?       onWaypointLock,
   VoidCallback?       onClear,
@@ -199,6 +205,7 @@ Widget _cockpitPanel(GameState state, {
   void Function(double)?         onThrottleChange,
   void Function(int)? onAuxPage, void Function(int)? onAuxMirrorScroll, void Function(int)? onAuxVideoScroll,
   void Function(int)? onManeuverScroll, void Function()? onManeuverExecute, void Function()? onManeuverStop,
+  VoidCallback? onOrientToggle,
 }) {
   final lp       = state.leftMfdPage;
   final rp       = state.rightMfdPage;
@@ -273,6 +280,10 @@ Widget _cockpitPanel(GameState state, {
               const SizedBox(width: 4),
               drag('gear', 'Gear', buildGearLever(state, onTap: onGearToggle)),
             ],
+            if (state.aircraftId == 'icefighter') ...[
+              const SizedBox(width: 4),
+              drag('probe', 'Refuel Probe', buildProbeLever(state, onTap: onProbeToggle)),
+            ],
             if (vis('throttle')) ...[
               const SizedBox(width: 4),
               drag('throttle', 'Throttle', buildThrottleGauge(state, onModeToggle: onThrottleModeToggle)),
@@ -312,7 +323,8 @@ Widget _cockpitPanel(GameState state, {
             ])),
             const SizedBox(height: 4),
             buildRightMFD(state, page: rp,
-                onMapTap: onNavMapTap, onDeleteWaypoint: onDeleteWaypoint),
+                onMapTap: onNavMapTap, onDeleteWaypoint: onDeleteWaypoint,
+                onOrientToggle: onOrientToggle),
             const SizedBox(height: 4),
             Center(child: _osbRow([
               _Osb('ZOOM', onTap: onMapZoom),

@@ -7,6 +7,7 @@ import 'package:vector_math/vector_math.dart' hide Colors;
 
 import '../rendering/aircraft_animator.dart';
 import '../rendering/aircraft_builder.dart';
+import '../rendering/tanker_aircraft.dart';
 import '../rendering/camera3d.dart';
 import '../rendering/mesh.dart';
 import '../rendering/particle_system.dart';
@@ -33,6 +34,8 @@ import 'settings_panel.dart';
 import 'settings_state.dart';
 import 'cockpit_hud.dart' as cockpit;
 import 'game_state_bridge.dart';
+import 'ollama_client.dart';
+import '../terrain/lake_generator.dart';
 
 class FireAndIceGame extends StatefulWidget {
   const FireAndIceGame({super.key});
@@ -54,6 +57,9 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   Mesh?        _airfieldMesh;
   Transform3d? _airfieldTransform;
 
+  Mesh?        _lakeMesh;
+  Transform3d? _lakeTransform;
+
   // Airbase buildings
   Mesh? _apronMesh;      Transform3d? _apronTransform;
   Mesh? _mainHgrMesh;    Transform3d? _mainHgrTransform;
@@ -64,6 +70,8 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   SceneNode?             _aircraftRoot;
   Map<String, SceneNode> _aircraftParts = {};
   final AircraftAnimator _animator = AircraftAnimator();
+
+  late final TankerAircraft _tanker;
 
   // ── Canvas ────────────────────────────────────────────────────────────────
 
@@ -105,10 +113,12 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   bool _prevToggleView  = false;
   bool _prevToggleGear  = false;
   bool _prevToggleFlaps = false;
+  bool _prevToggleProbe = false;
 
-  // ── Gear animation ────────────────────────────────────────────────────────
+  // ── Gear + probe transit times ────────────────────────────────────────────
 
-  static const double _gearTransitTime = 3.0;
+  static const double _gearTransitTime  = 3.0;
+  static const double _probeTransitTime = 2.5;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -204,16 +214,62 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       debugPrint('[FireAndIceGame] WebGL unavailable: $e');
     }
 
-    _camera = Camera3D(aspectRatio: 1600 / 900, fov: 90.0);
+    _camera = Camera3D(aspectRatio: 1600 / 900, fov: 90.0, far: 500.0);
   }
 
   void _registerKeyListeners() {
-    _keyDownSub = html.document.onKeyDown.listen(InputSystem.handleKeyDown);
-    _keyUpSub   = html.document.onKeyUp.listen(InputSystem.handleKeyUp);
+    _keyDownSub = html.document.onKeyDown.listen(_onKeyDown);
+    _keyUpSub   = html.document.onKeyUp.listen(_onKeyUp);
     _blurSub = html.window.onBlur.listen((_) {
       InputSystem.clearAll();
       html.window.requestAnimationFrame((_) => html.document.body?.focus());
     });
+  }
+
+  void _onKeyDown(html.KeyboardEvent event) {
+    if (_state.chatInputActive) { _handleChatKeyDown(event); return; }
+    if (event.shiftKey && event.key == 'Enter') {
+      event.preventDefault();
+      setState(() { _state.chatInputActive = true; _state.auxDisplayPage = 0; });
+      return;
+    }
+    InputSystem.handleKeyDown(event);
+  }
+
+  void _onKeyUp(html.KeyboardEvent event) {
+    if (_state.chatInputActive) return;
+    InputSystem.handleKeyUp(event);
+  }
+
+  void _handleChatKeyDown(html.KeyboardEvent event) {
+    event.preventDefault();
+    final key = event.key ?? '';
+    if (key == 'Enter') {
+      final msg = _state.chatInputBuffer.trim();
+      setState(() { _state.chatInputActive = false; _state.chatInputBuffer = ''; });
+      if (msg.isNotEmpty) _sendChatMessage(msg);
+    } else if (key == 'Escape') {
+      setState(() { _state.chatInputActive = false; _state.chatInputBuffer = ''; });
+    } else if (key == 'Backspace') {
+      if (_state.chatInputBuffer.isNotEmpty) {
+        setState(() => _state.chatInputBuffer =
+            _state.chatInputBuffer.substring(0, _state.chatInputBuffer.length - 1));
+      }
+    } else if (key.length == 1) {
+      setState(() => _state.chatInputBuffer += key);
+    }
+  }
+
+  String _nowHHMM() {
+    final t = DateTime.now();
+    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _sendChatMessage(String msg) async {
+    final history = _state.chatHistory.map((h) => (h.$1, h.$2)).toList();
+    setState(() { _state.chatHistory.add(('user', msg, _nowHHMM())); _state.chatPending = true; });
+    final reply = await OllamaClient.chat(msg, history);
+    if (mounted) setState(() { _state.chatHistory.add(('assistant', reply, _nowHHMM())); _state.chatPending = false; });
   }
 
   void _buildScene() {
@@ -221,6 +277,10 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     final airfield = AirfieldGenerator.generate();
     _airfieldMesh      = airfield.mesh;
     _airfieldTransform = airfield.transform;
+
+    final lake = LakeGenerator.generate();
+    _lakeMesh      = lake.mesh;
+    _lakeTransform = lake.transform;
 
     // Airbase complex
     final apron  = AirbaseGenerator.generateApron();
@@ -234,6 +294,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     final ct = AirbaseGenerator.generateControlTower();
     _towerMesh = ct.mesh; _towerTransform = ct.transform;
 
+    _tanker = TankerAircraft();
     _rebuildAircraftScene();
     for (final ab in _state.abilities) {
       final key = '${ab.color.x},${ab.color.y},${ab.color.z}';
@@ -267,6 +328,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _state.tickAirbaseThreat(dt);
     _checkMissionCompletion();
     if (_state.rtbActive && !_state.autopilotEnabled) _state.rtbActive = false;
+    _tickTankerAndProbe(dt);
     _syncAircraftSceneGraph(dt);
     _renderFrame(dt);
     _scheduleHudRebuild();
@@ -382,6 +444,10 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     final flapsNow = InputSystem.isActionActive(GameAction.toggleFlaps);
     if (flapsNow && !_prevToggleFlaps) setState(() => _state.cycleFlaps());
     _prevToggleFlaps = flapsNow;
+
+    final probeNow = InputSystem.isActionActive(GameAction.toggleProbe);
+    if (probeNow && !_prevToggleProbe) setState(() => _state.triggerProbe());
+    _prevToggleProbe = probeNow;
   }
 
   // ── Gear animation tick ───────────────────────────────────────────────────
@@ -403,6 +469,47 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       }
     }
     _state.gearDeployed = _state.gearProgress >= 1.0;
+  }
+
+  // ── Tanker orbit + probe animation ────────────────────────────────────────
+
+  void _tickTankerAndProbe(double dt) {
+    _tanker.tick(dt);
+
+    // Probe deploy / retract animation
+    final rate = 1.0 / _probeTransitTime;
+    if (_state.probeTargetOut) {
+      _state.probeProgress = (_state.probeProgress + rate * dt).clamp(0.0, 1.0);
+      if (_state.probeProgress >= 1.0) {
+        _state.probeMoving   = false;
+        _state.probeDeployed = true;
+      }
+    } else {
+      _state.probeProgress = (_state.probeProgress - rate * dt).clamp(0.0, 1.0);
+      if (_state.probeProgress <= 0.0) {
+        _state.probeMoving    = false;
+        _state.probeDeployed  = false;
+        _state.probeConnected = false;
+      }
+    }
+
+    // Probe connection: tip must reach the drogue basket within 3.5 world units.
+    // Probe tip in aircraft local space: (0, 0, -(2.0 + probeProgress*1.5 + 1.5))
+    // World: apply yaw-only rotation (level flight assumption).
+    if (_state.aircraftId == 'icefighter') {
+      final yawRad = _state.playerRotation.y * math.pi / 180.0;
+      final lz     = -(3.5 + _state.probeProgress * 1.5);
+      final tipX   = _state.playerPosition.x + math.sin(yawRad) * lz;
+      final tipZ   = _state.playerPosition.z + math.cos(yawRad) * lz;
+      final tipY   = _state.playerPosition.y;
+      final drogue = _tanker.drogueWorldPos;
+      final dx = tipX - drogue.x;
+      final dy = tipY - drogue.y;
+      final dz = tipZ - drogue.z;
+      _state.probeConnected =
+          _state.probeProgress >= 0.99 && (dx*dx + dy*dy + dz*dz) < 12.25; // 3.5² = 12.25
+      if (_state.probeConnected) _state.restoreMana(10.0 * dt);
+    }
   }
 
   // ── Mode transitions ──────────────────────────────────────────────────────
@@ -492,6 +599,9 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     if (_airfieldMesh != null && _airfieldTransform != null) {
       renderer.render(_airfieldMesh!, _airfieldTransform!, camera);
     }
+    if (_lakeMesh != null && _lakeTransform != null) {
+      renderer.render(_lakeMesh!, _lakeTransform!, camera);
+    }
     // Airbase buildings
     for (final pair in [
       (_apronMesh,   _apronTransform),
@@ -507,6 +617,10 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     if (_state.viewMode != ViewMode.cockpit && _aircraftRoot != null) {
       renderer.renderSceneGraph(_aircraftRoot!, camera);
     }
+
+    // Tanker ART-9 + drogue basket
+    renderer.render(_tanker.bodyMesh,   _tanker.transform,       camera);
+    renderer.render(_tanker.basketMesh, _tanker.basketTransform, camera);
 
     // Wyvern entities — orange cubes scaled by health (shrink as damaged).
     for (final w in _state.wyverns) {
@@ -586,6 +700,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             onMapZoom:      ()  => setState(() => _state.mapZoom = (_state.mapZoom + 1) % 3),
             onGearToggle:   ()  => setState(() => _state.triggerGear()),
             onFlapsToggle:  ()  => setState(() => _state.cycleFlaps()),
+            onProbeToggle:  ()  => setState(() => _state.triggerProbe()),
             onAutopilot:    ()  => setState(() => _state.toggleAutopilot()),
             onWaypointLock: ()  => setState(() => _state.cycleWaypointLock()),
             onClear:        ()  => setState(() => _state.clearNav()),
@@ -608,6 +723,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             }),
             onManeuverExecute: ()  => setState(() => _state.startManeuver(_state.selectedManeuverIdx)),
             onManeuverStop:    ()  => setState(() => _state.stopManeuver()),
+            onOrientToggle:    ()  => setState(() => _state.toggleMapOrientation()),
           ),
 
           Positioned(

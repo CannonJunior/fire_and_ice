@@ -43,8 +43,10 @@ class GameState {
   int auxDisplayPage = 0; // 0=CHAT 1=VID 2=MAP 3=MIRROR 4=MANUV
   int auxMirrorIndex = 0; // 0..7 → ELMT/LOAD/STAT/MODE/NAV/TERR/FIRE/MARK
   int auxVideoIndex  = 0; // 0=LISA HAYES  1=LIN MINMEI
+  bool mapNorthUp    = true;
   void scrollAuxMirror(int d) => auxMirrorIndex = (auxMirrorIndex + d + 8) % 8;
   void scrollAuxVideo(int d)  => auxVideoIndex  = (auxVideoIndex  + d + 2) % 2;
+  void toggleMapOrientation() { mapNorthUp = !mapNorthUp; }
 
   // ── Maneuver computer ─────────────────────────────────────────────────────
 
@@ -190,6 +192,20 @@ class GameState {
   bool   gearTargetDown = true;
   /// Animation progress: 0.0 = fully retracted, 1.0 = fully deployed.
   double gearProgress   = 1.0;
+
+  // ── Refueling probe (IceFighter) ─────────────────────────────────────────
+
+  bool   probeDeployed  = false;
+  bool   probeMoving    = false;
+  bool   probeTargetOut = false;
+  double probeProgress  = 0.0;  // 0 = retracted, 1 = fully extended
+  bool   probeConnected = false;
+
+  void triggerProbe() {
+    if (gameMode == GameMode.taxi) return;
+    probeTargetOut = !probeTargetOut;
+    probeMoving    = true;
+  }
 
   // ── Flaps ─────────────────────────────────────────────────────────────────
 
@@ -421,6 +437,13 @@ class GameState {
   // ── Combat — active wyverns ───────────────────────────────────────────────
 
   List<Wyvern> wyverns = [];
+
+  // ── Radio / chat ──────────────────────────────────────────────────────────
+
+  List<(String, String, String)> chatHistory = []; // (role, content, HH:MM timestamp)
+  bool                   chatInputActive = false;
+  String                 chatInputBuffer = '';
+  bool                   chatPending     = false;
 
   // ── Vitals ────────────────────────────────────────────────────────────────
 

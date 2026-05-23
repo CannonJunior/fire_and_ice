@@ -112,6 +112,12 @@ class AircraftBuilder {
         position: Vector3(0, -bh * 0.10, hl * 0.90),
         mesh: Mesh.flatPanel(halfSpan: bw * 0.50, chord: 0.06, thickness: 0.02,
             color: Vector3(0.6, 0.8, 1.0))));
+    // Refueling probe — rotated so strut extends forward in -Z from its local origin.
+    // Animated: position.z slides outward as probeProgress increases.
+    add('probe', SceneNode(id: 'probe',
+        position: Vector3(0, 0, -hl),
+        rotation: Vector3(math.pi / 2, 0, 0),
+        mesh: Mesh.strut(length: 1.5, radius: 0.05, color: Vector3(0.65, 0.82, 1.0))));
     return (root: root, parts: parts);
   }
 

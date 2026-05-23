@@ -15,7 +15,7 @@
     "autoLevelThreshold": 90.0,
     "bankToTurnMultiplier": 2.5,
     "barrelRollRate": 360.0,
-    "startAltitude": 500.0,
+    "startAltitude": 15.0,
     "stallSpeed": 2.5,
     "stallPitchAngle": 35.0,
     "gpwsAltitude": 10.0,

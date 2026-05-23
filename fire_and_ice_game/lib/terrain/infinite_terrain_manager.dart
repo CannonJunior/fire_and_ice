@@ -23,8 +23,8 @@ class InfiniteTerrainManager {
   static const double chunkWorldSize = chunkGridSize * chunkTileSize; // 64.0
 
   /// How many chunks in each cardinal direction from the player are kept loaded.
-  /// 3 → 7×7 = 49 chunks visible, covering ±192 world units.
-  static const int renderDistance = 3;
+  /// 5 → 11×11 = 121 chunks visible, covering ±320 world units.
+  static const int renderDistance = 5;
 
   /// Half-resolution grid size for outermost LOD ring (distance == renderDistance).
   static const int chunkLODGridSize = 16;
@@ -33,7 +33,7 @@ class InfiniteTerrainManager {
   static const int    _seed       = 1337;
 
   /// Maximum new chunks generated per game-loop frame to limit CPU spikes.
-  static const int _maxPerFrame = 2;
+  static const int _maxPerFrame = 4;
 
   // ── State ─────────────────────────────────────────────────────────────────
 

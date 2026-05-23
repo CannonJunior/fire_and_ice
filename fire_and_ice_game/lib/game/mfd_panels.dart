@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'game_state.dart';
 import 'loadout_page.dart';
 import 'mfd_pages.dart';
+import '../terrain/terrain_generator.dart';
 
 // ── Color palette ─────────────────────────────────────────────────────────────
 
@@ -49,7 +50,7 @@ Widget buildLeftMFD(GameState state, {int page = 0}) {
   );
 }
 
-Widget _header(String title, String mode, Color fg, Color dim) {
+Widget _header(String title, String mode, Color fg, Color dim, {Widget? action}) {
   return Container(
     height: 40,
     padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -58,11 +59,14 @@ Widget _header(String title, String mode, Color fg, Color dim) {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(title, style: TextStyle(color: fg, fontSize: 18, letterSpacing: 1)),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-          color: fg.withValues(alpha: 0.2),
-          child: Text(mode, style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.bold)),
-        ),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          if (action != null) ...[action, const SizedBox(width: 6)],
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            color: fg.withValues(alpha: 0.2),
+            child: Text(mode, style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+        ]),
       ],
     ),
   );
@@ -195,17 +199,12 @@ class _ArcGauge extends CustomPainter {
 
 // ── Right MFD – Terrain Navigation ───────────────────────────────────────────
 
-// Deterministic terrain dot positions, computed once at module load.
-final List<Offset> _terrainDots = List.generate(28, (i) {
-  final r = math.Random(i * 31 + 7);
-  return Offset(r.nextDouble(), r.nextDouble());
-});
-
 Widget buildRightMFD(
   GameState state, {
   int page = 0,
   Function(double, double)? onMapTap,
   Function(int)? onDeleteWaypoint,
+  VoidCallback? onOrientToggle,
 }) {
   // Compute world offset to locked waypoint (for NAV map overlay)
   (double, double)? wpData;
@@ -213,13 +212,21 @@ Widget buildRightMFD(
     final (_, wx, wz) = GameState.kWaypoints[state.lockedWaypoint];
     wpData = (wx - state.playerPosition.x, wz - state.playerPosition.z);
   }
+  final wyvernPositions = [for (final w in state.wyverns) (w.position.x, w.position.z)];
 
   final Widget body = switch (page) {
-    1 => buildTerrPage(state),
-    2 => buildFirePage(state),
+    1 => buildTerrPage(state, onOrientToggle: onOrientToggle),
+    2 => buildFirePage(state, onOrientToggle: onOrientToggle),
     3 => buildMarkPage(state, onDeleteWaypoint: onDeleteWaypoint),
     _ => Column(children: [
-        _header('TERRAIN NAV', 'NAV', _kRFg, _kRDim),
+        _header('TERRAIN NAV', 'NAV', _kRFg, _kRDim, action: GestureDetector(
+          onTap: onOrientToggle,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(color: _kRDim.withValues(alpha: 0.5), border: Border.all(color: _kRFg.withValues(alpha: 0.7))),
+            child: Text(state.mapNorthUp ? 'N↑' : 'HDG↑', style: const TextStyle(color: _kRFg, fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
+        )),
         Expanded(child: LayoutBuilder(
           builder: (context, constraints) {
             final mapW = constraints.maxWidth;
@@ -227,22 +234,17 @@ Widget buildRightMFD(
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapDown: onMapTap == null ? null : (details) {
-                final zoom     = state.mapZoom;
-                final ringBase = zoom == 1 ? 18.0 : zoom == 2 ? 42.0 : 28.0;
-                const upr      = 30.0; // world units per ring
-                final scale    = ringBase / upr;
-                final cx       = mapW / 2;
-                final cy       = mapH / 2;
-                final sdx      = details.localPosition.dx - cx;
-                final sdy      = details.localPosition.dy - cy;
-                final headRad  = state.playerRotation.y * math.pi / 180.0;
-                final relAngle = math.atan2(sdx, -sdy);
-                final dist     = math.sqrt(sdx * sdx + sdy * sdy) / scale;
-                final bearing  = relAngle + headRad;
-                onMapTap(
-                  state.playerPosition.x + math.sin(bearing) * dist,
-                  state.playerPosition.z - math.cos(bearing) * dist,
-                );
+                final lx = details.localPosition.dx, ly = details.localPosition.dy;
+                if (lx < 0 || lx > mapW || ly < 0 || ly > mapH) return;
+                final scale = (state.mapZoom == 1 ? 18.0 : state.mapZoom == 2 ? 42.0 : 28.0) / 30.0;
+                final sdx = lx - mapW / 2, sdy = ly - mapH / 2;
+                if (state.mapNorthUp) {
+                  onMapTap(state.playerPosition.x + sdx / scale, state.playerPosition.z + sdy / scale);
+                } else {
+                  final h = state.playerRotation.y * math.pi / 180;
+                  onMapTap(state.playerPosition.x + (sdx * math.cos(h) + sdy * math.sin(h)) / scale,
+                           state.playerPosition.z + (-sdx * math.sin(h) + sdy * math.cos(h)) / scale);
+                }
               },
               child: CustomPaint(
                 painter: _TerrainMap(
@@ -253,6 +255,8 @@ Widget buildRightMFD(
                   wpData: wpData,
                   flightPlan: state.flightPlan,
                   flightPlanIndex: state.flightPlanIndex,
+                  northUp: state.mapNorthUp,
+                  wyvernPositions: wyvernPositions,
                 ),
                 child: Container(),
               ),
@@ -278,8 +282,7 @@ Widget _navFooter(GameState state) {
     color: _kRDim.withValues(alpha: 0.3),
     child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
       Text('HDG:${hdg.toStringAsFixed(0)}°', style: const TextStyle(color: _kRFg, fontSize: 8)),
-      Text('X:${state.playerPosition.x.toStringAsFixed(0)} '
-           'Z:${state.playerPosition.z.toStringAsFixed(0)}',
+      Text('X:${state.playerPosition.x.toStringAsFixed(0)} Z:${state.playerPosition.z.toStringAsFixed(0)}',
           style: const TextStyle(color: _kRFg, fontSize: 8)),
       Text('ZOOM:$zoom', style: const TextStyle(color: _kRFg, fontSize: 8)),
     ]),
@@ -292,52 +295,47 @@ class _TerrainMap extends CustomPainter {
   final (double, double)? wpData;
   final List<(String, double, double)> flightPlan;
   final int flightPlanIndex;
+  final bool northUp;
+  final List<(double, double)> wyvernPositions;
 
   const _TerrainMap({
     required this.px, required this.pz, required this.heading,
     this.zoom = 0, this.wpData,
     this.flightPlan = const [],
     this.flightPlanIndex = 0,
+    this.northUp = true,
+    this.wyvernPositions = const [],
   });
 
   Offset _toScreen(double wx, double wz, double cx, double cy,
       double scale, double headRad) {
-    final dx = wx - px;
-    final dz = wz - pz;
-    final dist = math.sqrt(dx * dx + dz * dz);
-    if (dist <= 0) return Offset(cx, cy);
-    final relAngle = math.atan2(dx, -dz) - headRad;
-    return Offset(
-      cx + math.sin(relAngle) * dist * scale,
-      cy - math.cos(relAngle) * dist * scale,
-    );
+    final dx = wx - px, dz = wz - pz;
+    if (northUp) return Offset(cx + dx * scale, cy + dz * scale);
+    return Offset(cx + (dx * math.cos(headRad) - dz * math.sin(headRad)) * scale,
+                  cy + (dx * math.sin(headRad) + dz * math.cos(headRad)) * scale);
   }
 
   @override
   void paint(Canvas canvas, Size size) {
+    canvas.clipRect(Offset.zero & size);
     final cx       = size.width / 2;
     final cy       = size.height / 2;
     final ringBase = zoom == 1 ? 18.0 : zoom == 2 ? 42.0 : 28.0;
     final headRad  = heading * math.pi / 180;
-    const upr      = 30.0; // units per ring
-    final scale    = ringBase / upr;
+    final scale    = ringBase / 30.0;
 
-    // Grid
-    final gp = Paint()..color = const Color(0xFF003355)..strokeWidth = 0.5;
-    for (double x = 0; x < size.width; x += 14) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gp);
-    }
-    for (double y = 0; y < size.height; y += 14) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gp);
-    }
-
-    // Terrain blobs
-    final dp = Paint()..color = const Color(0xFF004466)..style = PaintingStyle.fill;
-    for (final d in _terrainDots) {
-      canvas.drawCircle(Offset(d.dx * size.width, d.dy * size.height), 4, dp);
+    const step = 10;
+    for (int sy = 0; sy < size.height.toInt(); sy += step) {
+      for (int sx = 0; sx < size.width.toInt(); sx += step) {
+        final sdx = sx - cx, sdy = sy - cy;
+        final wx = px + (northUp ? sdx : sdx * math.cos(headRad) + sdy * math.sin(headRad)) / scale;
+        final wz = pz + (northUp ? sdy : -sdx * math.sin(headRad) + sdy * math.cos(headRad)) / scale;
+        final t = (TerrainGenerator.heightAt(wx, wz) / 12.0).clamp(0.0, 1.0);
+        canvas.drawRect(Rect.fromLTWH(sx.toDouble(), sy.toDouble(), step.toDouble(), step.toDouble()),
+            Paint()..color = Color.lerp(const Color(0xFF081A0C), const Color(0xFF2E5018), t)!);
+      }
     }
 
-    // Range rings
     final rp = Paint()
       ..color = const Color(0xFF005577)
       ..strokeWidth = 0.5
@@ -346,7 +344,6 @@ class _TerrainMap extends CustomPainter {
       canvas.drawCircle(Offset(cx, cy), ringBase * mult, rp);
     }
 
-    // Flight plan: connecting lines
     if (flightPlan.length > 1) {
       final lp = Paint()
         ..color = const Color(0xFF0088CC).withValues(alpha: 0.55)
@@ -362,7 +359,6 @@ class _TerrainMap extends CustomPainter {
       }
     }
 
-    // Flight plan: dots + labels
     for (int i = 0; i < flightPlan.length; i++) {
       final (name, wx, wz) = flightPlan[i];
       final pos    = _toScreen(wx, wz, cx, cy, scale, headRad);
@@ -379,15 +375,12 @@ class _TerrainMap extends CustomPainter {
       tp.paint(canvas, Offset(pos.dx + 5, pos.dy - 4));
     }
 
-    // Locked waypoint diamond overlay
     if (wpData != null) {
       final (dx, dz) = wpData!;
       final dist = math.sqrt(dx * dx + dz * dz);
       if (dist > 0) {
-        final bearing  = math.atan2(dx, -dz);
-        final relAngle = bearing - headRad;
-        final sdx = math.sin(relAngle) * dist * scale;
-        final sdy = -math.cos(relAngle) * dist * scale;
+        final sdx =  dx * scale;
+        final sdy = -dz * scale;
         final maxR   = math.min(cx, cy) - 6;
         final sdist  = math.sqrt(sdx * sdx + sdy * sdy);
         final factor = sdist > maxR ? maxR / sdist : 1.0;
@@ -407,30 +400,37 @@ class _TerrainMap extends CustomPainter {
       }
     }
 
-    // Heading vector
-    final hx = cx + math.sin(headRad) * 22;
-    final hy = cy - math.cos(headRad) * 22;
-    canvas.drawLine(Offset(cx, cy), Offset(hx, hy),
-        Paint()..color = const Color(0xFF00DDFF)..strokeWidth = 1.5);
+    final abP = Paint()..color = const Color(0xFF4488FF)..strokeWidth = 1.5..style = PaintingStyle.stroke;
+    final abS = _toScreen(0.0, -55.0, cx, cy, scale, headRad);
+    canvas.drawCircle(abS, 5, abP);
+    canvas.drawLine(Offset(abS.dx - 9, abS.dy), Offset(abS.dx + 9, abS.dy), abP);
+    canvas.drawLine(Offset(abS.dx, abS.dy - 9), Offset(abS.dx, abS.dy + 9), abP);
 
-    // Player crosshair
-    final cp = Paint()..color = const Color(0xFF00CCFF)..strokeWidth = 1.5;
-    canvas.drawLine(Offset(cx - 9, cy), Offset(cx + 9, cy), cp);
-    canvas.drawLine(Offset(cx, cy - 9), Offset(cx, cy + 9), cp);
-    canvas.drawRect(
-      Rect.fromCenter(center: Offset(cx, cy), width: 6, height: 6),
-      Paint()
-        ..color = const Color(0xFF00CCFF)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
+    final wyP = Paint()..color = const Color(0xFFFF5500)..strokeWidth = 2..style = PaintingStyle.stroke;
+    for (final (wx, wz) in wyvernPositions) {
+      final ws = _toScreen(wx, wz, cx, cy, scale, headRad);
+      canvas.drawLine(Offset(ws.dx - 5, ws.dy - 5), Offset(ws.dx + 5, ws.dy + 5), wyP);
+      canvas.drawLine(Offset(ws.dx + 5, ws.dy - 5), Offset(ws.dx - 5, ws.dy + 5), wyP);
+    }
+
+    canvas.save();
+    canvas.translate(cx, cy);
+    if (northUp) canvas.rotate(-headRad); // negate: CCW game yaw vs CW canvas rotation
+    final ap = Paint()..color = const Color(0xFF00DDFF)..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
+    canvas.drawLine(const Offset(0, -10), const Offset(-6, 6), ap);
+    canvas.drawLine(const Offset(0, -10), const Offset( 6, 6), ap);
+    canvas.drawLine(const Offset(-10, 1), const Offset(10, 1), ap);
+    canvas.drawLine(const Offset(-4, 6), const Offset( 4, 6), ap);
+    canvas.restore();
   }
 
   @override
   bool shouldRepaint(_TerrainMap o) =>
       o.px != px || o.pz != pz || o.heading != heading || o.zoom != zoom ||
       o.wpData != wpData || o.flightPlan.length != flightPlan.length ||
-      o.flightPlanIndex != flightPlanIndex;
+      o.flightPlanIndex != flightPlanIndex || o.northUp != northUp ||
+      o.wyvernPositions.length != wyvernPositions.length;
 }
 
 // ── Center MFD – Flight Data ──────────────────────────────────────────────────

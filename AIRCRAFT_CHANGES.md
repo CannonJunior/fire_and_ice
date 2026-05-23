@@ -4,6 +4,38 @@ Record of modifications to aircraft configurations, cockpit layouts, and related
 
 ---
 
+## 2026-05-23
+
+### Leviathan ART-9 tanker + IceFighter refueling probe
+
+#### Tanker aircraft — Leviathan ART-9 Atmospheric Replenishment Transport
+
+- **New file**: `lib/rendering/tanker_aircraft.dart` — `TankerAircraft` class
+- Sci-fi/anime C-130-inspired design: long midnight-blue fuselage, high-mounted straight wings, four engine nacelles in pairs, twin vertical tail fins, glowing cyan belly retardant pod
+- Flies a **left-hand racetrack orbit** at **100 AGL** over the airbase complex (X ≈ −45 to +35, Z ≈ −15 to −95) at 2.8 world units/sec
+- Trails a rust-colored drogue hose with a **bright orange basket** (Mesh.cube, 0.55 units)
+- `drogueWorldPos` getter exposes basket world position for IceFighter probe docking
+- Rendered each frame in `game_widget.dart` (body + basket as separate meshes)
+
+#### IceFighter refueling probe
+
+- `lib/rendering/aircraft_builder.dart` — probe `SceneNode` added to `_buildIceFighter()`; `Mesh.strut(length: 1.5, radius: 0.05)` rotated +π/2 around X so it extends forward (−Z)
+- `lib/rendering/aircraft_animator.dart` — animates `probe` node: `visible = probeProgress > 0.04`, `position.z` slides outward as `probeProgress` increases 0→1
+- `lib/game/game_state.dart` — added `probeDeployed`, `probeMoving`, `probeTargetOut`, `probeProgress`, `probeConnected` fields; `triggerProbe()` method
+- `lib/models/game_action.dart` — added `toggleProbe` action
+- `lib/systems/input_system.dart` — mapped `toggleProbe` to key **P**
+- `lib/game/game_widget.dart` — `_tickTankerAndProbe()` drives probe animation (2.5 s transit), checks probe-tip → drogue distance (≤ 3.5 units) for connection; connected state restores **10 mana/sec**
+
+#### Cockpit UI — PROB lever
+
+- `lib/game/gear_lever.dart` — `buildProbeLever` widget and `_ProbeLeverPainter` added
+- Handle is an **oval** (`RRect`, 30 × 16 px with 7 px corner radius) distinguishing it from the circular gear knob
+- States: **RET** (cyan `#00CFFF`) → **MOVE** (amber `#FFAA00`) → **OUT** (pale blue `#AADDFF`) → **CONN** (green `#00CC44`)
+- `lib/game/cockpit_hud.dart` — `onProbeToggle` callback threaded through; probe lever rendered immediately right of the Gear lever, IceFighter-only
+- `lib/game/game_widget.dart` — `onProbeToggle` wired to `_state.triggerProbe()`
+
+---
+
 ## 2026-05-12
 
 ### Default aircraft changed to IceFighter

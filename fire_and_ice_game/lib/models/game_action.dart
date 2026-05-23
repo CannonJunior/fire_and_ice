@@ -81,4 +81,7 @@ enum GameAction {
 
   /// F - cycle flaps through four detents (UP → T/O → APPR → FULL → UP)
   toggleFlaps,
+
+  /// P - deploy / retract IceFighter refueling probe
+  toggleProbe,
 }

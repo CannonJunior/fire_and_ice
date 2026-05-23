@@ -111,6 +111,9 @@ class InputSystem {
 
       case GameAction.toggleFlaps:
         return _pressedKeys.contains('f') || _pressedKeys.contains('F');
+
+      case GameAction.toggleProbe:
+        return _pressedKeys.contains('p') || _pressedKeys.contains('P');
     }
   }
 
@@ -134,7 +137,7 @@ class InputSystem {
       ' ',      // Space
       '1', '2', '3', '4', '5',
       '6', '7', '8', '9', '0',
-      'Alt', 'Tab', 'f', 'F', 'g', 'G', '[', ']',
+      'Alt', 'Tab', 'f', 'F', 'g', 'G', 'p', 'P', '[', ']',
       'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
     };
 

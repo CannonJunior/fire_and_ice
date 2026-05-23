@@ -51,17 +51,6 @@ void _regYt(String id) {
   );
 }
 
-// Static radio log — shown on the CHAT page
-const _kLog = [
-  ('CTRL', 'Sector ALPHA cleared, no threats'),
-  ('A-01', 'Copy, climbing to FL080'),
-  ('CTRL', 'CAVOK, vis unrestricted'),
-  ('A-01', 'Fire spotted — grid 347-128'),
-  ('CTRL', 'Suppression authorized'),
-  ('A-01', 'Dropping retardant — 85 % payload'),
-  ('CTRL', 'Good spread. RTB on completion'),
-  ('A-01', 'Copy, RTB in approx 14 min'),
-];
 
 // ── Public builder ────────────────────────────────────────────────────────────
 
@@ -94,7 +83,7 @@ Widget buildAuxDisplay(GameState state, {
         onExecute: onManeuverExecute,
         onStop:    onManeuverStop,
       ),
-    _ => _chatPage(),
+    _ => _ChatPage(state: state),
   };
 
   return Column(mainAxisSize: MainAxisSize.min, children: [
@@ -215,28 +204,94 @@ Widget _ftr(String a, String b, String c) => Container(
 
 // ── CHAT page ─────────────────────────────────────────────────────────────────
 
-Widget _chatPage() => Column(children: [
-  _hdr('RADIO COMMS', 'CHAT'),
-  Expanded(child: ListView.builder(
-    physics: const NeverScrollableScrollPhysics(),
-    itemCount: _kLog.length,
-    itemBuilder: (_, i) {
-      final (call, msg) = _kLog[i];
-      final ctrl = call == 'CTRL';
-      return Padding(
-        padding: EdgeInsets.symmetric(horizontal: 5 * _kS, vertical: 1 * _kS),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 40 * _kS, child: Text('[$call]',
-              style: TextStyle(color: ctrl ? _kAFg : _kADim,
-                  fontSize: 7 * _kS, fontWeight: FontWeight.bold))),
-          Expanded(child: Text(msg,
-              style: TextStyle(color: ctrl ? _kADim : _kAFg, fontSize: 7 * _kS))),
-        ]),
-      );
-    },
-  )),
-  _ftr('FREQ:127.8', 'MODE:FM', 'CH:ALPHA'),
-]);
+class _ChatPage extends StatefulWidget {
+  final GameState state;
+  const _ChatPage({required this.state});
+  @override
+  State<_ChatPage> createState() => _ChatPageState();
+}
+
+class _ChatPageState extends State<_ChatPage> {
+  final _scroll = ScrollController();
+  int _lastCount = 0;
+
+  @override
+  void dispose() { _scroll.dispose(); super.dispose(); }
+
+  @override
+  void didUpdateWidget(_ChatPage old) {
+    super.didUpdateWidget(old);
+    final n = widget.state.chatHistory.length;
+    if (n != _lastCount) {
+      _lastCount = n;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients && _scroll.position.maxScrollExtent > 0) {
+          _scroll.animateTo(_scroll.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s       = widget.state;
+    final msgs    = s.chatHistory;
+    final active  = s.chatInputActive;
+    final buffer  = s.chatInputBuffer;
+    final pending = s.chatPending;
+
+    return Column(children: [
+      _hdr('RADIO COMMS', active ? 'INPUT' : 'CHAT'),
+      Expanded(child: msgs.isEmpty
+          ? Center(child: Text('SHIFT+ENTER TO OPEN COMMS',
+              style: TextStyle(color: _kADim, fontSize: 7 * _kS, letterSpacing: 2)))
+          : ListView.builder(
+              controller: _scroll,
+              itemCount: msgs.length + (pending ? 1 : 0),
+              itemBuilder: (_, i) {
+                if (pending && i == msgs.length) {
+                  return Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 5 * _kS, vertical: 1 * _kS),
+                    child: Text('...', style: TextStyle(color: _kADim, fontSize: 7 * _kS)),
+                  );
+                }
+                final (role, msg, ts) = msgs[i];
+                final isUser = role == 'user';
+                return Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 5 * _kS, vertical: 1 * _kS),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    SizedBox(width: 40 * _kS, child: Text(isUser ? '[YOU]' : '[AI] ',
+                        style: TextStyle(
+                            color: isUser ? _kADim : _kAFg,
+                            fontSize: 7 * _kS, fontWeight: FontWeight.bold))),
+                    Expanded(child: Text(msg,
+                        style: TextStyle(color: isUser ? _kAFg : _kADim, fontSize: 7 * _kS))),
+                    Text(ts, style: TextStyle(color: _kADim, fontSize: 6 * _kS)),
+                  ]),
+                );
+              },
+            )),
+      if (active || buffer.isNotEmpty)
+        Container(
+          height: 22 * _kS,
+          padding: EdgeInsets.symmetric(horizontal: 6 * _kS),
+          color: _kADim.withValues(alpha: 0.5),
+          child: Row(children: [
+            Text('> ', style: TextStyle(
+                color: _kAFg, fontSize: 8 * _kS, fontWeight: FontWeight.bold)),
+            Expanded(child: Text(
+              buffer + (active ? '▌' : ''),
+              style: TextStyle(color: _kAFg, fontSize: 8 * _kS),
+              overflow: TextOverflow.ellipsis,
+            )),
+          ]),
+        )
+      else
+        _ftr('FREQ:127.8', 'ENTER TO SEND', 'SH+ENT'),
+    ]);
+  }
+}
 
 // ── VIDEO page ────────────────────────────────────────────────────────────────
 
