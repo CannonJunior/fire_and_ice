@@ -4,12 +4,13 @@ import 'game_state.dart';
 
 // ── Shared colors (mirrored from mfd_panels.dart) ─────────────────────────────
 
-const _kLFg   = Color(0xFF00FF41);
-const _kLDim  = Color(0xFF005519);
-const _kRFg   = Color(0xFF00AAFF);
-const _kRDim  = Color(0xFF003366);
-const _kAmber = Color(0xFFFFB300);
-const _kWarn  = Color(0xFFFF6600);
+const _kLFg    = Color(0xFF00FF41);
+const _kLDim   = Color(0xFF005519);
+const _kRFg    = Color(0xFF00AAFF);
+const _kRDim   = Color(0xFF003366);
+const _kAmber  = Color(0xFFFFB300);
+const _kWarn   = Color(0xFFFF6600);
+const _kFireOut = Color(0xFF00FF88);
 
 // ── Shared header (matches mfd_panels.dart style) ─────────────────────────────
 
@@ -247,17 +248,16 @@ class _CompassPainter extends CustomPainter {
 
 // ── FIRE – Thermal Fire Detection ─────────────────────────────────────────────
 
-// Deterministic fire hotspot positions (seeded, stable across frames)
-final List<Offset> _fireHotspots = List.generate(5, (i) {
-  final r = math.Random(i * 47 + 13);
-  return Offset(r.nextDouble() * 0.7 + 0.15, r.nextDouble() * 0.7 + 0.15);
-});
-
 Widget buildFirePage(GameState state) {
+  final active = state.activeFires;
+  final allOut = state.allFiresOut;
   return Column(children: [
     _hdr('FIRE DETECTION', 'FIRE', _kRFg, _kRDim),
     Expanded(child: CustomPaint(
-      painter: _FireDetectPainter(),
+      painter: _FireDetectPainter(
+        state: state,
+        gameTimeMs: DateTime.now().millisecondsSinceEpoch,
+      ),
       child: Container(),
     )),
     Container(
@@ -267,14 +267,18 @@ Widget buildFirePage(GameState state) {
       child: Column(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('MODE:THERM', style: TextStyle(color: _kRFg, fontSize: 8)),
-          const Text('RNG:50km',   style: TextStyle(color: _kRFg, fontSize: 8)),
-          Text('FIRES:${_fireHotspots.length}',
-              style: const TextStyle(color: _kWarn, fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text('RNG:120u',   style: TextStyle(color: _kRFg, fontSize: 8)),
+          Text('FIRES:$active',
+              style: TextStyle(
+                color: allOut ? _kFireOut : _kWarn,
+                fontSize: 16, fontWeight: FontWeight.bold)),
         ]),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('SCAN:ACTIVE', style: TextStyle(color: _kRFg, fontSize: 8)),
-          const Text('SUPRS:RDY',  style: TextStyle(color: _kRFg, fontSize: 8)),
-          const Text('INTNS:HIGH', style: TextStyle(color: _kWarn, fontSize: 8)),
+          Text(allOut ? 'SUPRS:DONE' : 'SUPRS:RDY',
+              style: TextStyle(color: allOut ? _kFireOut : _kRFg, fontSize: 8)),
+          Text(allOut ? 'ALL OUT' : 'INTNS:HIGH',
+              style: TextStyle(color: allOut ? _kFireOut : _kWarn, fontSize: 8)),
         ]),
       ]),
     ),
@@ -282,12 +286,19 @@ Widget buildFirePage(GameState state) {
 }
 
 class _FireDetectPainter extends CustomPainter {
+  final GameState state;
+  final int gameTimeMs;
+  static const double _radarRange = 120.0;
+  const _FireDetectPainter({required this.state, required this.gameTimeMs});
+
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
     final cy = size.height / 2;
     final r  = math.min(cx, cy) - 8;
-    final ms = DateTime.now().millisecondsSinceEpoch;
+    final ms = gameTimeMs;
+    final px = state.playerPosition.x;
+    final pz = state.playerPosition.z;
 
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
         Paint()..color = const Color(0xFF000A14));
@@ -303,34 +314,40 @@ class _FireDetectPainter extends CustomPainter {
     canvas.drawLine(Offset(cx, 0), Offset(cx, size.height),
         Paint()..color = const Color(0xFF440022)..strokeWidth = 0.5);
 
-    // Thermal sweep — orange, faster than a targeting radar
+    // Thermal sweep
     final sweepAngle = (ms % 2000) / 2000 * 2 * math.pi - math.pi / 2;
     for (int i = 0; i < 25; i++) {
       final ta = sweepAngle - (i / 25) * (math.pi / 2);
-      canvas.drawLine(
-        Offset(cx, cy),
+      canvas.drawLine(Offset(cx, cy),
         Offset(cx + math.cos(ta) * r, cy + math.sin(ta) * r),
-        Paint()
-          ..color = const Color(0xFFFF6600).withValues(alpha: (1 - i / 25) * 0.35)
-          ..strokeWidth = 2..style = PaintingStyle.stroke,
-      );
+        Paint()..color = const Color(0xFFFF6600).withValues(alpha: (1 - i / 25) * 0.35)
+          ..strokeWidth = 2..style = PaintingStyle.stroke);
     }
     canvas.drawLine(Offset(cx, cy),
         Offset(cx + math.cos(sweepAngle) * r, cy + math.sin(sweepAngle) * r),
         Paint()..color = const Color(0xFFFF8800)..strokeWidth = 1.5);
 
-    // Fire hotspots — pulsing orange/red dots
+    // Fire hotspots — world-space positions relative to player
     final pulse = (math.sin(ms / 400.0) + 1) / 2;
-    for (final hot in _fireHotspots) {
-      final hx = hot.dx * size.width;
-      final hy = hot.dy * size.height;
+    for (int i = 0; i < GameState.firePositions.length; i++) {
+      final (fx, fz) = GameState.firePositions[i];
+      final dx = (fx - px) / _radarRange;
+      final dz = (fz - pz) / _radarRange;
+      final hx = cx + dx * r;
+      final hy = cy + dz * r;
       if (math.sqrt(math.pow(hx - cx, 2) + math.pow(hy - cy, 2)) > r) continue;
-      final col = Color.lerp(
-          const Color(0xFFFF2200), const Color(0xFFFFAA00), pulse)!;
-      canvas.drawCircle(Offset(hx, hy), 3, Paint()..color = col..style = PaintingStyle.fill);
-      canvas.drawCircle(Offset(hx, hy), 6,
-          Paint()..color = const Color(0xFFFF4400).withValues(alpha: 0.3)
-            ..style = PaintingStyle.stroke..strokeWidth = 1);
+      if (state.fireExtinguished[i]) {
+        // Suppressed: dim grey cross
+        final sp = Paint()..color = const Color(0xFF446666)..strokeWidth = 1;
+        canvas.drawLine(Offset(hx - 4, hy - 4), Offset(hx + 4, hy + 4), sp);
+        canvas.drawLine(Offset(hx + 4, hy - 4), Offset(hx - 4, hy + 4), sp);
+      } else {
+        final col = Color.lerp(const Color(0xFFFF2200), const Color(0xFFFFAA00), pulse)!;
+        canvas.drawCircle(Offset(hx, hy), 3, Paint()..color = col..style = PaintingStyle.fill);
+        canvas.drawCircle(Offset(hx, hy), 6,
+            Paint()..color = const Color(0xFFFF4400).withValues(alpha: 0.3)
+              ..style = PaintingStyle.stroke..strokeWidth = 1);
+      }
     }
 
     // Aircraft dot
@@ -339,7 +356,7 @@ class _FireDetectPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_FireDetectPainter _) => true;
+  bool shouldRepaint(_FireDetectPainter o) => true;
 }
 
 // ── MARK – Flight Plan Waypoints ──────────────────────────────────────────────

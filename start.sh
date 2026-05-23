@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # Fire & Ice Game Start Script
-# Checks if port 8009 is in use and kills the process if needed
+# Checks if port 8011 is in use and kills the process if needed
 # Then starts the Flutter web server
 
 set -e
 
-PORT=8009
+PORT=8011
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "========================================="
@@ -36,7 +36,7 @@ if [ ! -z "$DEFUNCT_PIDS" ]; then
     echo "Stale Dart subprocesses killed"
 fi
 
-# Check if port 8009 is still in use after cleanup
+# Check if port is still in use after cleanup
 echo "Checking if port $PORT is available..."
 PORT_PID=$(lsof -ti:$PORT 2>/dev/null || echo "")
 
@@ -87,5 +87,5 @@ echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-# Start Flutter web server on port 8009
+# Start Flutter web server on port 8011
 flutter run -d web-server --web-port=$PORT --web-hostname=localhost

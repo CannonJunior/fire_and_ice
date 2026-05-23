@@ -73,7 +73,7 @@ class ShaderProgram {
     return ShaderProgram._(gl, prog);
   }
 
-  /// Compile shaders with transform feedback varyings (WebGL2 only).
+  /// Compile a transform-feedback shader (WebGL2 only).
   factory ShaderProgram.fromSourceWithVaryings(
     dynamic gl,
     String vertexSource,

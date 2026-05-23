@@ -66,6 +66,7 @@ Widget buildCockpitHud(
         const SizedBox(width: 6),
         _viewBadge('🎮 3RD PERSON'),
       ])),
+      Positioned(top: 0, left: 0, right: 0, child: _portBanner()),
     ]);
   }
 
@@ -114,6 +115,7 @@ Widget buildCockpitHud(
       const SizedBox(width: 6),
       _viewBadge('👁 COCKPIT'),
     ])),
+    Positioned(top: 0, left: 0, right: 0, child: _portBanner()),
   ]);
 }
 
@@ -148,6 +150,19 @@ Widget _viewBadge(String label) {
     child: Text(
       label,
       style: const TextStyle(color: Color(0xFF80DDFF), fontSize: 18, letterSpacing: 1),
+    ),
+  );
+}
+
+Widget _portBanner() {
+  return IgnorePointer(
+    child: Center(
+      child: Text('8011',
+        style: const TextStyle(
+          color: Color(0xFFFFDD44), fontSize: 64,
+          fontWeight: FontWeight.bold, letterSpacing: 8,
+          shadows: [Shadow(color: Colors.black, blurRadius: 12)],
+        )),
     ),
   );
 }

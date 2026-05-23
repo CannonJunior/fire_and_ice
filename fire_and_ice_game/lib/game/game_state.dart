@@ -4,7 +4,10 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:vector_math/vector_math.dart';
 import '../data/abilities.dart';
+import '../enemies/wyvern.dart';
 import 'aircraft_config.dart';
+import 'mission_state.dart';
+import 'wind_state.dart';
 
 /// Camera perspective mode — toggled with Tab.
 enum ViewMode { thirdPerson, cockpit }
@@ -30,7 +33,7 @@ class GameState {
     viewMode = viewMode == ViewMode.thirdPerson ? ViewMode.cockpit : ViewMode.thirdPerson;
   }
 
-  GameMode gameMode = GameMode.taxi;
+  GameMode gameMode = GameMode.flight;
 
   // ── MFD page selection ────────────────────────────────────────────────────
 
@@ -223,17 +226,10 @@ class GameState {
   double groundSpeed      = 0.0;
   bool   isBarrelRolling  = false;
 
-  /// Apparent wind vector: player's velocity through the air (forward × speed).
-  Vector3 get apparentWind {
-    final yaw   = playerRotation.y * (math.pi / 180.0);
-    final pitch = flightPitchAngle  * (math.pi / 180.0);
-    final cosP  = math.cos(pitch);
-    return Vector3(
-      -math.sin(yaw) * cosP,
-       math.sin(pitch),
-      -math.cos(yaw) * cosP,
-    )..scale(flightSpeed);
-  }
+  final WindState windState = WindState();
+
+  /// Live ambient wind vector (XZ plane, world space).
+  Vector3 get apparentWind => windState.windVector3;
 
   // ── Terrain / hazard state (updated each frame by PhysicsSystem) ──────────
 
@@ -276,17 +272,80 @@ class GameState {
     return false;
   }
 
+  double get _dropRangeRadius => const [20.0, 32.0, 46.0, 64.0][dropRange.clamp(0, 3)];
+
   bool dropRetardant() {
     if (!suppressionArmed) return false;
-    final d2 = [20.0, 32.0, 46.0, 64.0][dropRange.clamp(0, 3)];
+    return suppressFiresInRadius(_dropRangeRadius);
+  }
+
+  /// Extinguish any fire zones within [radius] world units (ability-based, no arm required).
+  bool suppressFiresInRadius(double radius) {
     final px = playerPosition.x, pz = playerPosition.z;
     bool hit = false;
     for (int i = 0; i < firePositions.length; i++) {
       if (fireExtinguished[i]) continue;
       final (fx, fz) = firePositions[i];
-      if ((px-fx)*(px-fx)+(pz-fz)*(pz-fz) < d2*d2) { fireExtinguished[i] = true; hit = true; }
+      if ((px-fx)*(px-fx)+(pz-fz)*(pz-fz) < radius*radius) { fireExtinguished[i] = true; hit = true; }
     }
     return hit;
+  }
+
+  // ── Airbase threat ───────────────────────────────────────────────────────
+
+  /// 0 = no threat, 1 = critical; driven by fire proximity to base center (0, -55).
+  double airbaseThreatLevel = 0.0;
+  double closestFireToBase  = double.infinity;
+
+  void tickAirbaseThreat(double dt) {
+    var closest = double.infinity;
+    for (int i = 0; i < firePositions.length; i++) {
+      if (fireExtinguished[i]) continue;
+      final (fx, fz) = firePositions[i];
+      final dx = fx - 0.0, dz = fz - (-55.0);
+      final d = math.sqrt(dx*dx + dz*dz);
+      if (d < closest) closest = d;
+    }
+    closestFireToBase = closest;
+    const critR = 60.0;
+    if (closest < critR) {
+      airbaseThreatLevel =
+          (airbaseThreatLevel + (1.0 - closest/critR) * dt * 0.03).clamp(0.0, 1.0);
+    } else {
+      airbaseThreatLevel = (airbaseThreatLevel - dt * 0.01).clamp(0.0, 1.0);
+    }
+  }
+
+  // ── Missions ──────────────────────────────────────────────────────────────
+
+  final MissionState missions = MissionState();
+
+  // ── Return-to-base ────────────────────────────────────────────────────────
+
+  bool rtbActive = false;
+
+  void activateRTB() {
+    rtbActive = true;
+    clearFlightPlan();
+    addWaypoint(0.0, 72.0); // approach the north runway threshold
+    autopilotEnabled = true;
+  }
+
+  void cancelRTB() {
+    rtbActive = false;
+    clearFlightPlan();
+    autopilotEnabled = false;
+  }
+
+  double _autoDropTimer = 0.0;
+
+  /// Auto-drop retardant when armed+auto+fireBelow. Returns true when a drop fires.
+  bool tickAutoSuppress(double dt) {
+    if (!suppressionArmed || !suppressionAuto || !isFireBelow) { _autoDropTimer = 0.0; return false; }
+    _autoDropTimer += dt;
+    if (_autoDropTimer < 5.0) return false;
+    _autoDropTimer = 0.0;
+    return suppressFiresInRadius(_dropRangeRadius);
   }
 
   // ── Dual-engine fire suppression ─────────────────────────────────────────
@@ -359,6 +418,10 @@ class GameState {
   double cfgThrottleRate    = 0.45;
   double cfgFlightSpeedAccel = 2.5;
 
+  // ── Combat — active wyverns ───────────────────────────────────────────────
+
+  List<Wyvern> wyverns = [];
+
   // ── Vitals ────────────────────────────────────────────────────────────────
 
   double mana   = 100.0;
@@ -387,17 +450,18 @@ class GameState {
 
   Future<void> initialize() async {
     await _loadFlightConfig();
+    await missions.loadFromConfig();
     _setupDefaultActionBar();
     _resetCharges();
-    playerPosition = Vector3(0.0, 0.5, cfgRunwayStartZ);
-    flightAltitude = 0.0;
-    flightSpeed    = 0.0;
+    playerPosition = Vector3(0.0, cfgStartAltitude, cfgRunwayStartZ);
+    flightAltitude = cfgStartAltitude;
+    flightSpeed    = cfgFlightSpeed;
     groundSpeed    = 0.0;
-    throttle       = 0.0;
-    gameMode       = GameMode.taxi;
-    gearProgress   = 1.0;
-    gearDeployed   = true;
-    gearTargetDown = true;
+    throttle       = 0.5;
+    gameMode       = GameMode.flight;
+    gearProgress   = 0.0;
+    gearDeployed   = false;
+    gearTargetDown = false;
     gearMoving     = false;
   }
 
@@ -439,6 +503,22 @@ class GameState {
       cfgRunwayStartZ     = (t['runwayStartZ']    as num).toDouble();
       cfgThrottleRate     = (t['throttleRate']    as num).toDouble();
       cfgFlightSpeedAccel = (t['flightSpeedAccel'] as num).toDouble();
+
+      // Wind config
+      if (data.containsKey('wind')) {
+        final w = data['wind'] as Map<String, dynamic>;
+        double wn(String k, double fb) => (w[k] as num?)?.toDouble() ?? fb;
+        windState.cfgBaseStrength    = wn('baseStrength',    windState.cfgBaseStrength);
+        windState.cfgMaxStrength     = wn('maxStrength',     windState.cfgMaxStrength);
+        windState.cfgGustFrequency   = wn('gustFrequency',   windState.cfgGustFrequency);
+        windState.cfgGustAmplitude   = wn('gustAmplitude',   windState.cfgGustAmplitude);
+        windState.cfgDirDriftSpeed   = wn('dirDriftSpeed',   windState.cfgDirDriftSpeed);
+        windState.cfgCrosswindFactor = wn('crosswindFactor', windState.cfgCrosswindFactor);
+        windState.cfgParticleCount   = (w['particleCount'] as num?)?.toInt() ?? windState.cfgParticleCount;
+        windState.cfgParticleSpeed   = wn('particleSpeed',   windState.cfgParticleSpeed);
+        windState.cfgParticleLifetime= wn('particleLifetime',windState.cfgParticleLifetime);
+        windState.cfgParticleLength  = wn('particleLength',  windState.cfgParticleLength);
+      }
 
       // Aircraft library
       final acList = data['aircraft'] as List<dynamic>?;

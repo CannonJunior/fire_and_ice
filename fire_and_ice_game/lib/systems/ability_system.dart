@@ -39,6 +39,12 @@ class VisualEffect {
 
   /// Whether this effect has expired
   bool get isExpired => remaining <= 0.0;
+
+  /// True once the particle burst for this effect has been emitted.
+  bool emitted = false;
+
+  /// True once WyvernSystem has processed this effect for hit-detection.
+  bool damageTick = false;
 }
 
 /// AbilitySystem - Manages ability cooldowns, activation, and visual effects.
@@ -114,6 +120,10 @@ class AbilitySystem {
     state.startCooldown(ability);
 
     _spawnEffect(ability, state.playerPosition);
+
+    if (ability.suppressRadius != null) {
+      state.suppressFiresInRadius(ability.suppressRadius!);
+    }
 
     debugPrint('[AbilitySystem] Activated ${ability.name}');
   }
