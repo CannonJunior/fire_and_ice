@@ -241,7 +241,7 @@ Widget buildRightMFD(
                 final bearing  = relAngle + headRad;
                 onMapTap(
                   state.playerPosition.x + math.sin(bearing) * dist,
-                  state.playerPosition.z + math.cos(bearing) * dist,
+                  state.playerPosition.z - math.cos(bearing) * dist,
                 );
               },
               child: CustomPaint(
@@ -306,7 +306,7 @@ class _TerrainMap extends CustomPainter {
     final dz = wz - pz;
     final dist = math.sqrt(dx * dx + dz * dz);
     if (dist <= 0) return Offset(cx, cy);
-    final relAngle = math.atan2(dx, dz) - headRad;
+    final relAngle = math.atan2(dx, -dz) - headRad;
     return Offset(
       cx + math.sin(relAngle) * dist * scale,
       cy - math.cos(relAngle) * dist * scale,
@@ -384,7 +384,7 @@ class _TerrainMap extends CustomPainter {
       final (dx, dz) = wpData!;
       final dist = math.sqrt(dx * dx + dz * dz);
       if (dist > 0) {
-        final bearing  = math.atan2(dx, dz);
+        final bearing  = math.atan2(dx, -dz);
         final relAngle = bearing - headRad;
         final sdx = math.sin(relAngle) * dist * scale;
         final sdy = -math.cos(relAngle) * dist * scale;

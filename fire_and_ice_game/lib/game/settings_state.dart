@@ -58,6 +58,14 @@ class SettingsState {
   bool cockpitDraggable = false;
   bool showCockpitInfo  = false;
 
+  // ── Per-element cockpit visibility ─────────────────────────────────────────
+  // Keys match the drag() ids in cockpit_hud.dart. Defaults to true (visible).
+  Map<String, bool> cockpitElementVisible = {};
+
+  bool elementVisible(String key) => cockpitElementVisible[key] ?? true;
+
+  void setElementVisible(String key, bool v) => cockpitElementVisible[key] = v;
+
   // ── Per-aircraft cockpit element positions ──────────────────────────────────
   // Layout: aircraftId → elementId → [dx, dy]
   Map<String, Map<String, List<double>>> cockpitLayouts = {};
@@ -125,6 +133,11 @@ class SettingsState {
             }
         };
       }
+      final visJson = sp.getString('${_p}elementVisible');
+      if (visJson != null) {
+        final raw = jsonDecode(visJson) as Map<String, dynamic>;
+        cockpitElementVisible = raw.map((k, v) => MapEntry(k, v as bool));
+      }
       debugPrint('[Settings] Loaded from SharedPreferences');
     } catch (e) {
       debugPrint('[Settings] Load failed ($e) — using defaults');
@@ -149,8 +162,9 @@ class SettingsState {
       await sp.setBool('${_p}showTutorial',      showTutorial);
       await sp.setBool('${_p}cockpitDraggable', cockpitDraggable);
       await sp.setBool('${_p}showCockpitInfo',  showCockpitInfo);
-      await sp.setString('${_p}aircraft',       selectedAircraft);
-      await sp.setString('${_p}cockpitLayouts', jsonEncode(cockpitLayouts));
+      await sp.setString('${_p}aircraft',        selectedAircraft);
+      await sp.setString('${_p}cockpitLayouts',  jsonEncode(cockpitLayouts));
+      await sp.setString('${_p}elementVisible',  jsonEncode(cockpitElementVisible));
     } catch (e) {
       debugPrint('[Settings] Save failed: $e');
     }

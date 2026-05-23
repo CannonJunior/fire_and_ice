@@ -43,13 +43,14 @@ class SettingsPanel extends StatefulWidget {
 class _SettingsPanelState extends State<SettingsPanel> {
   // Track which sections are open — aircraft expanded by default.
   final Map<String, bool> _open = {
-    'aircraft': true,
-    'flight':   false,
-    'camera':   false,
-    'hud':      false,
-    'controls': false,
-    'bindings': false,
-    'tests':    false,
+    'aircraft':    true,
+    'flight':      false,
+    'camera':      false,
+    'hud':         false,
+    'hudElements': false,
+    'controls':    false,
+    'bindings':    false,
+    'tests':       false,
   };
 
   SettingsState get s => widget.settings;
@@ -201,6 +202,35 @@ class _SettingsPanelState extends State<SettingsPanel> {
 
   // ── HUD section ─────────────────────────────────────────────────────────────
 
+  static const _kElements = [
+    ('leftMfd',      'Left MFD'),
+    ('annunciator',  'Annunciator'),
+    ('centerMfd',    'Centre MFD'),
+    ('suppression',  'Suppression'),
+    ('flaps',        'Flaps'),
+    ('gear',         'Gear'),
+    ('throttle',     'Throttle'),
+    ('tq',           'Throttle Quad'),
+    ('alt',          'Altimeter'),
+    ('aoa',          'AoA Indicator'),
+    ('attitudeGyro', 'Attitude Gyro'),
+    ('fireProx',     'Fire Proximity'),
+    ('rightMfd',     'Right MFD'),
+    ('auxDisp',      'Aux Display'),
+  ];
+
+  Widget _cockpitElementsBody() => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: _kElements.map((e) {
+      final (key, label) = e;
+      return _ToggleRow(label, s.elementVisible(key), (v) {
+        s.setElementVisible(key, v);
+        s.save();
+        _changed();
+      });
+    }).toList(),
+  );
+
   Widget _hudBody() => Column(mainAxisSize: MainAxisSize.min, children: [
     _ToggleRow('Annunciator Panel', s.showAnnunciator, (v) { s.showAnnunciator = v; _changed(); },
         hint: 'Master-warning lights above Flight Data'),
@@ -214,6 +244,8 @@ class _SettingsPanelState extends State<SettingsPanel> {
         hint: 'Drag grip appears on each cockpit group to reposition it'),
     _ToggleRow('Element Info',      s.showCockpitInfo,  (v) { s.showCockpitInfo  = v; _changed(); },
         hint: 'Show name, position offset, and FIXED / DRAG state per group'),
+    _Section('COCKPIT ELEMENTS', 'hudElements', _open['hudElements']!, _toggle,
+        _cockpitElementsBody()),
     _RestoreLayoutRow(
       aircraftName: s.aircraftConfigs
           .firstWhere((a) => a.id == s.selectedAircraft,
