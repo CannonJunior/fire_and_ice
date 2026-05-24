@@ -6,7 +6,7 @@ const _kBevel = Color(0xFF30303C);
 
 Widget buildAttitudeGyro(GameState state) {
   return Container(
-    width: 360,
+    width: 284,
     decoration: BoxDecoration(
       color: const Color(0xFF000810),
       border: Border.all(color: _kBevel, width: 2),
@@ -27,7 +27,7 @@ Widget buildAttitudeGyro(GameState state) {
         ]),
       ),
       SizedBox(
-        height: 172,
+        height: 100,
         child: ClipRect(child: CustomPaint(
           painter: _AttitudeGyroPainter(
             pitch: state.flightPitchAngle,

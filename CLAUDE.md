@@ -51,6 +51,11 @@ Controls:
 - Default aircraft is **IceFighter** (`icefighter`). Update `settings_state.dart → selectedAircraft` if changing the default.
 - Aircraft catalogue order reflects selection-screen display order; IceFighter is always position #1.
 
+## Cockpit HUD Elements
+- See `COCKPIT_HUD_ELEMENTS.md` for the **mandatory 4-step checklist** when adding any new cockpit UI element.
+- Every element needs: (1) entry in `settings_panel.dart _kElements`, (2) `keep(vis(key), drag(key, …))` wrap in `cockpit_hud.dart _cockpitPanel()`. Settings state requires no changes.
+- Circular instruments (AoA, FPS, ManaArc) use a 120×120 SizedBox with radial-gradient background and kIceShelf 1.5 px outer border — see spec in COCKPIT_HUD_ELEMENTS.md.
+
 ## Architecture Notes
 - No Riverpod, no Flame - plain Flutter + dart:html WebGL
 - Terrain is visual only (no collision system)

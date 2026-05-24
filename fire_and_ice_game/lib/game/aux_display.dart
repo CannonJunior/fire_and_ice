@@ -256,18 +256,43 @@ class _ChatPageState extends State<_ChatPage> {
                     child: Text('...', style: TextStyle(color: _kADim, fontSize: 7 * _kS)),
                   );
                 }
-                final (role, msg, ts) = msgs[i];
-                final isUser = role == 'user';
-                return Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 5 * _kS, vertical: 1 * _kS),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    SizedBox(width: 40 * _kS, child: Text(isUser ? '[YOU]' : '[AI] ',
-                        style: TextStyle(
-                            color: isUser ? _kADim : _kAFg,
-                            fontSize: 7 * _kS, fontWeight: FontWeight.bold))),
-                    Expanded(child: Text(msg,
-                        style: TextStyle(color: isUser ? _kAFg : _kADim, fontSize: 7 * _kS))),
-                    Text(ts, style: TextStyle(color: _kADim, fontSize: 6 * _kS)),
+                final (role, rawMsg, ts) = msgs[i];
+                final isUser   = role == 'user';
+                final isTanker = !isUser && rawMsg.startsWith('[TNKR]');
+                final isSdo    = !isUser && rawMsg.startsWith('[SDO]');
+
+                final callsign = isUser    ? '[YOU]'
+                    : isTanker ? '[LEVIATHAN-01]'
+                    : isSdo    ? '[BASE HOTSHOT]'
+                    : '[AI]';
+                final displayMsg = isTanker ? rawMsg.replaceFirst('[TNKR] ', '')
+                    : isSdo ? rawMsg.replaceFirst('[SDO] ', '')
+                    : rawMsg;
+
+                final rowBg  = isTanker ? const Color(0xFF142447)
+                    : isSdo ? const Color(0xFF3A0A0A)
+                    : Colors.transparent;
+                final csClr  = isUser    ? _kADim
+                    : isTanker ? const Color(0xFF4A8ACC)
+                    : isSdo    ? const Color(0xFFCC4444)
+                    : _kAFg;
+                final msgClr = isUser    ? _kAFg
+                    : isTanker ? const Color(0xFFAABBCC)
+                    : isSdo    ? const Color(0xFFCC8888)
+                    : _kADim;
+
+                return Container(
+                  margin: EdgeInsets.symmetric(horizontal: 4 * _kS, vertical: 1 * _kS),
+                  padding: EdgeInsets.symmetric(horizontal: 4 * _kS, vertical: 2 * _kS),
+                  color: rowBg,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Text(callsign, style: TextStyle(
+                          color: csClr, fontSize: 7 * _kS, fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      Text(ts, style: TextStyle(color: csClr, fontSize: 6 * _kS)),
+                    ]),
+                    Text(displayMsg, style: TextStyle(color: msgClr, fontSize: 7 * _kS)),
                   ]),
                 );
               },
@@ -318,8 +343,11 @@ Widget _vidPage(GameState s, void Function(int)? onScroll) {
 Widget _mapPage(GameState s) => Column(children: [
   _hdr('TERRAIN MAP', 'MAP'),
   Expanded(child: CustomPaint(
-    painter: _MapPainter(px: s.playerPosition.x, pz: s.playerPosition.z,
-        heading: s.playerRotation.y),
+    painter: _MapPainter(
+      px: s.playerPosition.x, pz: s.playerPosition.z,
+      heading: s.playerRotation.y,
+      tankerX: s.tankerPosition.$1, tankerZ: s.tankerPosition.$2,
+    ),
     child: Container(),
   )),
   _ftr('X:${s.playerPosition.x.toStringAsFixed(0)}',
@@ -327,8 +355,11 @@ Widget _mapPage(GameState s) => Column(children: [
 ]);
 
 class _MapPainter extends CustomPainter {
-  final double px, pz, heading;
-  const _MapPainter({required this.px, required this.pz, required this.heading});
+  final double px, pz, heading, tankerX, tankerZ;
+  const _MapPainter({
+    required this.px, required this.pz, required this.heading,
+    required this.tankerX, required this.tankerZ,
+  });
 
   static Color _hc(double h) {
     if (h < 0.6) return const Color(0xFF1A3A1A);
@@ -375,9 +406,37 @@ class _MapPainter extends CustomPainter {
       ..close();
     canvas.drawPath(path, Paint()..color = Colors.white);
     canvas.drawCircle(Offset(cx, cy), 2, Paint()..color = Colors.white);
+
+    // ── YANKEE waypoint marker ────────────────────────────────────────────────
+    final scale = size.width / 2 / range;
+    final yx = cx + (0.0 - px) * scale;
+    final yz = cy - (0.0 - pz) * scale;
+    if (yx >= 0 && yx <= size.width && yz >= 0 && yz <= size.height) {
+      final yp = Paint()..color = const Color(0xFFFFCC00)..strokeWidth = 1.0..style = PaintingStyle.stroke;
+      canvas.drawRect(Rect.fromCenter(center: Offset(yx, yz), width: 7, height: 7), yp);
+      final tp = TextPainter(
+        text: const TextSpan(text: 'YNK', style: TextStyle(color: Color(0xFFFFCC00), fontSize: 5)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(yx + 5, yz - 3));
+    }
+
+    // ── Tanker position marker ─────────────────────────────────────────────────
+    final tx = cx + (tankerX - px) * scale;
+    final tz = cy - (tankerZ - pz) * scale;
+    if (tx >= 0 && tx <= size.width && tz >= 0 && tz <= size.height) {
+      canvas.drawCircle(Offset(tx, tz), 4,
+          Paint()..color = const Color(0xFF00AAFF)..style = PaintingStyle.stroke..strokeWidth = 1.2);
+      final tp = TextPainter(
+        text: const TextSpan(text: 'LVTHN', style: TextStyle(color: Color(0xFF00AAFF), fontSize: 5)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(tx + 5, tz - 3));
+    }
   }
 
   @override
   bool shouldRepaint(_MapPainter o) =>
-      o.px != px || o.pz != pz || o.heading != heading;
+      o.px != px || o.pz != pz || o.heading != heading ||
+      o.tankerX != tankerX || o.tankerZ != tankerZ;
 }

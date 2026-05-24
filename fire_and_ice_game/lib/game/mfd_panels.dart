@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'game_state.dart';
 import 'loadout_page.dart';
 import 'mfd_pages.dart';
-import '../terrain/terrain_generator.dart';
-
 // ── Color palette ─────────────────────────────────────────────────────────────
 
 const _kBevel = Color(0xFF2A3040);
@@ -199,6 +197,12 @@ class _ArcGauge extends CustomPainter {
 
 // ── Right MFD – Terrain Navigation ───────────────────────────────────────────
 
+// Deterministic terrain dot positions, computed once at module load.
+final List<Offset> _terrainDots = List.generate(28, (i) {
+  final r = math.Random(i * 31 + 7);
+  return Offset(r.nextDouble(), r.nextDouble());
+});
+
 Widget buildRightMFD(
   GameState state, {
   int page = 0,
@@ -232,7 +236,6 @@ Widget buildRightMFD(
             final mapW = constraints.maxWidth;
             final mapH = constraints.maxHeight;
             return GestureDetector(
-              behavior: HitTestBehavior.opaque,
               onTapDown: onMapTap == null ? null : (details) {
                 final lx = details.localPosition.dx, ly = details.localPosition.dy;
                 if (lx < 0 || lx > mapW || ly < 0 || ly > mapH) return;
@@ -324,16 +327,19 @@ class _TerrainMap extends CustomPainter {
     final headRad  = heading * math.pi / 180;
     final scale    = ringBase / 30.0;
 
-    const step = 10;
-    for (int sy = 0; sy < size.height.toInt(); sy += step) {
-      for (int sx = 0; sx < size.width.toInt(); sx += step) {
-        final sdx = sx - cx, sdy = sy - cy;
-        final wx = px + (northUp ? sdx : sdx * math.cos(headRad) + sdy * math.sin(headRad)) / scale;
-        final wz = pz + (northUp ? sdy : -sdx * math.sin(headRad) + sdy * math.cos(headRad)) / scale;
-        final t = (TerrainGenerator.heightAt(wx, wz) / 12.0).clamp(0.0, 1.0);
-        canvas.drawRect(Rect.fromLTWH(sx.toDouble(), sy.toDouble(), step.toDouble(), step.toDouble()),
-            Paint()..color = Color.lerp(const Color(0xFF081A0C), const Color(0xFF2E5018), t)!);
-      }
+    // Grid
+    final gp = Paint()..color = const Color(0xFF003355)..strokeWidth = 0.5;
+    for (double x = 0; x < size.width; x += 14) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gp);
+    }
+    for (double y = 0; y < size.height; y += 14) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gp);
+    }
+
+    // Terrain blobs
+    final dp = Paint()..color = const Color(0xFF004466)..style = PaintingStyle.fill;
+    for (final d in _terrainDots) {
+      canvas.drawCircle(Offset(d.dx * size.width, d.dy * size.height), 4, dp);
     }
 
     final rp = Paint()

@@ -7,6 +7,7 @@
     "brakeMultiplier": 0.6,
     "brakeJumpForce": 3.0,
     "manaDrainRate": 3.0,
+    "manaFillRate": 10.0,
     "lowManaThreshold": 10.0,
     "lowManaDescentRate": 2.0,
     "bankRate": 120.0,

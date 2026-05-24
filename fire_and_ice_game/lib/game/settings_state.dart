@@ -82,6 +82,10 @@ class SettingsState {
   /// Clear all element positions for [aircraftId] (Restore Defaults).
   void resetCockpitLayout(String aircraftId) => cockpitLayouts.remove(aircraftId);
 
+  /// Reset one element's position to its natural layout slot (offset = zero).
+  void resetElementOffset(String aircraftId, String elementId) =>
+      cockpitLayouts[aircraftId]?.remove(elementId);
+
   // ── Per-aircraft cockpit element sizes ────────────────────────────────────
   // Layout: aircraftId → elementId → [scaleX, scaleY]
   Map<String, Map<String, List<double>>> _cockpitSizes = {};

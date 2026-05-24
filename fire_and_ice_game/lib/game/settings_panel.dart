@@ -23,17 +23,15 @@ const _kDim     = Color(0xFF556677);
 class SettingsPanel extends StatefulWidget {
   final SettingsState settings;
   final VoidCallback   onClose;
-
-  /// Called every time any setting value changes.  The caller should call
-  /// [SettingsState.save], [SettingsState.applyFlight], and
-  /// [SettingsState.applyCamera] in response.
   final VoidCallback   onChanged;
+  final VoidCallback   onKeyboardMap;
 
   const SettingsPanel({
     super.key,
     required this.settings,
     required this.onClose,
     required this.onChanged,
+    required this.onKeyboardMap,
   });
 
   @override
@@ -48,7 +46,6 @@ class _SettingsPanelState extends State<SettingsPanel> {
     'camera':      false,
     'hud':         false,
     'hudElements': false,
-    'controls':    false,
     'bindings':    false,
     'tests':       false,
   };
@@ -85,7 +82,6 @@ class _SettingsPanelState extends State<SettingsPanel> {
                     _Section('FLIGHT',       'flight',   _open['flight']!,   _toggle, _flightBody()),
                     _Section('CAMERA',       'camera',   _open['camera']!,   _toggle, _cameraBody()),
                     _Section('HUD',          'hud',      _open['hud']!,      _toggle, _hudBody()),
-                    _Section('CONTROLS',     'controls', _open['controls']!, _toggle, _controlsBody()),
                     _Section('KEY BINDINGS', 'bindings', _open['bindings']!, _toggle, _bindingsBody()),
                     _Section('TEST STATUS',  'tests',    _open['tests']!,    _toggle, const TestStatusWidget()),
                   ],
@@ -209,12 +205,14 @@ class _SettingsPanelState extends State<SettingsPanel> {
     ('suppression',  'Suppression'),
     ('flaps',        'Flaps'),
     ('gear',         'Gear'),
+    ('probe',        'Refuel Probe'),
     ('throttle',     'Throttle'),
     ('tq',           'Throttle Quad'),
     ('alt',          'Altimeter'),
     ('aoa',          'AoA Indicator'),
     ('attitudeGyro', 'Attitude Gyro'),
     ('fireProx',     'Fire Proximity'),
+    ('manaArc',      'Mana Arc'),
     ('rightMfd',     'Right MFD'),
     ('auxDisp',      'Aux Display'),
   ];
@@ -223,11 +221,24 @@ class _SettingsPanelState extends State<SettingsPanel> {
     mainAxisSize: MainAxisSize.min,
     children: _kElements.map((e) {
       final (key, label) = e;
-      return _ToggleRow(label, s.elementVisible(key), (v) {
-        s.setElementVisible(key, v);
-        s.save();
-        _changed();
-      });
+      return Row(children: [
+        Expanded(child: _ToggleRow(label, s.elementVisible(key), (v) {
+          s.setElementVisible(key, v);
+          s.save();
+          _changed();
+        })),
+        GestureDetector(
+          onTap: () {
+            s.resetElementOffset(s.selectedAircraft, key);
+            s.save();
+            _changed();
+          },
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 10),
+            child: Text('↺', style: TextStyle(color: Color(0xFF3AB7FF), fontSize: 18, height: 1.0)),
+          ),
+        ),
+      ]);
     }).toList(),
   );
 
@@ -259,48 +270,60 @@ class _SettingsPanelState extends State<SettingsPanel> {
     ),
   ]);
 
-  // ── Controls section ────────────────────────────────────────────────────────
-
-  Widget _controlsBody() => Column(mainAxisSize: MainAxisSize.min, children: [
-    _InfoRow('Movement', 'W/S  A/D  Q/E'),
-    _InfoRow('Barrel roll', 'Q+A  or  E+D'),
-    _InfoRow('Boost / brake', 'Alt  /  Space'),
-    _InfoRow('View toggle', 'Tab'),
-    _InfoRow('Ability slots', '1 – 0'),
-    _InfoRow('Throttle', ']  /  ['),
-    _InfoRow('Landing gear', 'G'),
-    _InfoRow('Flaps cycle', 'F'),
-  ]);
-
-  // ── Key bindings (detailed read-only) ───────────────────────────────────────
+  // ── Key bindings ─────────────────────────────────────────────────────────────
 
   Widget _bindingsBody() {
-    final rows = [
-      // Flight
-      ('W',           'Pitch nose down (dive)',     false),
-      ('S',           'Pitch nose up (climb)',       false),
-      ('A',           'Yaw left + bank-turn',        false),
-      ('D',           'Yaw right + bank-turn',       false),
-      ('Q',           'Bank left only',              false),
-      ('E',           'Bank right only',             false),
-      ('Q + A',       'Barrel roll left',            false),
-      ('E + D',       'Barrel roll right',           false),
-      ('Alt',         '1.5× speed boost',            false),
-      ('Space',       'Air brake + altitude bump',   false),
-      // UI
-      ('Tab',         'Cockpit ↔ 3rd-person view',   false),
-      ('1 – 0',       'Activate ability slots',       false),
-      (']',           'Throttle up',                 false),
-      ('[',           'Throttle down',               false),
-      ('G',           'Landing gear up / down',      false),
-      ('F',           'Step flaps (bounces UP↔FULL)',   false),
-      // Meta
-      ('⚙  button',  'Open / close settings',       true),
+    const rows = [
+      ('W',          'Pitch nose down (dive)',          false),
+      ('S',          'Pitch nose up (climb)',           false),
+      ('A',          'Yaw left + bank-turn',            false),
+      ('D',          'Yaw right + bank-turn',           false),
+      ('Q',          'Bank left only',                  false),
+      ('E',          'Bank right only',                 false),
+      ('Q + A',      'Barrel roll left',                false),
+      ('E + D',      'Barrel roll right',               false),
+      ('Alt',        '1.5× speed boost',                false),
+      ('Space',      'Air brake + altitude bump',       false),
+      ('Tab',        'Cockpit ↔ 3rd-person view',       false),
+      ('1 – 0',      'Activate ability slots',          false),
+      (']',          'Throttle up',                     false),
+      ('[',          'Throttle down',                   false),
+      ('G',          'Landing gear up / down',          false),
+      ('F',          'Step flaps (UP ↔ FULL)',          false),
+      ('P',          'Deploy / retract probe',          false),
+      ('Shift+Enter','Open RADIO COMMS input',          false),
+      ('Enter',      'Send RADIO COMMS message',        false),
+      ('⚙  button',  'Open / close settings',          true),
     ];
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: rows.map((r) {
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      // Keyboard map button
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+        child: GestureDetector(
+          onTap: widget.onKeyboardMap,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(
+              color: _kDimBlue,
+              border: Border.all(color: _kAccent),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text('⌨', style: TextStyle(fontSize: 13)),
+              SizedBox(width: 8),
+              Text('KEYBOARD MAP',
+                  style: TextStyle(
+                      color: _kAccent, fontSize: 10,
+                      fontWeight: FontWeight.bold, letterSpacing: 1.5,
+                      fontFamily: 'monospace')),
+            ]),
+          ),
+        ),
+      ),
+      const SizedBox(height: 4),
+      ...rows.map((r) {
         final (key, desc, accent) = r;
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -325,8 +348,8 @@ class _SettingsPanelState extends State<SettingsPanel> {
                 style: const TextStyle(color: _kDim, fontSize: 10))),
           ]),
         );
-      }).toList(),
-    );
+      }),
+    ]);
   }
 }
 

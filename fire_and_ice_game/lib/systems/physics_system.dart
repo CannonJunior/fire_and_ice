@@ -294,6 +294,14 @@ class PhysicsSystem {
     if (state.playerPosition.y < floor) {
       state.playerPosition.y = floor;
 
+      // Auto-recover pitch when hitting terrain — prevents sustained nose-down
+      // crash state. Bleed negative pitch toward 0 at 2× normal pitch rate.
+      if (state.flightPitchAngle < 0) {
+        state.flightPitchAngle = math.min(
+            state.flightPitchAngle + state.cfgPitchRate * 2.0 * dt, 0.0);
+        state.playerRotation.x = state.flightPitchAngle;
+      }
+
       // Terrain impact: skip on runway surface (gndH ≈ 0) to allow smooth
       // touchdown; apply crash physics only on elevated terrain.
       if (gndH > 0.6 && state.flightSpeed > 0.5) {

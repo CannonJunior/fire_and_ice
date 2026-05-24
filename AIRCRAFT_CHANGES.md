@@ -4,6 +4,82 @@ Record of modifications to aircraft configurations, cockpit layouts, and related
 
 ---
 
+## 2026-05-24 (Mana Arc redesign — circular gauge, 3-tier color, status lights)
+
+### Mana Arc visual overhaul
+
+- `lib/game/mana_arc.dart` — complete rewrite:
+  - Widget structure now matches `buildAoaIndicator`: Column with label header + 120×120 `SizedBox` (no rectangular Container border)
+  - 3-tier segment color: annunciator red (`#FF2222`) ≤25%, heat amber 25–50%, glacier blue >50%
+  - Tanking override: all filled segments switch to glacier blue when probe connected
+  - "100% MANA" centre text removed; status lights repositioned as vertical stack inside arc centre
+  - `REDY` label renamed to `RDY`
+  - Status lights (IceFighter only): RDY (blue `#0099FF`), FLOW (green `#00CC44`), FULL (amber `#FFAA00`)
+- `lib/game/attitude_gyro.dart` — width reduced 360 → 284 px to keep the instrument row within the lever-row width constraint after ManaArc was added
+- `lib/game/cockpit_hud.dart` — ManaArc added to instrument row with `keep(vis('manaArc'), ...)`
+
+#### Test updates
+
+- Suite passes 30/31 (T14 pre-existing failure unchanged)
+
+---
+
+## 2026-05-24 (cockpit panel layout fix + Mana Arc repositioning)
+
+### Cockpit panel overflow fix and Mana Arc moved to instrument row
+
+#### Overflow fix
+
+- `lib/game/throttle_quadrant.dart` — `_trackH` reduced 144 → 70 px; saves 74 px from the lever row
+- `lib/game/attitude_gyro.dart` — body `SizedBox` height reduced 172 → 100 px; saves 72 px from the instrument row
+- Combined savings (146 px) bring the center column from ~1040 px to ~890 px, fitting the 900 px viewport with no overflow
+
+#### Mana Arc repositioning
+
+- `lib/game/cockpit_hud.dart` — `ManaArc` removed from the persistent screen overlays (both cockpit and third-person stacks)
+- `ManaArc` added to the instrument row alongside AoA indicator / attitude gyro / fire proximity sensor, wrapped in a dark-bordered cockpit-style `Container` so it matches the other panel instruments
+- The arc is now cockpit-view-only (consistent with AoA, not with HullIntegrityArc overlay)
+- The `FireProximitySensor` duplicate that existed in both the overlay and the panel row was consolidated to the panel row only
+
+#### Test updates
+
+- `tests/test_cockpit_ui.py` — `THR_TRACK_H` updated 144 → 70; `THR_GD_TOP` updated 610 → 594 to match new TQ position
+- Suite now passes 30/31 (T14 ability OSB pre-existing failure unchanged)
+
+---
+
+## 2026-05-23 (mana arc + MANA TANKING mode)
+
+### Mana arc gauge + aerial-refueling mode
+
+#### Cockpit UI — Mana Arc
+
+- **New file**: `lib/game/mana_arc.dart` — `ManaArc` widget and supporting painters
+- 270° segmented arc gauge (10 segments, same geometry as HullIntegrityArc) placed bottom-right of screen, immediately left of HullIntegrityArc
+- Centre text shows percentage + resource label (default `MANA`; rename via `resourceLabel` param)
+- Colour convention (inspired by aviation AR displays): blue fill → amber at 100% → red below 20%
+- Pulsing green outer ring while probe is connected (mirrors real "AR contact" status light)
+- **Three-light status strip** (shown for IceFighter only — hidden for other aircraft):
+  - **REDY** (blue): probe extended and ready to dock
+  - **FLOW** (green): probe connected, resource actively flowing
+  - **FULL** (amber): resource at maximum capacity
+- Gauge persists across cockpit ↔ third-person view toggle (rendered in both IgnorePointer stacks)
+
+#### GameMode — MANA TANKING
+
+- `lib/game/game_state.dart` — added `GameMode.manaTanking` to the `GameMode` enum
+- Transitions: `FLIGHT → MANA TANKING` when `probeConnected` becomes true; `MANA TANKING → FLIGHT` when probe disconnects
+- `lib/game/cockpit_hud.dart` — mode badge shows `MANA TANKING` in arctic cyan (`#00EEFF`)
+- `lib/game/game_widget.dart` — `_checkModeTransitions` extended with `manaTanking` case (flight physics unchanged); `_tickTankerAndProbe` drives mode transitions and uses `cfgManaFillRate`
+- RP accrual continues during `manaTanking` (same as flight/landing)
+
+#### Config
+
+- `assets/data/flight_config.json` — added `manaFillRate: 10.0` under `flight` (units/sec)
+- `lib/game/game_state.dart` — added `cfgManaFillRate = 10.0`, loaded from JSON; replaces previously hardcoded `10.0` in `_tickTankerAndProbe`
+
+---
+
 ## 2026-05-23
 
 ### Leviathan ART-9 tanker + IceFighter refueling probe

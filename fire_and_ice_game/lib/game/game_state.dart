@@ -14,9 +14,10 @@ enum ViewMode { thirdPerson, cockpit }
 
 /// Operational flight mode. Drives physics dispatch and UI context.
 enum GameMode {
-  taxi,     // On the ground: taxiing, takeoff roll
-  flight,   // Airborne with gear up
-  landing,  // Airborne with gear down — approach / rollout
+  taxi,         // On the ground: taxiing, takeoff roll
+  flight,       // Airborne with gear up
+  landing,      // Airborne with gear down — approach / rollout
+  manaTanking,  // Airborne + probe connected to tanker drogue — resource replenishment
 }
 
 /// GameState - Single source of truth for all mutable game data.
@@ -221,16 +222,11 @@ class GameState {
     if (flapsLevel == 0 || flapsLevel == 3) _flapsDir = -_flapsDir;
   }
 
-  /// Toggle gear and update game mode. No-op in taxi (gear cannot retract on ground).
+  /// Toggle gear. No-op in taxi (gear cannot retract on ground).
   void triggerGear() {
     if (gameMode == GameMode.taxi) return;
     gearTargetDown = !gearTargetDown;
     gearMoving     = true;
-    if (gearTargetDown && gameMode == GameMode.flight) {
-      gameMode = GameMode.landing;
-    } else if (!gearTargetDown && gameMode == GameMode.landing) {
-      gameMode = GameMode.flight;
-    }
   }
 
   // ── Flight parameters ─────────────────────────────────────────────────────
@@ -407,6 +403,7 @@ class GameState {
   double cfgBrakeJumpForce     = 3.0;
   double cfgFireDamageRate     = 6.0;
   double cfgManaDrainRate      = 3.0;
+  double cfgManaFillRate       = 10.0;  // units/sec restored while probe connected
   double cfgLowManaThreshold   = 10.0;
   double cfgLowManaDescentRate = 2.0;
   double cfgBankRate           = 120.0;
@@ -437,6 +434,10 @@ class GameState {
   // ── Combat — active wyverns ───────────────────────────────────────────────
 
   List<Wyvern> wyverns = [];
+
+  // ── Tanker tracking (updated by game loop) ───────────────────────────────
+
+  (double, double) tankerPosition = (0.0, 0.0); // (worldX, worldZ)
 
   // ── Radio / chat ──────────────────────────────────────────────────────────
 
@@ -501,6 +502,7 @@ class GameState {
       cfgBrakeMultiplier    = (f['brakeMultiplier']      as num).toDouble();
       cfgBrakeJumpForce     = (f['brakeJumpForce']       as num).toDouble();
       cfgManaDrainRate      = (f['manaDrainRate']        as num).toDouble();
+      cfgManaFillRate       = (f['manaFillRate']         as num?)?.toDouble() ?? cfgManaFillRate;
       cfgLowManaThreshold   = (f['lowManaThreshold']     as num).toDouble();
       cfgLowManaDescentRate = (f['lowManaDescentRate']   as num).toDouble();
       cfgBankRate           = (f['bankRate']             as num).toDouble();
@@ -580,7 +582,7 @@ class GameState {
 
   /// Award RP for airborne time (2/sec) and a landing bonus (+50 on touchdown).
   void tickMissionEconomy(double dt, GameMode prevMode) {
-    if (gameMode == GameMode.flight || gameMode == GameMode.landing) {
+    if (gameMode == GameMode.flight || gameMode == GameMode.landing || gameMode == GameMode.manaTanking) {
       _rpAccum += 2.0 * dt;
       if (_rpAccum >= 1.0) {
         final pts = _rpAccum.floor();

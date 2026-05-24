@@ -48,7 +48,7 @@ class _TQState extends State<_ThrottleQuadrant> {
   double _tStart     = 0.0; // throttle at drag start
 
   // Track height in local pixels — set from layout
-  static const double _trackH = 144.0;
+  static const double _trackH = 70.0;
 
   double get _throttle => widget.state.throttle;
 

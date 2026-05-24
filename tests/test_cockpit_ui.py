@@ -46,9 +46,9 @@ FLAPS_DN_X = 825   # flaps-extend button (T28 trivially passes on frame)
 
 # Throttle quadrant
 THR_X       = 1050
-THR_GD_TOP  = 610
+THR_GD_TOP  = 594
 THR_TRACK_T = 16
-THR_TRACK_H = 144
+THR_TRACK_H = 70
 
 # Top-right menu buttons
 SETTINGS_X, SETTINGS_Y = 2140, 22
@@ -213,7 +213,7 @@ def t13_left_mfd_elmt(page):
 def _click_ability(page, slot_x, ability_name):
     enter_cockpit(page)
     wait_gs(page, 'abilityCooldowns',
-            lambda cds: ability_name not in (cds or {}), timeout_ms=25000)
+            lambda cds: ability_name not in (cds or {}), timeout_ms=35000)
     before_mana = gs(page, 'mana')
     before_cds  = gs(page, 'abilityCooldowns') or {}
     page.mouse.click(slot_x, OSB_BOT_Y)
@@ -339,9 +339,9 @@ def t29_throttle_drag(page):
     page.keyboard.down('['); page.wait_for_timeout(3500); page.keyboard.up('[')
     page.wait_for_timeout(300)
     thr    = gs(page, 'throttle')
-    # Drag full track height (144px) from bottom to near top for reliable detection
-    from_y = lever_y(0.0)           # bottom of track = y≈770
-    to_y   = lever_y(0.85)          # near top = y≈ 640, 130px upward drag
+    # Drag from closed (throttle=0) to 85% — track is now 70px
+    from_y = lever_y(0.0)           # bottom of track ≈ y=680
+    to_y   = lever_y(0.85)          # 85% up ≈ y=621, ~59px upward drag
     page.mouse.move(THR_X, from_y)
     page.mouse.down()
     page.mouse.move(THR_X, to_y, steps=10)

@@ -35,6 +35,8 @@ import 'settings_state.dart';
 import 'cockpit_hud.dart' as cockpit;
 import 'game_state_bridge.dart';
 import 'ollama_client.dart';
+import 'radio_system.dart';
+import 'controls_map_overlay.dart';
 import '../terrain/lake_generator.dart';
 
 class FireAndIceGame extends StatefulWidget {
@@ -88,6 +90,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
 
   final SettingsState _settings = SettingsState();
   bool _showSettings = false, _showHangar = false, _showMission = false;
+  bool _showKeyboardMap = false;
 
   // ── Input listener subscriptions ─────────────────────────────────────────
 
@@ -152,6 +155,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     await _initFireSystem();
     await WyvernSystem.loadConfig();
     WyvernSystem.spawnDefault(_state);
+    RadioSystem.reset();
     _startLoop();
     if (mounted) setState(() {});
   }
@@ -473,8 +477,15 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
 
   // ── Tanker orbit + probe animation ────────────────────────────────────────
 
+  void _emitRadio(String msg) {
+    if (!mounted) return;
+    setState(() { _state.chatHistory.add(('assistant', msg, _nowHHMM())); });
+  }
+
   void _tickTankerAndProbe(double dt) {
     _tanker.tick(dt);
+    _state.tankerPosition = (_tanker.position.x, _tanker.position.z);
+    RadioSystem.tick(_state, _tanker.crossedWaypoint, _tanker.crossNorthbound, dt, _emitRadio);
 
     // Probe deploy / retract animation
     final rate = 1.0 / _probeTransitTime;
@@ -508,7 +519,14 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       final dz = tipZ - drogue.z;
       _state.probeConnected =
           _state.probeProgress >= 0.99 && (dx*dx + dy*dy + dz*dz) < 12.25; // 3.5² = 12.25
-      if (_state.probeConnected) _state.restoreMana(10.0 * dt);
+      if (_state.probeConnected) {
+        _state.restoreMana(_state.cfgManaFillRate * dt);
+        if (_state.gameMode == GameMode.flight || _state.gameMode == GameMode.landing) {
+          _state.gameMode = GameMode.manaTanking;
+        }
+      } else if (_state.gameMode == GameMode.manaTanking) {
+        _state.gameMode = GameMode.flight;
+      }
     }
   }
 
@@ -523,8 +541,9 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
           debugPrint('[Game] Liftoff → FLIGHT');
         }
       case GameMode.landing:
-        final touchFloor = math.max(_state.terrainHeight, 0.5);
-        if (_state.playerPosition.y <= touchFloor + 0.1) {
+        final lndH    = _state.terrainHeight;
+        final touchFloor = math.max(lndH, 0.5);
+        if (_state.playerPosition.y <= touchFloor + 0.1 && lndH < 0.6) {
           _state.playerPosition.y = touchFloor;
           _state.gameMode         = GameMode.taxi;
           _state.groundSpeed      = _state.flightSpeed;
@@ -534,15 +553,9 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
           _state.gearMoving     = false;
         }
       case GameMode.flight:
-        final cf = math.max(_state.terrainHeight, 0.5);
-        if (_state.playerPosition.y <= cf + 0.1 && _state.flightSpeed < 1.0) {
-          _state.playerPosition.y = cf;
-          _state.gameMode         = GameMode.taxi;
-          _state.groundSpeed      = _state.flightSpeed;
-          _state.throttle         = 0.0;
-          _state.flightPitchAngle = 0.0;
-          _state.flightBankAngle  = 0.0;
-        }
+        break; // always-in-flight: no automatic transition to taxi
+      case GameMode.manaTanking:
+        break; // physics unchanged; mode reverts to flight when probe disconnects
     }
   }
 
@@ -739,11 +752,15 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             Positioned(
               top: 44, right: 12,
               child: SettingsPanel(
-                settings: _settings,
-                onClose:   () => setState(() => _showSettings = false),
-                onChanged: _onSettingChanged,
+                settings:      _settings,
+                onClose:       () => setState(() => _showSettings = false),
+                onChanged:     _onSettingChanged,
+                onKeyboardMap: () => setState(() => _showKeyboardMap = true),
               ),
             ),
+
+          if (_showKeyboardMap)
+            KeyboardMapOverlay(onClose: () => setState(() => _showKeyboardMap = false)),
 
           if (_showHangar)
             Positioned.fill(child: buildHangarScreen(
