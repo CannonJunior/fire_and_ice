@@ -112,17 +112,6 @@ Widget buildCockpitHud(
     ),
     IgnorePointer(child: Stack(children: [
       WarningTextZone(state: state),
-      Positioned(bottom: 12, left: 12,
-          child: FireProximitySensor(state: state)),
-      Positioned(bottom: 12, left: 140,
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF080C14),
-              border: Border.all(color: const Color(0xFF2A3050), width: 2),
-            ),
-            padding: const EdgeInsets.all(4),
-            child: ManaArc(state: state),
-          )),
       Positioned(bottom: 12, right: 12,
           child: HullIntegrityArc(state: state)),
       if (showTutorial) buildTutorialOverlay(state),
@@ -320,7 +309,15 @@ Widget _cockpitPanel(GameState state, {
               drag('aoa', 'AoA Indicator', buildAoaIndicator(state)),
               const SizedBox(width: 8),
             ])),
-            drag('attitudeGyro', 'Attitude Gyro', buildAttitudeGyro(state)),
+            keep(vis('attitudeGyro'), Row(mainAxisSize: MainAxisSize.min, children: [                                    
+              drag('attitudeGyro', 'Attitude Gyro', buildAttitudeGyro(state)),                                    
+              const SizedBox(width: 8),
+            ])),
+            keep(vis('fireProx'), Row(mainAxisSize: MainAxisSize.min, children: [
+              drag('fireProx', 'Fire Proximity', FireProximitySensor(state: state)),
+              const SizedBox(width: 8),
+            ])),
+            keep(vis('manaArc'), drag('manaArc', 'Mana Arc', ManaArc(state: state))),
           ]),
         ]),
         const SizedBox(width: 20),

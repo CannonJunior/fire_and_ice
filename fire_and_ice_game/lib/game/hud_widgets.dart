@@ -9,7 +9,6 @@ import 'hud_tutorial.dart';
 /// Layout (HUD_DESIGN_RESEARCH.md §1):
 ///  - Top-left:     FlightDataCluster (ALT / SPD / HDG)
 ///  - Top-centre:   WarningTextZone (STALL, LOW MANA, etc.)
-///  - Bottom-left:  FireProximitySensor (elemental threat awareness)
 ///  - Bottom-right: HullIntegrityArc (10-segment arc gauge)
 ///  - Bottom-centre: ManaSegmentBar + AbilityHexRow
 ///
@@ -33,12 +32,6 @@ Widget buildHud(
 
         // Top-centre: stall / low-mana / hull-critical warnings
         WarningTextZone(state: state),
-
-        // Bottom-left: fire proximity sensor (replaces radar)
-        Positioned(
-          bottom: 12, left: 12,
-          child: FireProximitySensor(state: state),
-        ),
 
         // Bottom-right: hull integrity arc (replaces health bar)
         Positioned(
