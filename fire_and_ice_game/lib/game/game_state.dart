@@ -229,6 +229,12 @@ class GameState {
     gearMoving     = true;
   }
 
+  // ── LVR lever ─────────────────────────────────────────────────────────────
+
+  bool lvrOn = false;
+
+  void toggleLvr() { lvrOn = !lvrOn; }
+
   // ── Flight parameters ─────────────────────────────────────────────────────
 
   double flightPitchAngle = 0.0;

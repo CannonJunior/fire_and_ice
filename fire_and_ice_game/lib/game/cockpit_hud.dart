@@ -17,6 +17,7 @@ import 'suppression_panel.dart';
 import 'throttle_quadrant.dart';
 import 'alt_indicator.dart';
 import 'aux_display.dart';
+import 'lvr_lever.dart';
 
 // Colors
 
@@ -59,6 +60,7 @@ Widget buildCockpitHud(
   void Function(int)? onAuxPage, void Function(int)? onAuxMirrorScroll, void Function(int)? onAuxVideoScroll,
   void Function(int)? onManeuverScroll, void Function()? onManeuverExecute, void Function()? onManeuverStop,
   VoidCallback? onOrientToggle,
+  VoidCallback? onLvrToggle,
 }) {
   if (state.viewMode == ViewMode.thirdPerson) {
     return Stack(children: [
@@ -108,7 +110,8 @@ Widget buildCockpitHud(
           onThrottleChange: onThrottleChange,
           onAuxPage: onAuxPage, onAuxMirrorScroll: onAuxMirrorScroll, onAuxVideoScroll: onAuxVideoScroll,
           onManeuverScroll: onManeuverScroll, onManeuverExecute: onManeuverExecute, onManeuverStop: onManeuverStop,
-          onOrientToggle: onOrientToggle),
+          onOrientToggle: onOrientToggle,
+          onLvrToggle: onLvrToggle),
     ),
     IgnorePointer(child: Stack(children: [
       WarningTextZone(state: state),
@@ -207,6 +210,7 @@ Widget _cockpitPanel(GameState state, {
   void Function(int)? onAuxPage, void Function(int)? onAuxMirrorScroll, void Function(int)? onAuxVideoScroll,
   void Function(int)? onManeuverScroll, void Function()? onManeuverExecute, void Function()? onManeuverStop,
   VoidCallback? onOrientToggle,
+  VoidCallback? onLvrToggle,
 }) {
   final lp       = state.leftMfdPage;
   final rp       = state.rightMfdPage;
@@ -218,12 +222,18 @@ Widget _cockpitPanel(GameState state, {
 
   // Shorthand: builds a CockpitDragGroup with per-aircraft persistent offset.
   Widget drag(String id, String label, Widget child) {
-    final (dx, dy) = settings?.cockpitOffset(aid, id) ?? (0.0, 0.0);
+    final bool isDraggable = settings?.cockpitDraggable ?? false;
+    // Only restore saved offsets when drag mode is active. In non-draggable
+    // mode a stale non-zero offset causes Transform.translate to misplace the
+    // hit-test area, so clicks at the visual position silently fail.
+    final (dx, dy) = isDraggable
+        ? (settings?.cockpitOffset(aid, id) ?? (0.0, 0.0))
+        : (0.0, 0.0);
     return CockpitDragGroup(
       key:           ValueKey('${aid}_$id'),
       label:         label,
       initialOffset: Offset(dx, dy),
-      draggable:     settings?.cockpitDraggable ?? false,
+      draggable:     isDraggable,
       showInfo:      settings?.showCockpitInfo  ?? false,
       onOffsetChanged: (o) {
         settings?.setCockpitOffset(aid, id, o.dx, o.dy);
@@ -301,6 +311,10 @@ Widget _cockpitPanel(GameState state, {
             keep(vis('alt'), Row(mainAxisSize: MainAxisSize.min, children: [
               const SizedBox(width: 4),
               drag('alt', 'Altimeter', buildAltIndicator(state)),
+            ])),
+            keep(vis('lvr'), Row(mainAxisSize: MainAxisSize.min, children: [
+              const SizedBox(width: 4),
+              drag('lvr', 'LVR', buildLvrLever(state, onTap: onLvrToggle)),
             ])),
           ]),
           const SizedBox(height: 4),

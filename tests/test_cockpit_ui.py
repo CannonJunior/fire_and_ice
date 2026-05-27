@@ -1,5 +1,5 @@
 """
-Fire & Ice — Cockpit UI test suite (31 tests).
+Fire & Ice — Cockpit UI test suite (33 tests).
 
 Reads game state via the hidden DOM bridge element:
   JSON.parse(document.getElementById('_gs').dataset.state)
@@ -12,7 +12,9 @@ Coordinates: left/right MFD x values from main-branch empirical calibration (80p
              AUX x values from DOM-bridge probe (probe-confirmed at 2200x900).
 """
 
+import datetime
 import json
+import os
 import sys
 import time
 
@@ -42,17 +44,29 @@ AUX_Y = 866
 GEAR_X    = 36
 CTRL_Y    = 820
 
-FLAPS_DN_X = 825   # flaps-extend button (T28 trivially passes on frame)
+# Levers row (y=640–790; note: CTRL_Y=820 lands in the instruments row below)
+LEVERS_Y      = 680
+FLAPS_LEVER_X = 720   # empirically verified at (720, 680)
+LVR_LEVER_X   = 1295  # empirically verified at (1295, 680)
 
 # Throttle quadrant
+# lever_y(t) = THR_GD_TOP + THR_TRACK_T + (1-t)*THR_TRACK_H
+# → t = (THR_GD_TOP + THR_TRACK_T + THR_TRACK_H - y) / THR_TRACK_H
 THR_X       = 1050
 THR_GD_TOP  = 594
 THR_TRACK_T = 16
 THR_TRACK_H = 70
+# Click-to-set: TQ GestureDetector starts at y≈645 (probe-verified).
+# y=670 → local_y=25 → t=1-(25-16)/70≈0.87 (empirically 0.871)
+TQ_CLICK_Y  = 670
 
-# Top-right menu buttons
-SETTINGS_X, SETTINGS_Y = 2140, 22
-HANGAR_X,   HANGAR_Y   = 2060, 22
+# Top-right menu buttons (right-aligned Row: HANGAR | TOC | SETTINGS)
+# SETTINGS is non-fullscreen (top:44); HANGAR/TOC are Positioned.fill panels
+# Full-screen panels have their own ✕ CLOSE at (PANEL_CLOSE_X, 22)
+SETTINGS_X,    SETTINGS_Y    = 2140, 22
+HANGAR_X,      HANGAR_Y      = 2015, 22   # empirically verified (x=2060 is TOC)
+TOC_X,         TOC_Y         = 2060, 22   # mission / tactical operations center
+PANEL_CLOSE_X, PANEL_CLOSE_Y = 2170, 22   # ✕ CLOSE inside any full-screen panel
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -319,6 +333,7 @@ def t26_aux_map(page):
 def t27_gear_button_click(page):
     enter_cockpit(page)
     wait_gs(page, 'gameMode', lambda v: v == 'flight', timeout_ms=3000)
+    # Toggle gear down → up → down with mouse click on external gear lever
     before = gs(page, 'gearTargetDown')
     page.mouse.click(GEAR_X, CTRL_Y)
     wait_gs(page, 'gearTargetDown', lambda v: v != before)
@@ -326,11 +341,13 @@ def t27_gear_button_click(page):
     wait_gs(page, 'gearTargetDown', lambda v: v == before)
 
 
-def t28_flaps_extend_button(page):
+def t28_flaps_lever_cycle(page):
     enter_cockpit(page)
-    f0 = gs(page, 'frame')
-    page.mouse.click(FLAPS_DN_X, CTRL_Y)
-    wait_gs(page, 'frame', lambda v: v > f0, timeout_ms=2000)
+    # Four consecutive clicks must each advance the lever to a new detent (0–3 bounce)
+    for _ in range(4):
+        before = gs(page, 'flapsLevel')
+        page.mouse.click(FLAPS_LEVER_X, LEVERS_Y)
+        wait_gs(page, 'flapsLevel', lambda v, b=before: v != b)
 
 
 def t29_throttle_drag(page):
@@ -365,8 +382,26 @@ def t31_hangar_panel(page):
     page.mouse.click(HANGAR_X, HANGAR_Y)
     page.wait_for_timeout(400)
     wait_gs(page, 'frame', lambda v: v > f0, timeout_ms=2000)
-    page.mouse.click(HANGAR_X, HANGAR_Y)
+    page.mouse.click(PANEL_CLOSE_X, PANEL_CLOSE_Y)   # ✕ CLOSE inside hangar panel
+    page.wait_for_timeout(300)
+
+
+def t32_lvr_lever_click(page):
+    enter_cockpit(page)
+    before = gs(page, 'lvrOn')
+    page.mouse.click(LVR_LEVER_X, LEVERS_Y)
+    wait_gs(page, 'lvrOn', lambda v: v != before)
+    page.mouse.click(LVR_LEVER_X, LEVERS_Y)
+    wait_gs(page, 'lvrOn', lambda v: v == before)
+
+
+def t33_throttle_quad_click(page):
+    enter_cockpit(page)
+    # Drain throttle then click near TOGA mark — should jump throttle well above idle
+    page.keyboard.down('['); page.wait_for_timeout(2000); page.keyboard.up('[')
     page.wait_for_timeout(200)
+    page.mouse.click(THR_X, TQ_CLICK_Y)
+    wait_gs(page, 'throttle', lambda v: v > 0.5)
 
 
 # ── Runner ────────────────────────────────────────────────────────────────────
@@ -399,10 +434,12 @@ TESTS = [
     ('T25 AUX VID tab',              t25_aux_vid),
     ('T26 AUX MAP tab',              t26_aux_map),
     ('T27 Gear button click',        t27_gear_button_click),
-    ('T28 Flaps extend button',      t28_flaps_extend_button),
+    ('T28 Flaps lever cycle',        t28_flaps_lever_cycle),
     ('T29 Throttle drag',            t29_throttle_drag),
     ('T30 Settings panel',           t30_settings_panel),
     ('T31 Hangar panel',             t31_hangar_panel),
+    ('T32 LVR lever click',          t32_lvr_lever_click),
+    ('T33 Throttle quad click',      t33_throttle_quad_click),
 ]
 
 if __name__ == '__main__':
@@ -422,6 +459,22 @@ if __name__ == '__main__':
     print(f'\n{"="*50}')
     print(f'  {passed}/{len(TESTS)} passed   {failed} failed')
     print(f'{"="*50}\n')
+
+    # Write test_results.json so TestStatusWidget in Settings can display results.
+    _web = os.path.join(os.path.dirname(__file__), '..', 'fire_and_ice_game', 'web')
+    _out = os.path.join(_web, 'test_results.json')
+    _ts  = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    with open(_out, 'w') as _f:
+        json.dump({
+            'timestamp': _ts,
+            'passed':    passed,
+            'total':     len(TESTS),
+            'tests': [
+                {'name': r[1], 'passed': r[0] == 'PASS',
+                 'detail': r[2] if r[0] == 'FAIL' else ''}
+                for r in results
+            ],
+        }, _f, indent=2)
 
     if failed > 0:
         print('Failed tests:')

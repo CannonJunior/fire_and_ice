@@ -215,6 +215,7 @@ class _SettingsPanelState extends State<SettingsPanel> {
     ('manaArc',      'Mana Arc'),
     ('rightMfd',     'Right MFD'),
     ('auxDisp',      'Aux Display'),
+    ('lvr',          'LVR'),
   ];
 
   Widget _cockpitElementsBody() => Column(

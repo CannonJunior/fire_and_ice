@@ -77,6 +77,16 @@ class _TQState extends State<_ThrottleQuadrant> {
     if (_throttle > _kIdleThresh) setState(() => _gateLifted = false);
   }
 
+  // Click anywhere in the lever area to jump throttle to that position.
+  // localPosition.dy maps linearly: trackTop (y=16) = TOGA (1.0), trackTop+trackH (y=86) = IDLE.
+  void _onTapDown(TapDownDetails d) {
+    const trackTop = _TQPainter._trackTop;
+    final t = (1.0 - (d.localPosition.dy - trackTop) / _trackH).clamp(0.0, 1.0);
+    final newT = _gateLifted ? t : t.clamp(_kIdleThresh, 1.0);
+    setState(() {});
+    widget.onThrottle(newT);
+  }
+
   @override
   Widget build(BuildContext context) {
     final gateColor = _gateLifted ? _kGateLifted : _kGate;
@@ -112,6 +122,8 @@ class _TQState extends State<_ThrottleQuadrant> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: GestureDetector(
+            behavior:    HitTestBehavior.opaque,
+            onTapDown:   _onTapDown,
             onPanStart:  _onPanStart,
             onPanUpdate: _onPanUpdate,
             onPanEnd:    _onPanEnd,

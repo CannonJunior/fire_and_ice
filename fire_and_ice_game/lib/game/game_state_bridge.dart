@@ -30,6 +30,8 @@ void writeGameStateBridge(GameState s, int frame) {
       ',"flightSpeed":${s.flightSpeed.toStringAsFixed(3)}'
       ',"groundSpeed":${s.groundSpeed.toStringAsFixed(3)}'
       ',"flightAltitude":${s.flightAltitude.toStringAsFixed(3)}'
+      ',"flapsLevel":${s.flapsLevel}'
+      ',"lvrOn":${s.lvrOn}'
       ',"abilityCooldowns":{$cd}}';
   var el = html.document.getElementById('_gs');
   if (el == null) {

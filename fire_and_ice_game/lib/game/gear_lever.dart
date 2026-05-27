@@ -35,7 +35,8 @@ Widget buildGearLever(GameState state, {VoidCallback? onTap}) {
   final knobFrac = state.gearProgress;
 
   return GestureDetector(
-    onTap: state.gameMode == GameMode.taxi ? null : onTap,
+    behavior: HitTestBehavior.opaque,
+    onTapDown: state.gameMode == GameMode.taxi ? null : (_) => onTap?.call(),
     child: Container(
       width: 92,
       decoration: BoxDecoration(
@@ -167,7 +168,7 @@ Widget buildFlapsLever(GameState state, {VoidCallback? onTap}) {
 
   return GestureDetector(
     behavior: HitTestBehavior.opaque,
-    onTap: onTap,
+    onTapDown: (_) => onTap?.call(),
     child: Container(
       width: 92,
       decoration: BoxDecoration(

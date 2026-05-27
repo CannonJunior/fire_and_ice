@@ -1,155 +1,170 @@
 {
-  "timestamp": "2026-05-20T02:18:31Z",
-  "passed": 30,
-  "total": 30,
+  "timestamp": "2026-05-27T03:41:05Z",
+  "passed": 32,
+  "total": 33,
   "tests": [
     {
-      "name": "T01 App loads",
+      "name": "T01 Page loads",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T02 View toggle (Tab)",
+      "name": "T02 View toggle Tab",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T03 Left MFD tab \u2014 ELMT",
+      "name": "T03 Throttle up ] key",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T04 Left MFD tab \u2014 LOAD",
+      "name": "T04 Throttle down [ key",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T05 Left MFD tab \u2014 STAT",
+      "name": "T05 Gear G key",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T06 Left MFD tab \u2014 MODE",
+      "name": "T06 Flaps extend F key",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T07 Left MFD ability \u2014 INFE",
+      "name": "T07 Flaps retract f key",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T08 Left MFD ability \u2014 CRYO",
+      "name": "T08 Forward W key",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T09 Left MFD ability \u2014 HEAT",
+      "name": "T09 Ability slot 1 key",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T10 Left MFD ability \u2014 FROS",
+      "name": "T10 Left MFD ABLT tab",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T11 Annunciator L-ENG FIRE light",
+      "name": "T11 Left MFD STAT tab",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T12 Annunciator R-ENG FIRE light",
+      "name": "T12 Left MFD MODE tab",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T13 Annunciator panel renders",
+      "name": "T13 Left MFD ELMT tab",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T14 Gear toggle (G key)",
+      "name": "T14 Ability OSB slot 0",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T15 Throttle up (] key)",
+      "name": "T15 Ability OSB slot 1",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T16 Throttle down ([ key)",
+      "name": "T16 Right MFD TERR tab",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T17 Throttle quadrant drag",
+      "name": "T17 Right MFD TGT tab",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T18 Right MFD tab \u2014 TERR",
+      "name": "T18 Right MFD MARK tab",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T19 Right MFD tab \u2014 FIRE",
+      "name": "T19 Right MFD NAV tab",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T20 Right MFD tab \u2014 MARK",
+      "name": "T20 ZOOM button",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T21 Right MFD action \u2014 ZOOM",
+      "name": "T21 AUTO button",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T22 Right MFD action \u2014 AUTO",
+      "name": "T22 LOCK button",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T23 Right MFD action \u2014 CLR",
+      "name": "T23 CLR button",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T24 Aux Display \u2014 CHAT tab",
+      "name": "T24 AUX CHAT tab",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T25 Aux Display \u2014 VID tab",
+      "name": "T25 AUX VID tab",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T26 Fire Prox sensor visible",
+      "name": "T26 AUX MAP tab",
+      "passed": false,
+      "detail": "wait_gs timeout: key='auxDisplayPage' last=1"
+    },
+    {
+      "name": "T27 Gear button click",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T27 Hull Integrity Arc visible",
+      "name": "T28 Flaps lever cycle",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T28 Settings panel opens",
+      "name": "T29 Throttle drag",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T29 Hangar panel opens",
+      "name": "T30 Settings panel",
       "passed": true,
       "detail": ""
     },
     {
-      "name": "T30 View toggle back to 3rd-person",
+      "name": "T31 Hangar panel",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T32 LVR lever click",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "T33 Throttle quad click",
       "passed": true,
       "detail": ""
     }

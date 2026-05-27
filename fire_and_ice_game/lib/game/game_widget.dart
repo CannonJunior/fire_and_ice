@@ -737,6 +737,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             onManeuverExecute: ()  => setState(() => _state.startManeuver(_state.selectedManeuverIdx)),
             onManeuverStop:    ()  => setState(() => _state.stopManeuver()),
             onOrientToggle:    ()  => setState(() => _state.toggleMapOrientation()),
+            onLvrToggle:       ()  => setState(() => _state.toggleLvr()),
           ),
 
           Positioned(
