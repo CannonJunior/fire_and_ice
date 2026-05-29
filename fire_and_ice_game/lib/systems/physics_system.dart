@@ -8,7 +8,7 @@ import '../terrain/terrain_generator.dart';
 /// Dispatches to ground or flight physics based on [GameState.gameMode].
 ///
 /// Controls (flight):
-///  W/S = pitch down/up   A/D = yaw + bank-turn   Q/E = bank only
+///  W/S = pitch up/down   Q/E = bank only   A/D = rudder (yaw only, no bank)
 ///  Q+A / E+D = barrel roll   Alt = boost   Space = air brake
 ///
 /// Controls (taxi):
@@ -30,7 +30,7 @@ class PhysicsSystem {
       _updateGround(state, bankLeft, bankRight, brake, dt);
     } else {
       _updatePitch(state, forward, backward, dt);
-      _updateSpeed(state, sprint, brake, dt);
+      _updateAerodynamics(state, sprint, brake, dt);
       _updateBanking(state, strafeLeft, strafeRight, bankLeft, bankRight, dt);
       _updateYaw(state, strafeLeft, strafeRight, bankLeft, bankRight, dt);
       _updatePosition(state, dt);
@@ -114,29 +114,66 @@ class PhysicsSystem {
     state.playerRotation.x  = state.flightPitchAngle;
   }
 
-  // ── Speed (throttle-based in flight) ─────────────────────────────────────
+  // ── Aerodynamics (replaces simple throttle-speed model) ──────────────────
 
-  static void _updateSpeed(GameState state, bool sprint, bool brake, double dt) {
-    // Throttle sets the target cruise speed
-    final target = state.cfgFlightSpeed * state.throttle;
-    final accel  = state.cfgFlightSpeedAccel;
+  static void _updateAerodynamics(GameState s, bool sprint, bool brake, double dt) {
+    final V = math.max(s.flightSpeed, 0.5);
 
-    if (state.flightSpeed < target) {
-      state.flightSpeed = math.min(state.flightSpeed + accel * dt, target);
-    } else if (state.flightSpeed > target) {
-      state.flightSpeed = math.max(state.flightSpeed - accel * dt, target);
+    // True AoA: nose attitude minus actual flight-path angle
+    final gammaRad = math.atan2(s.verticalSpeed, V);
+    final gammaDeg = gammaRad * (180.0 / math.pi);
+    s.flightPathAngleDeg = gammaDeg;
+    s.aeroAoA = (s.flightPitchAngle - gammaDeg).clamp(-30.0, 30.0);
+
+    final fl = s.flapsLevel.clamp(0, 3);
+    double cl = s.cfgClZero + s.cfgClPerDeg * s.aeroAoA + s.cfgFlapsClDelta[fl];
+    final clMax = 1.2 + s.cfgFlapsClDelta[fl];
+    final isStalling = s.aeroAoA > s.cfgStallAoaDeg[fl];
+    s.isStalling = isStalling;
+
+    if (isStalling) {
+      final depth = s.aeroAoA - s.cfgStallAoaDeg[fl];
+      cl = math.max(0.0, clMax * (1.0 - depth / 20.0));
+      // Stall: nose pitches over automatically
+      s.flightPitchAngle -= s.cfgPitchRate * (1.5 + depth * 0.1) * dt;
+      s.flightPitchAngle  = s.flightPitchAngle.clamp(-s.cfgMaxPitchAngle, s.cfgMaxPitchAngle);
+      s.playerRotation.x  = s.flightPitchAngle;
     }
 
-    if (sprint) state.flightSpeed *= state.cfgBoostMultiplier;
+    final brakeCd = brake ? 0.20 : 0.0;
+    final gearCd  = s.gearDeployed ? s.cfgGearCdDelta : 0.0;
+    final cd = s.cfgCd0 + s.cfgKInduced * cl * cl + s.cfgFlapsCdDelta[fl] + gearCd + brakeCd;
 
-    if (brake) {
-      state.flightSpeed *= state.cfgBrakeMultiplier;
-      state.playerPosition.y += state.cfgBrakeJumpForce * dt;
+    final qS     = s.cfgKLift * V * V;
+    final boost  = sprint ? s.cfgBoostMultiplier : 1.0;
+    final thrust = s.throttle * s.cfgMaxThrust * boost;
+    final weight = s.cfgAeroMass * 9.8;
+    final sinG   = math.sin(gammaRad);
+    final cosG   = math.cos(gammaRad);
+
+    // Along-path: thrust − drag − weight component
+    s.flightSpeed = (s.flightSpeed +
+            (thrust - qS * cd - weight * sinG) / s.cfgAeroMass * dt)
+        .clamp(0.5, s.cfgFlightSpeed * 1.8);
+
+    // Vertical: lift − weight perpendicular to path
+    s.verticalSpeed += (qS * cl - weight * cosG) / s.cfgAeroMass * dt;
+
+    // Arcade-assist: pitch attitude blends into vertical speed so the aircraft
+    // still climbs/dives when the player points the nose (prevents the "slides
+    // sideways" feel of pure physics at low speeds).
+    final pitchImpliedVz =
+        s.flightSpeed * math.sin(s.flightPitchAngle * math.pi / 180.0);
+    s.verticalSpeed +=
+        (pitchImpliedVz - s.verticalSpeed) * s.cfgPitchFollowRate * dt;
+    s.verticalSpeed = s.verticalSpeed.clamp(-15.0, 15.0);
+
+    // Low-mana: slow descent
+    if (s.mana < s.cfgLowManaThreshold) {
+      s.verticalSpeed -= s.cfgLowManaDescentRate * dt;
     }
 
-    if (state.mana < state.cfgLowManaThreshold) {
-      state.playerPosition.y -= state.cfgLowManaDescentRate * dt;
-    }
+    if (brake) s.playerPosition.y += s.cfgBrakeJumpForce * dt;
   }
 
   // ── Banking ──────────────────────────────────────────────────────────────
@@ -183,44 +220,34 @@ class PhysicsSystem {
     GameState state,
     bool qHeld, bool eHeld, bool aHeld, bool dHeld, double dt,
   ) {
-    final bankToTurn  = state.cfgBankToTurnMult;
     final barrelLeft  = qHeld && aHeld;
     final barrelRight = eHeld && dHeld;
     if (barrelLeft || barrelRight) return;
 
-    // Compute bank magnitude once; avoids two separate .abs() calls and
-    // reduces the number of sin() evaluations from 2 to 1 for the common case.
+    // Bank-induced yaw: rolling generates a coordinated turn automatically.
     final bankAbs = state.flightBankAngle.abs();
-
     if (bankAbs > 1.0) {
       final bankSin = math.sin(state.flightBankAngle * (math.pi / 180.0));
-      state.playerRotation.y -= bankSin * bankToTurn * 60.0 * dt;
+      state.playerRotation.y -= bankSin * state.cfgBankToTurnMult * 60.0 * dt;
     }
 
-    final bankRad  = bankAbs.clamp(0.0, 90.0) * (math.pi / 180.0);
-    final turnMult = 1.0 + math.sin(bankRad) * bankToTurn;
-    final turnRate = 180.0 * turnMult;
-    if (aHeld) state.playerRotation.y += turnRate * dt;
-    if (dHeld) state.playerRotation.y -= turnRate * dt;
+    // A/D = rudder: fixed yaw rate independent of bank angle.
+    if (aHeld) state.playerRotation.y += state.cfgRudderYawRate * dt;
+    if (dHeld) state.playerRotation.y -= state.cfgRudderYawRate * dt;
   }
 
   // ── Position update ──────────────────────────────────────────────────────
 
-  // Pre-allocated scratch vector — avoids one Vector3 heap allocation per frame.
-  static final Vector3 _fwd = Vector3.zero();
-
   static void _updatePosition(GameState state, double dt) {
-    final yawRad   = state.playerRotation.y * (math.pi / 180.0);
-    final pitchRad = state.flightPitchAngle  * (math.pi / 180.0);
-    final cosP     = math.cos(pitchRad);
+    final yawRad = state.playerRotation.y * (math.pi / 180.0);
+    // Horizontal speed is the non-vertical component of total airspeed.
+    final vsSq   = state.verticalSpeed * state.verticalSpeed;
+    final fsSq   = state.flightSpeed   * state.flightSpeed;
+    final hSpeed = math.sqrt(math.max(0.0, fsSq - vsSq));
 
-    _fwd.setValues(
-      -math.sin(yawRad) * cosP,
-       math.sin(pitchRad),
-      -math.cos(yawRad) * cosP,
-    );
-
-    state.playerPosition.addScaled(_fwd, state.flightSpeed * dt);
+    state.playerPosition.x -= math.sin(yawRad) * hSpeed * dt;
+    state.playerPosition.z -= math.cos(yawRad) * hSpeed * dt;
+    state.playerPosition.y += state.verticalSpeed * dt;
     state.windState.applyDrift(state.playerPosition, dt);
     state.flightAltitude = state.playerPosition.y;
   }
@@ -275,17 +302,6 @@ class PhysicsSystem {
     final clearance = state.playerPosition.y - gndH;
     state.isGpwsActive = clearance < state.cfgGpwsAltitude;
 
-    // Stall: nose-up at low speed → force nose over (Tiny Combat Arena / AC7 behaviour)
-    final stalling = state.flightSpeed < state.cfgStallSpeed &&
-        state.flightPitchAngle > state.cfgStallPitchAngle;
-    state.isStalling = stalling;
-    if (stalling) {
-      state.flightPitchAngle =
-          (state.flightPitchAngle - state.cfgPitchRate * 1.5 * dt)
-              .clamp(-state.cfgMaxPitchAngle, 0.0);
-      state.playerRotation.x = state.flightPitchAngle;
-    }
-
     // ── Hard terrain floor ───────────────────────────────────────────────────
     // Aircraft cannot penetrate terrain regardless of approach speed or angle.
     // max(gndH, 0.5) preserves the runway floor so the existing landing →
@@ -305,14 +321,12 @@ class PhysicsSystem {
       // Terrain impact: skip on runway surface (gndH ≈ 0) to allow smooth
       // touchdown; apply crash physics only on elevated terrain.
       if (gndH > 0.6 && state.flightSpeed > 0.5) {
-        // Severity scales with speed and dive angle, clamped to avoid
-        // insta-kill at the bottom of a steep descent.
         final severity = ((state.flightSpeed +
                 state.flightPitchAngle.abs() * 0.05) /
             state.cfgFlightSpeed).clamp(0.1, 3.0);
         state.takeDamage(state.cfgCrashDamageRate * severity * dt);
-        // Bleed speed aggressively — aircraft grinds to a stop on hillside.
         state.flightSpeed      = (state.flightSpeed * 0.35).clamp(0.0, double.infinity);
+        state.verticalSpeed    = math.max(0.0, state.verticalSpeed);
         state.flightPitchAngle = state.flightPitchAngle.clamp(-15.0, 5.0);
         state.playerRotation.x = state.flightPitchAngle;
       }

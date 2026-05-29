@@ -100,7 +100,10 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
 
   // ── Effect rendering pool ─────────────────────────────────────────────────
 
-  final Map<String, Mesh> _effectMeshCache = {};
+  final Map<int, Mesh> _effectMeshCache = {};
+
+  static int _colorKey(Vector3 c) =>
+      (c.r * 255).round() << 16 | (c.g * 255).round() << 8 | (c.b * 255).round();
   late final Mesh _wyvernMesh;
   final Transform3d _effectTransform = Transform3d();
 
@@ -113,10 +116,11 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   // ── Edge detection ────────────────────────────────────────────────────────
 
   final List<bool> _prevAbilityKeys = List.filled(10, false);
-  bool _prevToggleView  = false;
-  bool _prevToggleGear  = false;
-  bool _prevToggleFlaps = false;
-  bool _prevToggleProbe = false;
+  bool _prevToggleView   = false;
+  bool _prevToggleGear   = false;
+  bool _prevToggleFlaps  = false;
+  bool _prevToggleProbe  = false;
+  bool _prevCycleTarget  = false;
 
   // ── Gear + probe transit times ────────────────────────────────────────────
 
@@ -301,7 +305,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _tanker = TankerAircraft();
     _rebuildAircraftScene();
     for (final ab in _state.abilities) {
-      final key = '${ab.color.x},${ab.color.y},${ab.color.z}';
+      final key = _colorKey(ab.color);
       _effectMeshCache[key] ??= Mesh.cube(size: 1.0, color: ab.color);
     }
     _wyvernMesh = Mesh.cube(size: 2.5, color: Vector3(1.0, 0.25, 0.05));
@@ -452,6 +456,10 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     final probeNow = InputSystem.isActionActive(GameAction.toggleProbe);
     if (probeNow && !_prevToggleProbe) setState(() => _state.triggerProbe());
     _prevToggleProbe = probeNow;
+
+    final cycleNow = InputSystem.isActionActive(GameAction.cycleTarget);
+    if (cycleNow && !_prevCycleTarget) _state.cycleTarget();
+    _prevCycleTarget = cycleNow;
   }
 
   // ── Gear animation tick ───────────────────────────────────────────────────
@@ -648,7 +656,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     // Cube ability effects (kept for HUD feedback; particles play on top).
     for (final effect in AbilitySystem.activeEffects) {
       final sz  = 0.5 * effect.scale.clamp(0.2, 4.0);
-      final key = '${effect.color.x},${effect.color.y},${effect.color.z}';
+      final key = _colorKey(effect.color);
       final em  = _effectMeshCache[key]
           ?? (_effectMeshCache[key] = Mesh.cube(size: 1.0, color: effect.color));
       _effectTransform.position.setFrom(effect.position);

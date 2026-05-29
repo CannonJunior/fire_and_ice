@@ -67,8 +67,11 @@ enum GameAction {
   /// Key 0 - ability slot 10
   actionBar10,
 
-  /// Tab - toggle between third-person and cockpit views
+  /// ` (backtick) - toggle between third-person and cockpit views
   toggleView,
+
+  /// Tab - cycle through available targets (active fires + living wyverns)
+  cycleTarget,
 
   /// ] - increase throttle
   throttleUp,

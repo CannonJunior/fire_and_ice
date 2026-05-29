@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'game_state.dart';
 import 'loadout_page.dart';
 import 'mfd_pages.dart';
+import '../terrain/terrain_generator.dart';
 // ── Color palette ─────────────────────────────────────────────────────────────
 
 const _kBevel = Color(0xFF2A3040);
@@ -197,12 +198,6 @@ class _ArcGauge extends CustomPainter {
 
 // ── Right MFD – Terrain Navigation ───────────────────────────────────────────
 
-// Deterministic terrain dot positions, computed once at module load.
-final List<Offset> _terrainDots = List.generate(28, (i) {
-  final r = math.Random(i * 31 + 7);
-  return Offset(r.nextDouble(), r.nextDouble());
-});
-
 Widget buildRightMFD(
   GameState state, {
   int page = 0,
@@ -216,7 +211,14 @@ Widget buildRightMFD(
     final (_, wx, wz) = GameState.kWaypoints[state.lockedWaypoint];
     wpData = (wx - state.playerPosition.x, wz - state.playerPosition.z);
   }
-  final wyvernPositions = [for (final w in state.wyverns) (w.position.x, w.position.z)];
+  final wyvernPositions = [
+    for (final w in state.wyverns) if (!w.isDying) (w.id, w.position.x, w.position.z),
+  ];
+  final fireMarkers = [
+    for (int i = 0; i < GameState.firePositions.length; i++)
+      if (!state.fireExtinguished[i])
+        ('fire_$i', GameState.firePositions[i].$1, GameState.firePositions[i].$2),
+  ];
 
   final Widget body = switch (page) {
     1 => buildTerrPage(state, onOrientToggle: onOrientToggle),
@@ -260,6 +262,8 @@ Widget buildRightMFD(
                   flightPlanIndex: state.flightPlanIndex,
                   northUp: state.mapNorthUp,
                   wyvernPositions: wyvernPositions,
+                  fireMarkers: fireMarkers,
+                  selectedTargetId: state.selectedTargetId,
                 ),
                 child: Container(),
               ),
@@ -299,7 +303,9 @@ class _TerrainMap extends CustomPainter {
   final List<(String, double, double)> flightPlan;
   final int flightPlanIndex;
   final bool northUp;
-  final List<(double, double)> wyvernPositions;
+  final List<(String, double, double)> wyvernPositions;
+  final List<(String, double, double)> fireMarkers;  // (id, wx, wz) active fires
+  final String? selectedTargetId;
 
   const _TerrainMap({
     required this.px, required this.pz, required this.heading,
@@ -308,6 +314,8 @@ class _TerrainMap extends CustomPainter {
     this.flightPlanIndex = 0,
     this.northUp = true,
     this.wyvernPositions = const [],
+    this.fireMarkers = const [],
+    this.selectedTargetId,
   });
 
   Offset _toScreen(double wx, double wz, double cx, double cy,
@@ -336,11 +344,7 @@ class _TerrainMap extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gp);
     }
 
-    // Terrain blobs
-    final dp = Paint()..color = const Color(0xFF004466)..style = PaintingStyle.fill;
-    for (final d in _terrainDots) {
-      canvas.drawCircle(Offset(d.dx * size.width, d.dy * size.height), 4, dp);
-    }
+    _drawContours(canvas, size, cx, cy, scale, headRad);
 
     final rp = Paint()
       ..color = const Color(0xFF005577)
@@ -406,18 +410,37 @@ class _TerrainMap extends CustomPainter {
       }
     }
 
+    // Fire zone markers — small orange triangles
+    final fmP = Paint()..color = const Color(0xFFFF6600)..style = PaintingStyle.fill;
+    for (final (fid, fx, fz) in fireMarkers) {
+      final fs = _toScreen(fx, fz, cx, cy, scale, headRad);
+      final path = Path()
+        ..moveTo(fs.dx, fs.dy - 6)
+        ..lineTo(fs.dx + 5, fs.dy + 4)
+        ..lineTo(fs.dx - 5, fs.dy + 4)
+        ..close();
+      canvas.drawPath(path, fmP);
+      if (fid == selectedTargetId) {
+        canvas.drawCircle(fs, 10, Paint()..color = const Color(0xFFFFAA00)..strokeWidth = 1.5..style = PaintingStyle.stroke);
+      }
+    }
+
+    // Wyvern markers — orange X; ring around selected target
+    final wyP = Paint()..color = const Color(0xFFFF5500)..strokeWidth = 2..style = PaintingStyle.stroke;
+    for (final (wid, wx, wz) in wyvernPositions) {
+      final ws = _toScreen(wx, wz, cx, cy, scale, headRad);
+      canvas.drawLine(Offset(ws.dx-5,ws.dy-5),Offset(ws.dx+5,ws.dy+5),wyP);
+      canvas.drawLine(Offset(ws.dx+5,ws.dy-5),Offset(ws.dx-5,ws.dy+5),wyP);
+      if (wid == selectedTargetId) {
+        canvas.drawCircle(ws, 10, Paint()..color = const Color(0xFFFF8800)..strokeWidth = 1.5..style = PaintingStyle.stroke);
+      }
+    }
+
     final abP = Paint()..color = const Color(0xFF4488FF)..strokeWidth = 1.5..style = PaintingStyle.stroke;
     final abS = _toScreen(0.0, -55.0, cx, cy, scale, headRad);
     canvas.drawCircle(abS, 5, abP);
     canvas.drawLine(Offset(abS.dx - 9, abS.dy), Offset(abS.dx + 9, abS.dy), abP);
     canvas.drawLine(Offset(abS.dx, abS.dy - 9), Offset(abS.dx, abS.dy + 9), abP);
-
-    final wyP = Paint()..color = const Color(0xFFFF5500)..strokeWidth = 2..style = PaintingStyle.stroke;
-    for (final (wx, wz) in wyvernPositions) {
-      final ws = _toScreen(wx, wz, cx, cy, scale, headRad);
-      canvas.drawLine(Offset(ws.dx - 5, ws.dy - 5), Offset(ws.dx + 5, ws.dy + 5), wyP);
-      canvas.drawLine(Offset(ws.dx + 5, ws.dy - 5), Offset(ws.dx - 5, ws.dy + 5), wyP);
-    }
 
     canvas.save();
     canvas.translate(cx, cy);
@@ -431,12 +454,41 @@ class _TerrainMap extends CustomPainter {
     canvas.restore();
   }
 
+  // Marching-squares contour lines at 2/4/6/8/10 m elevation.
+  void _drawContours(Canvas c, Size sz, double cx, double cy, double sc, double hr) {
+    const step = 8.0;
+    final hw = sz.width/(2*sc)+16, hh = sz.height/(2*sc)+16;
+    final cols = (hw*2/step).ceil(), rows = (hh*2/step).ceil();
+    // Sample height grid once; reused across all levels.
+    final hg = List.generate(rows+1, (r) => List.generate(cols+1,
+        (k) => TerrainGenerator.heightAt(px-hw+k*step, pz-hh+r*step)));
+    for (int li = 0; li < 5; li++) {
+      final lv = 2.0 + li*2;
+      final cp = Paint()
+        ..color = Color.fromRGBO(0, 120+li*20, 80+li*8, 0.25+li*0.08)
+        ..strokeWidth = li < 2 ? 0.5 : 0.7;
+      for (int r = 0; r < rows; r++) for (int k = 0; k < cols; k++) {
+        final h00=hg[r][k], h10=hg[r][k+1], h01=hg[r+1][k], h11=hg[r+1][k+1];
+        final x0=px-hw+k*step, z0=pz-hh+r*step;
+        final pts=<Offset>[];
+        if((h00>lv)!=(h10>lv)){final t=(lv-h00)/(h10-h00);pts.add(_toScreen(x0+t*step,z0,cx,cy,sc,hr));}
+        if((h10>lv)!=(h11>lv)){final t=(lv-h10)/(h11-h10);pts.add(_toScreen(x0+step,z0+t*step,cx,cy,sc,hr));}
+        if((h01>lv)!=(h11>lv)){final t=(lv-h01)/(h11-h01);pts.add(_toScreen(x0+t*step,z0+step,cx,cy,sc,hr));}
+        if((h00>lv)!=(h01>lv)){final t=(lv-h00)/(h01-h00);pts.add(_toScreen(x0,z0+t*step,cx,cy,sc,hr));}
+        if(pts.length==2) c.drawLine(pts[0],pts[1],cp);
+        else if(pts.length==4){c.drawLine(pts[0],pts[3],cp);c.drawLine(pts[1],pts[2],cp);}
+      }
+    }
+  }
+
   @override
   bool shouldRepaint(_TerrainMap o) =>
       o.px != px || o.pz != pz || o.heading != heading || o.zoom != zoom ||
       o.wpData != wpData || o.flightPlan.length != flightPlan.length ||
       o.flightPlanIndex != flightPlanIndex || o.northUp != northUp ||
-      o.wyvernPositions.length != wyvernPositions.length;
+      o.wyvernPositions.length != wyvernPositions.length ||
+      o.fireMarkers.length != fireMarkers.length ||
+      o.selectedTargetId != selectedTargetId;
 }
 
 // ── Center MFD – Flight Data ──────────────────────────────────────────────────

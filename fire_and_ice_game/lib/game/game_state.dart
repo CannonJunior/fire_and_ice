@@ -258,6 +258,15 @@ class GameState {
   /// True when the aircraft is in an aerodynamic stall.
   bool   isStalling     = false;
 
+  // ── Aerodynamic state (set by PhysicsSystem._updateAerodynamics) ──────────
+
+  /// Vertical component of velocity (world units/sec, + = climbing).
+  double verticalSpeed      = 0.0;
+  /// Flight-path angle in degrees (+ = climbing).
+  double flightPathAngleDeg = 0.0;
+  /// True angle of attack = pitchAttitude − flightPathAngle (degrees).
+  double aeroAoA            = 0.0;
+
   // ── Fire zones ────────────────────────────────────────────────────────────
 
   /// World-space (X, Z) centres of active fire zones.
@@ -337,6 +346,51 @@ class GameState {
   // ── Missions ──────────────────────────────────────────────────────────────
 
   final MissionState missions = MissionState();
+
+  // ── Target selection ──────────────────────────────────────────────────────
+
+  String? _selectedTargetId;
+  String? get selectedTargetId => _selectedTargetId;
+
+  /// Cycle to the next available target (active fires then living wyverns).
+  void cycleTarget() {
+    final list = _buildTargetList();
+    if (list.isEmpty) { _selectedTargetId = null; return; }
+    final idx = list.indexWhere((t) => t.id == _selectedTargetId);
+    _selectedTargetId = list[(idx + 1) % list.length].id;
+  }
+
+  /// Live world position of the currently selected target; null if none valid.
+  ({String id, String label, double wx, double wz, double wy})? get currentTarget {
+    if (_selectedTargetId == null) return null;
+    for (int i = 0; i < firePositions.length; i++) {
+      if (fireExtinguished[i]) continue;
+      if ('fire_$i' == _selectedTargetId) {
+        final (fx, fz) = firePositions[i];
+        return (id: 'fire_$i', label: 'FIRE ${i+1}', wx: fx, wz: fz, wy: 0.0);
+      }
+    }
+    for (final w in wyverns) {
+      if (w.isDying) continue;
+      if (w.id == _selectedTargetId) {
+        return (id: w.id, label: w.id.replaceAll('_', ' ').toUpperCase(),
+                wx: w.position.x, wz: w.position.z, wy: w.position.y);
+      }
+    }
+    _selectedTargetId = null;
+    return null;
+  }
+
+  List<({String id, String label, double wx, double wz, double wy})> _buildTargetList() => [
+    for (int i = 0; i < firePositions.length; i++)
+      if (!fireExtinguished[i])
+        (id: 'fire_$i', label: 'FIRE ${i+1}',
+         wx: firePositions[i].$1, wz: firePositions[i].$2, wy: 0.0),
+    for (final w in wyverns)
+      if (!w.isDying)
+        (id: w.id, label: w.id.replaceAll('_', ' ').toUpperCase(),
+         wx: w.position.x, wz: w.position.z, wy: w.position.y),
+  ];
 
   // ── Return-to-base ────────────────────────────────────────────────────────
 
@@ -425,6 +479,22 @@ class GameState {
   double cfgCrashDamageRate    = 80.0;
   double cfgLandingMaxSpeed    = 9.0;
   double cfgLandingMaxPitchDeg = 10.0;
+  double cfgRudderYawRate      = 45.0; // A/D yaw rate (degrees/sec)
+
+  // ── Aerodynamics config (mirrors currentAircraft.aero, call applyAeroConfig()) ──
+
+  double cfgMaxThrust       = 12.0;
+  double cfgKLift           = 0.45;
+  double cfgCd0             = 0.020;
+  double cfgKInduced        = 0.042;
+  double cfgClZero          = 0.25;
+  double cfgClPerDeg        = 0.09;
+  List<double> cfgFlapsClDelta  = [0.0, 0.25, 0.45, 0.65];
+  List<double> cfgFlapsCdDelta  = [0.0, 0.018, 0.055, 0.110];
+  List<double> cfgStallAoaDeg   = [16.0, 17.5, 18.5, 20.0];
+  double cfgGearCdDelta     = 0.055;
+  double cfgAeroMass        = 1.0;
+  double cfgPitchFollowRate = 3.0;
 
   // ── Taxi config (loaded from JSON) ───────────────────────────────────────
 
@@ -481,11 +551,13 @@ class GameState {
   Future<void> initialize() async {
     await _loadFlightConfig();
     await missions.loadFromConfig();
+    applyAeroConfig();
     _setupDefaultActionBar();
     _resetCharges();
     playerPosition = Vector3(0.0, cfgStartAltitude, cfgRunwayStartZ);
     flightAltitude = cfgStartAltitude;
     flightSpeed    = cfgFlightSpeed;
+    verticalSpeed  = 0.0;
     groundSpeed    = 0.0;
     throttle       = 0.5;
     gameMode       = GameMode.flight;
@@ -493,6 +565,23 @@ class GameState {
     gearDeployed   = false;
     gearTargetDown = false;
     gearMoving     = false;
+  }
+
+  /// Copy per-aircraft aero params into cfg fields.  Call after aircraft change.
+  void applyAeroConfig() {
+    final a = currentAircraft.aero;
+    cfgMaxThrust       = a.maxThrust;
+    cfgKLift           = a.kLift;
+    cfgCd0             = a.cd0;
+    cfgKInduced        = a.kInduced;
+    cfgClZero          = a.clZero;
+    cfgClPerDeg        = a.clPerDeg;
+    cfgFlapsClDelta    = List.of(a.flapsClDelta);
+    cfgFlapsCdDelta    = List.of(a.flapsCdDelta);
+    cfgStallAoaDeg     = List.of(a.stallAoaDeg);
+    cfgGearCdDelta     = a.gearCdDelta;
+    cfgAeroMass        = a.mass;
+    cfgPitchFollowRate = a.pitchFollowRate;
   }
 
   Future<void> _loadFlightConfig() async {
@@ -524,6 +613,7 @@ class GameState {
       cfgCrashDamageRate    = (f['crashDamageRate']      as num).toDouble();
       cfgLandingMaxSpeed    = (f['landingMaxSpeed']      as num).toDouble();
       cfgLandingMaxPitchDeg = (f['landingMaxPitchDeg']   as num).toDouble();
+      cfgRudderYawRate      = (f['rudderYawRate'] as num?)?.toDouble() ?? cfgRudderYawRate;
 
       final t = data['taxi'] as Map<String, dynamic>;
       cfgMaxGroundSpeed   = (t['maxGroundSpeed']  as num).toDouble();

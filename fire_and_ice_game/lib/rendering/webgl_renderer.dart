@@ -62,6 +62,12 @@ class WebGLRenderer {
 
   ShaderProgram? _particleShader;
   dynamic _particleVbo;
+  Float32List _particleDataBuf = Float32List(0);
+  final Vector4 _cpuColorScratch = Vector4.zero();
+
+  // ── Scene graph scratch ───────────────────────────────────────────────────
+
+  final List<SceneNode> _renderablesScratch = [];
 
   static const String _particleVertSrc = '''
 attribute vec3 aPos;
@@ -265,7 +271,9 @@ void main() {
   /// Call after [SceneNode.updateWorldMatrix] has been called on the root.
   /// One draw call per node with a mesh — typically ~8–12 for a full aircraft.
   void renderSceneGraph(SceneNode root, Camera3D camera) {
-    for (final node in root.renderables) {
+    _renderablesScratch.clear();
+    root.collectRenderables(_renderablesScratch);
+    for (final node in _renderablesScratch) {
       renderWithMatrix(node.mesh!, node.worldMatrix, camera);
     }
   }
@@ -357,23 +365,26 @@ void main() {
     _particleVbo ??= gl.createBuffer();
 
     const stride = 8; // x,y,z, r,g,b,a, size
-    final data = Float32List(particles.length * stride);
+    final needed = particles.length * stride;
+    if (_particleDataBuf.length < needed) {
+      _particleDataBuf = Float32List(needed + stride * 100);
+    }
     for (int i = 0; i < particles.length; i++) {
       final p = particles[i];
-      final c = p.color;
+      p.writeColor(_cpuColorScratch);
       final b = i * stride;
-      data[b]     = p.position.x;
-      data[b + 1] = p.position.y;
-      data[b + 2] = p.position.z;
-      data[b + 3] = c.r;
-      data[b + 4] = c.g;
-      data[b + 5] = c.b;
-      data[b + 6] = c.a;
-      data[b + 7] = p.size;
+      _particleDataBuf[b]     = p.position.x;
+      _particleDataBuf[b + 1] = p.position.y;
+      _particleDataBuf[b + 2] = p.position.z;
+      _particleDataBuf[b + 3] = _cpuColorScratch.r;
+      _particleDataBuf[b + 4] = _cpuColorScratch.g;
+      _particleDataBuf[b + 5] = _cpuColorScratch.b;
+      _particleDataBuf[b + 6] = _cpuColorScratch.a;
+      _particleDataBuf[b + 7] = p.size;
     }
 
     gl.bindBuffer(0x8892, _particleVbo); // ARRAY_BUFFER
-    gl.bufferData(0x8892, data, 0x88E8); // DYNAMIC_DRAW
+    gl.bufferData(0x8892, Float32List.view(_particleDataBuf.buffer, 0, needed), 0x88E8); // DYNAMIC_DRAW
 
     _particleShader!.use();
     _activeProgram = _particleShader!.program;

@@ -421,6 +421,14 @@ Widget buildCockpitWindshieldHud(GameState state) {
   final flapLbl = ['UP', 'T/O', 'APR', 'FUL'][state.flapsLevel.clamp(0, 3)];
   final vsStr   = '${vs >= 0 ? '+' : ''}$vs';
 
+  final tgt = state.currentTarget;
+  double? targetBrg;
+  if (tgt != null) {
+    final dx = tgt.wx - state.playerPosition.x;
+    final dz = tgt.wz - state.playerPosition.z;
+    targetBrg = ((math.atan2(dx, dz) * 180 / math.pi) + 360) % 360;
+  }
+
   Widget wayptBox() {
     final (name, wx, wz) = GameState.kWaypoints[state.lockedWaypoint];
     final dx = wx - state.playerPosition.x, dz = wz - state.playerPosition.z;
@@ -434,7 +442,7 @@ Widget buildCockpitWindshieldHud(GameState state) {
   }
 
   return Stack(children: [
-    Positioned.fill(child: CustomPaint(painter: _HwPainter(pitch: pitch, bank: bank, heading: hdg))),
+    Positioned.fill(child: CustomPaint(painter: _HwPainter(pitch: pitch, bank: bank, heading: hdg, targetBearing: targetBrg))),
     Positioned(left: 210, top: 258, child: _chevBox(spd.toStringAsFixed(0), true)),
     Positioned(left: 210, top: 303, child: Text('α   ${aoa.toStringAsFixed(0)}', style: _tsS)),
     Positioned(right: 210, top: 258, child: _chevBox(alt.toStringAsFixed(0), false)),
@@ -452,6 +460,7 @@ Widget buildCockpitWindshieldHud(GameState state) {
         Text('R    ${radar.toStringAsFixed(0)}'),
       ]))),
     if (state.lockedWaypoint >= 0) Positioned(left: 44, top: 95, child: wayptBox()),
+    if (tgt != null) Positioned(right: 44, top: 95, child: _tgtBox(tgt, targetBrg!, state)),
     if (state.autopilotEnabled)
       Align(alignment: const Alignment(0, -0.56),
         child: Container(
@@ -465,6 +474,22 @@ Widget buildCockpitWindshieldHud(GameState state) {
       Align(alignment: const Alignment(0, -0.32),
         child: const Text('◀  BARREL ROLL  ▶',
           style: TextStyle(color: Color(0xFFFF6600), fontSize: 36, fontWeight: FontWeight.bold, letterSpacing: 4))),
+  ]);
+}
+
+Widget _tgtBox(
+  ({String id, String label, double wx, double wz, double wy}) tgt,
+  double bearing,
+  GameState state,
+) {
+  final dx = tgt.wx - state.playerPosition.x;
+  final dz = tgt.wz - state.playerPosition.z;
+  final dist = math.sqrt(dx * dx + dz * dz);
+  const tgtColor = Color(0xFFFF8800);
+  return Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
+    Text('◎ ${tgt.label}', style: _tsS.copyWith(color: tgtColor)),
+    Text('${dist.toStringAsFixed(0)} m', style: _tsS.copyWith(color: tgtColor)),
+    Text('BRG  ${bearing.toStringAsFixed(0)}°', style: _tsD),
   ]);
 }
 
@@ -490,12 +515,13 @@ class _ChevP extends CustomPainter {
 
 class _HwPainter extends CustomPainter {
   final double pitch, bank, heading;
-  const _HwPainter({required this.pitch, required this.bank, required this.heading});
+  final double? targetBearing;
+  const _HwPainter({required this.pitch, required this.bank, required this.heading, this.targetBearing});
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2, cy = size.height * 0.335;
-    _hdgTape(canvas, cx, heading);
+    _hdgTape(canvas, cx, heading, targetBearing);
     canvas.save();
     canvas.translate(cx, cy);
     canvas.rotate(-bank * math.pi / 180);
@@ -547,12 +573,24 @@ class _HwPainter extends CustomPainter {
     canvas.drawLine(const Offset(0,-12), const Offset(0,-24), p);
   }
 
-  void _hdgTape(Canvas canvas, double cx, double hdg) {
+  void _hdgTape(Canvas canvas, double cx, double hdg, [double? tgtBrg]) {
     final p = Paint()..color = _hG..strokeWidth = 1.5;
     for (int dh = -18; dh <= 18; dh++) {
       final th = ((hdg+dh)%360+360)%360; final x = cx+dh*9.0;
       if (th%10==0) { canvas.drawLine(Offset(x,48),Offset(x,58),p); _lbl(canvas,'${(th/10).round()%36}',Offset(x,64)); }
       else if (th%5==0) canvas.drawLine(Offset(x,48),Offset(x,54),p);
+    }
+    // Target bearing caret — amber triangle below tape ticks
+    if (tgtBrg != null) {
+      double rel = (tgtBrg - hdg + 360) % 360;
+      if (rel > 180) rel -= 360;
+      if (rel.abs() <= 18) {
+        final tx = cx + rel * 9.0;
+        canvas.drawPath(
+          Path()..moveTo(tx, 47)..lineTo(tx - 5, 37)..lineTo(tx + 5, 37)..close(),
+          Paint()..color = const Color(0xFFFF8800)..style = PaintingStyle.fill,
+        );
+      }
     }
     final hs = hdg.round().toString().padLeft(3,'0');
     canvas.drawRect(Rect.fromLTWH(cx-28,74,56,24),Paint()..color=_hG..style=PaintingStyle.stroke..strokeWidth=1.5);
@@ -573,5 +611,5 @@ class _HwPainter extends CustomPainter {
 
   static String _cdir(double h) => const ['N','NE','E','SE','S','SW','W','NW'][((h+22.5)/45).floor()%8];
 
-  @override bool shouldRepaint(_HwPainter o) => o.pitch!=pitch||o.bank!=bank||o.heading!=heading;
+  @override bool shouldRepaint(_HwPainter o) => o.pitch!=pitch||o.bank!=bank||o.heading!=heading||o.targetBearing!=targetBearing;
 }

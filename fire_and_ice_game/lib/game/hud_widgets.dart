@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'game_state.dart';
 import 'hud_ability_hex.dart';
@@ -55,9 +56,32 @@ Widget buildHud(
             ),
           ),
 
+        // Target indicator (top-right, below mode badges)
+        if (state.currentTarget != null)
+          Positioned(top: 48, right: 115, child: _targetChip(state)),
+
         // Tutorial explainer cards (topmost layer)
         if (showTutorial) buildTutorialOverlay(state),
       ],
     ),
+  );
+}
+
+Widget _targetChip(GameState state) {
+  final t = state.currentTarget!;
+  final dx = t.wx - state.playerPosition.x;
+  final dz = t.wz - state.playerPosition.z;
+  final dist = math.sqrt(dx * dx + dz * dz);
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: const Color(0x991A0800),
+      border: Border.all(color: const Color(0xFFFF8800)),
+      borderRadius: BorderRadius.circular(3),
+    ),
+    child: Text('◎ ${t.label}  ${dist.toStringAsFixed(0)} m',
+      style: const TextStyle(
+        color: Color(0xFFFF8800), fontSize: 12,
+        fontWeight: FontWeight.bold, letterSpacing: 1)),
   );
 }

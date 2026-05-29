@@ -45,6 +45,9 @@ class SceneNode {
   /// Computed world-space transform.  Call [updateWorldMatrix] to refresh.
   Matrix4 worldMatrix = Matrix4.identity();
 
+  /// Pre-allocated local matrix — reused each frame to avoid allocation.
+  final Matrix4 _localMatrix = Matrix4.identity();
+
   /// When false the node (and its children) are excluded from [renderables].
   bool visible = true;
 
@@ -69,6 +72,13 @@ class SceneNode {
     for (final c in _children) yield* c.renderables;
   }
 
+  /// Collect renderable nodes into [out] — avoids sync* iterator allocation.
+  void collectRenderables(List<SceneNode> out) {
+    if (!visible) return;
+    if (mesh != null) out.add(this);
+    for (final c in _children) c.collectRenderables(out);
+  }
+
   /// Named lookup — finds the first descendant with the given [id].
   SceneNode? find(String targetId) {
     if (id == targetId) return this;
@@ -86,14 +96,18 @@ class SceneNode {
   /// Call once per frame AFTER updating [position] and [rotation].
   /// Pass [parentMatrix] = null for the root node.
   void updateWorldMatrix([Matrix4? parentMatrix]) {
-    // Build local matrix: Translate × RotY × RotX × RotZ
-    final local = Matrix4.identity();
-    local.translate(position.x, position.y, position.z);
-    local.rotateY(rotation.y);
-    local.rotateX(rotation.x);
-    local.rotateZ(rotation.z);
+    _localMatrix.setIdentity();
+    _localMatrix.translate(position.x, position.y, position.z);
+    _localMatrix.rotateY(rotation.y);
+    _localMatrix.rotateX(rotation.x);
+    _localMatrix.rotateZ(rotation.z);
 
-    worldMatrix = parentMatrix != null ? parentMatrix.multiplied(local) : local;
+    if (parentMatrix != null) {
+      worldMatrix.setFrom(parentMatrix);
+      worldMatrix.multiply(_localMatrix);
+    } else {
+      worldMatrix.setFrom(_localMatrix);
+    }
 
     for (final child in _children) {
       child.updateWorldMatrix(worldMatrix);

@@ -18,16 +18,12 @@ const _kLeverBody = Color(0xFF505060);
 /// over [GameState.gearProgress]. Tapping calls [onTap].
 Widget buildGearLever(GameState state, {VoidCallback? onTap}) {
   final Color leverColor;
-  final String statusLabel;
   if (state.gearMoving) {
-    leverColor  = _kAmber;
-    statusLabel = 'TRANS';
+    leverColor = _kAmber;
   } else if (state.gearDeployed) {
-    leverColor  = _kGreen;
-    statusLabel = 'DOWN';
+    leverColor = _kGreen;
   } else {
-    leverColor  = _kRed;
-    statusLabel = 'UP';
+    leverColor = _kRed;
   }
 
   // Lever knob Y: 0 = top (UP), 1 = bottom (DOWN)
@@ -68,7 +64,9 @@ Widget buildGearLever(GameState state, {VoidCallback? onTap}) {
           child: Column(children: [
             _light('DN', state.gearDeployed && !state.gearMoving, _kGreen),
             const SizedBox(height: 2),
-            _light(statusLabel, state.gearMoving, _kAmber),
+            _light('TRANS', state.gearMoving, _kAmber),
+            const SizedBox(height: 2),
+            _light('UP', !state.gearDeployed && !state.gearMoving, _kRed),
           ]),
         ),
       ]),

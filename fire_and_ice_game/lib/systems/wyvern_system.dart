@@ -84,8 +84,9 @@ class WyvernSystem {
     });
   }
 
-  // Scratch vector — reused each tick to avoid per-frame allocation.
-  static final Vector3 _toPlayer = Vector3.zero();
+  // Scratch vectors — reused each tick to avoid per-frame allocation.
+  static final Vector3 _toPlayer   = Vector3.zero();
+  static final Vector3 _hitScratch = Vector3.zero();
 
   static void _tickWyvern(Wyvern w, GameState state, double dt) {
     w.stateTimer     += dt;
@@ -182,13 +183,14 @@ class WyvernSystem {
       if (effect.damageTick) continue;
       effect.damageTick = true;
 
-      // Expendable missiles have lifetime ≥ 0.9 s → larger hit sphere
-      final hitRadius = effect.lifetime >= 0.9 ? cfgMissileRadius : cfgHitboxRadius;
+      final hitRadius  = effect.lifetime >= 0.9 ? cfgMissileRadius : cfgHitboxRadius;
+      final hitRadius2 = hitRadius * hitRadius;
 
       for (final w in state.wyverns) {
         if (w.isDying) continue;
-        final dist = (effect.position - w.position).length;
-        if (dist >= hitRadius) continue;
+        _hitScratch.setFrom(effect.position);
+        _hitScratch.sub(w.position);
+        if (_hitScratch.length2 >= hitRadius2) continue;
 
         // Ice effects (dominant blue, low red) deal bonus damage to fire wyvern
         final isIce = effect.color.b > 0.5 && effect.color.r <= 0.5;

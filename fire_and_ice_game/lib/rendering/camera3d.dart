@@ -59,8 +59,14 @@ class Camera3D {
   /// Smooth lerp speed for camera position transitions
   final double _lerpSpeed = 8.0;
 
-  /// Pre-allocated scratch vectors — avoids allocating new Vector3 each frame.
-  final Vector3 _desiredPos = Vector3.zero();
+  /// Pre-allocated scratch objects — avoids per-frame allocation.
+  final Vector3 _desiredPos      = Vector3.zero();
+  final Matrix4 _viewCache       = Matrix4.identity();
+  final Vector3 _upScratch       = Vector3(0, 1, 0);
+  final Vector3 _viewDirScratch  = Vector3.zero();
+  final Vector3 _crossScratch    = Vector3.zero();
+  final Vector3 _effectiveTgtScratch = Vector3.zero();
+  static final Vector3 _worldUpVec = Vector3(0, 1, 0);
 
   Camera3D({
     Vector3? position,
@@ -78,17 +84,20 @@ class Camera3D {
   Matrix4 getViewMatrix() {
     final up = _computeUpVector();
     if (_target != null) {
-      final effectiveTarget = targetPitchOffset != 0.0
-          ? Vector3(_target!.x, _target!.y + targetPitchOffset, _target!.z)
-          : _target!;
-      return makeViewMatrix(transform.position, effectiveTarget, up);
+      Vector3 tgt = _target!;
+      if (targetPitchOffset != 0.0) {
+        _effectiveTgtScratch.setFrom(_target!);
+        _effectiveTgtScratch.y += targetPitchOffset;
+        tgt = _effectiveTgtScratch;
+      }
+      setViewMatrix(_viewCache, transform.position, tgt, up);
+      return _viewCache;
     }
     final forward = transform.forward;
-    return makeViewMatrix(
-      transform.position,
-      transform.position + forward,
-      up,
-    );
+    _effectiveTgtScratch.setFrom(transform.position);
+    _effectiveTgtScratch.add(forward);
+    setViewMatrix(_viewCache, transform.position, _effectiveTgtScratch, up);
+    return _viewCache;
   }
 
   /// Build perspective projection matrix (cached; recomputed only when fov or
@@ -211,23 +220,31 @@ class Camera3D {
   ///
   /// Uses Rodrigues' rotation formula to avoid gimbal lock.
   Vector3 _computeUpVector() {
-    if (rollAngle.abs() < 0.01) return Vector3(0, 1, 0);
+    if (rollAngle.abs() < 0.01) {
+      _upScratch.setValues(0, 1, 0);
+      return _upScratch;
+    }
 
-    Vector3 viewDir;
     if (_target != null) {
-      viewDir = (_target! - transform.position).normalized();
+      _viewDirScratch.setFrom(_target!);
+      _viewDirScratch.sub(transform.position);
+      _viewDirScratch.normalize();
     } else {
-      viewDir = transform.forward;
+      _viewDirScratch.setFrom(transform.forward);
     }
 
     final rollRad = radians(rollAngle);
     final cosA    = math.cos(rollRad);
     final sinA    = math.sin(rollRad);
-    final worldUp = Vector3(0, 1, 0);
-    final dot     = viewDir.dot(worldUp);
-    final cross   = viewDir.cross(worldUp);
-
-    return worldUp * cosA + cross * sinA + viewDir * (dot * (1 - cosA));
+    final dot     = _viewDirScratch.y; // dot with (0,1,0)
+    _viewDirScratch.crossInto(_worldUpVec, _crossScratch);
+    final k = dot * (1.0 - cosA);
+    _upScratch.setValues(
+      _crossScratch.x * sinA + _viewDirScratch.x * k,
+      cosA + _crossScratch.y * sinA + _viewDirScratch.y * k,
+      _crossScratch.z * sinA + _viewDirScratch.z * k,
+    );
+    return _upScratch;
   }
 
   // ── Accessors ─────────────────────────────────────────────────────────────

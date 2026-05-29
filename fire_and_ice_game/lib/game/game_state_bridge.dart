@@ -32,6 +32,10 @@ void writeGameStateBridge(GameState s, int frame) {
       ',"flightAltitude":${s.flightAltitude.toStringAsFixed(3)}'
       ',"flapsLevel":${s.flapsLevel}'
       ',"lvrOn":${s.lvrOn}'
+      ',"verticalSpeed":${s.verticalSpeed.toStringAsFixed(3)}'
+      ',"flightPathAngleDeg":${s.flightPathAngleDeg.toStringAsFixed(2)}'
+      ',"aeroAoA":${s.aeroAoA.toStringAsFixed(2)}'
+      ',"selectedTargetId":${s.selectedTargetId == null ? 'null' : '"${s.selectedTargetId}"'}'
       ',"abilityCooldowns":{$cd}}';
   var el = html.document.getElementById('_gs');
   if (el == null) {

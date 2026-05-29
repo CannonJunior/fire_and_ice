@@ -30,6 +30,9 @@ class Transform3d {
   /// Non-uniform scale
   Vector3 scale;
 
+  /// Pre-allocated model matrix — returned by toMatrix() without heap allocation.
+  final Matrix4 _modelMatrix = Matrix4.identity();
+
   Transform3d({
     Vector3? position,
     Vector3? rotation,
@@ -42,22 +45,17 @@ class Transform3d {
   ///
   /// Rotation order (Y → X → Z) produces standard aircraft-style Euler angles:
   /// yaw around world-up, pitch around local right, roll around local forward.
+  ///
+  /// Returns the internal _modelMatrix — callers must not store the reference
+  /// across frames as it is overwritten each call to toMatrix().
   Matrix4 toMatrix() {
-    final matrix = Matrix4.identity();
-
-    matrix.translateByVector3(position);
-
-    final yawRad   = radians(rotation.y);
-    final pitchRad = radians(rotation.x);
-    final rollRad  = radians(rotation.z);
-
-    matrix.rotateY(yawRad);
-    matrix.rotateX(pitchRad);
-    matrix.rotateZ(rollRad);
-
-    matrix.scaleByVector3(scale);
-
-    return matrix;
+    _modelMatrix.setIdentity();
+    _modelMatrix.translateByVector3(position);
+    _modelMatrix.rotateY(radians(rotation.y));
+    _modelMatrix.rotateX(radians(rotation.x));
+    _modelMatrix.rotateZ(radians(rotation.z));
+    _modelMatrix.scaleByVector3(scale);
+    return _modelMatrix;
   }
 
   /// Forward direction vector computed from yaw and pitch.

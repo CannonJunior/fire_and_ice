@@ -26,8 +26,8 @@ const _kDanger   =  22.0; // red starts
 
 /// Circular angle-of-attack indicator — same 120×120 footprint as FIRE PROX.
 ///
-/// Effective AoA = pitch × (stallSpeed / speed), so low-speed flight reads
-/// higher AoA for the same nose attitude, matching real aerodynamics.
+/// Reads state.aeroAoA which is true AoA: pitchAttitude − flightPathAngle.
+/// In taxi mode, displays zero.
 ///
 /// Zones:  green −15°→+12°  normal
 ///         amber  12°→+22°  caution
@@ -37,9 +37,7 @@ Widget buildAoaIndicator(GameState state) {
   if (state.gameMode == GameMode.taxi) {
     displayAoa = 0.0;
   } else {
-    final ratio = (state.cfgStallSpeed /
-        state.flightSpeed.clamp(0.5, double.infinity)).clamp(0.5, 3.0);
-    displayAoa = (state.flightPitchAngle * ratio).clamp(_kAoaMin, _kAoaMax);
+    displayAoa = state.aeroAoA.clamp(_kAoaMin, _kAoaMax);
   }
 
   final stalling = state.isStalling;

@@ -29,13 +29,20 @@ class Particle {
 
   // Age-driven color: fire = black→red→orange→yellow; smoke = warm-grey→dark-grey.
   Vector4 get color {
+    final out = Vector4.zero();
+    writeColor(out);
+    return out;
+  }
+
+  void writeColor(Vector4 out) {
+    final t_ = t;
     if (isFire) {
-      if (t < 0.25) return Vector4(1.0, 0.15 + t * 1.4, 0.0,       1.0 - t * 0.3);
-      if (t < 0.55) return Vector4(1.0, 0.5  + t * 0.8, 0.05,      0.85 - t * 0.6);
-      return             Vector4(0.9, 0.7,              0.3 + t,   (1.0 - t) * 0.6);
+      if (t_ < 0.25)      out.setValues(1.0, 0.15 + t_ * 1.4, 0.0,  1.0 - t_ * 0.3);
+      else if (t_ < 0.55) out.setValues(1.0, 0.5  + t_ * 0.8, 0.05, 0.85 - t_ * 0.6);
+      else                out.setValues(0.9, 0.7, 0.3 + t_, (1.0 - t_) * 0.6);
     } else {
-      final g = (0.25 + t * 0.15).clamp(0.0, 1.0);
-      return Vector4(g, g, g, (1.0 - t) * 0.55);
+      final g = (0.25 + t_ * 0.15).clamp(0.0, 1.0);
+      out.setValues(g, g, g, (1.0 - t_) * 0.55);
     }
   }
 }
@@ -142,6 +149,16 @@ class ParticleRenderer {
   // Corner offsets for a billboard quad (CCW winding).
   static const List<double> _corners = [-1,-1, 1,-1, 1,1, -1,1];
 
+  // Pre-allocated scratch objects — avoid per-frame heap allocation.
+  final List<Particle> _scratchFire  = [];
+  final List<Particle> _scratchSmoke = [];
+  final Vector4        _colorScratch = Vector4.zero();
+  final Matrix4        _vpScratch    = Matrix4.identity();
+  final Vector3        _camRight     = Vector3.zero();
+  final Vector3        _camUp        = Vector3.zero();
+  final Vector3        _camPos       = Vector3.zero();
+  final Vector3        _sortScratch  = Vector3.zero();
+
   ParticleRenderer(this.gl) {
     _fireShader  = ShaderProgram.fromSource(gl, particleVertShader, fireFragShader);
     _smokeShader = ShaderProgram.fromSource(gl, particleVertShader, smokeFragShader);
@@ -182,35 +199,37 @@ class ParticleRenderer {
     if (particles.isEmpty) return;
 
     final viewMat = camera.getViewMatrix();
-    // Extract camera right (column 0) and up (column 1) from view matrix.
-    final camRight = Vector3(viewMat[0], viewMat[4], viewMat[8]);
-    final camUp    = Vector3(viewMat[1], viewMat[5], viewMat[9]);
+    _camRight.setValues(viewMat[0], viewMat[4], viewMat[8]);
+    _camUp.setValues(viewMat[1], viewMat[5], viewMat[9]);
+    _vpScratch.setFrom(camera.getProjectionMatrix());
+    _vpScratch.multiply(viewMat);
 
-    final viewProj = camera.getProjectionMatrix()..multiply(camera.getViewMatrix());
-
-    // Depth-sort: fire first (additive is order-independent), smoke after (alpha-sorted).
-    final fire  = particles.where((p) => p.isFire).toList();
-    final smoke = particles.where((p) => !p.isFire).toList();
-    // Sort smoke back-to-front for correct alpha blending.
-    final camPos = Vector3(viewMat[12], viewMat[13], viewMat[14]);
-    smoke.sort((a, b) {
-      final da = (a.position - camPos).length2;
-      final db = (b.position - camPos).length2;
+    _scratchFire.clear();
+    _scratchSmoke.clear();
+    for (final p in particles) {
+      if (p.isFire) _scratchFire.add(p); else _scratchSmoke.add(p);
+    }
+    _camPos.setValues(viewMat[12], viewMat[13], viewMat[14]);
+    _scratchSmoke.sort((a, b) {
+      _sortScratch.setFrom(a.position);
+      _sortScratch.sub(_camPos);
+      final da = _sortScratch.length2;
+      _sortScratch.setFrom(b.position);
+      _sortScratch.sub(_camPos);
+      final db = _sortScratch.length2;
       return db.compareTo(da);
     });
 
     gl.depthMask(false);
 
-    // ── Fire pass: additive blending ─────────────────────────────────────────
-    gl.enable(0x0BE2);               // BLEND
-    gl.blendFunc(0x0302, 0x0001);    // SRC_ALPHA, ONE
-    _drawBatch(fire, _fireShader, _fPosLoc, _fCornerLoc, _fColorLoc, _fSizeLoc,
-        viewProj, camRight, camUp, time);
+    gl.enable(0x0BE2);
+    gl.blendFunc(0x0302, 0x0001);
+    _drawBatch(_scratchFire, _fireShader, _fPosLoc, _fCornerLoc, _fColorLoc, _fSizeLoc,
+        _vpScratch, _camRight, _camUp, time);
 
-    // ── Smoke pass: standard alpha blending ──────────────────────────────────
-    gl.blendFunc(0x0302, 0x0303);    // SRC_ALPHA, ONE_MINUS_SRC_ALPHA
-    _drawBatch(smoke, _smokeShader, _sPosLoc, _sCornerLoc, _sColorLoc, _sSizeLoc,
-        viewProj, camRight, camUp, time);
+    gl.blendFunc(0x0302, 0x0303);
+    _drawBatch(_scratchSmoke, _smokeShader, _sPosLoc, _sCornerLoc, _sColorLoc, _sSizeLoc,
+        _vpScratch, _camRight, _camUp, time);
 
     gl.disable(0x0BE2);
     gl.depthMask(true);
@@ -229,8 +248,8 @@ class ParticleRenderer {
     final limit = math.min(batch.length, _maxQuads);
 
     for (int qi = 0; qi < limit; qi++) {
-      final p   = batch[qi];
-      final col = p.color;
+      final p    = batch[qi];
+      p.writeColor(_colorScratch);
       final base = qi * _vertsPerQuad * _floatsPerVertex;
 
       for (int vi = 0; vi < _vertsPerQuad; vi++) {
@@ -240,10 +259,10 @@ class ParticleRenderer {
         _vboData[offset+2] = p.position.z;
         _vboData[offset+3] = _corners[vi * 2];
         _vboData[offset+4] = _corners[vi * 2 + 1];
-        _vboData[offset+5] = col.r;
-        _vboData[offset+6] = col.g;
-        _vboData[offset+7] = col.b;
-        _vboData[offset+8] = col.a;
+        _vboData[offset+5] = _colorScratch.r;
+        _vboData[offset+6] = _colorScratch.g;
+        _vboData[offset+7] = _colorScratch.b;
+        _vboData[offset+8] = _colorScratch.a;
         _vboData[offset+9] = p.size;
       }
       quadCount++;
