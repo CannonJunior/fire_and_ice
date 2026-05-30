@@ -4,6 +4,23 @@ Record of modifications to aircraft configurations, cockpit layouts, and related
 
 ---
 
+## 2026-05-30 — NPC tanker speed fix + SkyTanker unlocked
+
+### Leviathan ART-9 NPC cruise speed
+
+- `lib/rendering/tanker_aircraft.dart` — `_speed` raised from **2.8 → 8.0** world units/sec.
+  - At 2.8 u/s the tanker was flying well below minimum sustainable lift speed (≈ 7.8 u/s for kLift 0.55, mass 1.8).
+  - `_legTime` reduced from 120.0 → 42.0 s so the north-leg orbit footprint (≈ 336 units) remains the same.
+  - The player IceFighter (cfgFlightSpeed 7.0, boost 10.5) can now approach and dock at the faster tanker speed.
+
+### SkyTanker — player-selectable from start
+
+- `lib/game/aircraft_config.dart` — `_skyTanker.unlockRp` changed from **2000 → 0**.
+  - SkyTanker now appears unlocked in the Hangar from the very first session.
+  - Aero config unchanged: maxThrust 8.0, kLift 0.55, mass 1.8 — sustains level flight at cfgFlightSpeed 7.0 with throttle ≈ 22 %, AoA ≈ 5.8°, well clear of the 13° stall limit.
+
+---
+
 ## 2026-05-24 (Mana Arc redesign — circular gauge, 3-tier color, status lights)
 
 ### Mana Arc visual overhaul

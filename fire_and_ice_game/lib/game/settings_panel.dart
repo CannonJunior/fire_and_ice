@@ -206,6 +206,7 @@ class _SettingsPanelState extends State<SettingsPanel> {
     ('flaps',        'Flaps'),
     ('gear',         'Gear'),
     ('probe',        'Refuel Probe'),
+    ('drogue',       'Drogue Basket'),
     ('throttle',     'Throttle'),
     ('tq',           'Throttle Quad'),
     ('alt',          'Altimeter'),
@@ -218,30 +219,46 @@ class _SettingsPanelState extends State<SettingsPanel> {
     ('lvr',          'LVR'),
   ];
 
-  Widget _cockpitElementsBody() => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: _kElements.map((e) {
-      final (key, label) = e;
-      return Row(children: [
-        Expanded(child: _ToggleRow(label, s.elementVisible(key), (v) {
-          s.setElementVisible(key, v);
-          s.save();
-          _changed();
-        })),
-        GestureDetector(
-          onTap: () {
-            s.resetElementOffset(s.selectedAircraft, key);
-            s.save();
-            _changed();
-          },
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 10),
-            child: Text('↺', style: TextStyle(color: Color(0xFF3AB7FF), fontSize: 18, height: 1.0)),
-          ),
+  Widget _cockpitElementsBody() {
+    final acName = s.aircraftConfigs
+        .firstWhere((a) => a.id == s.selectedAircraft,
+            orElse: () => s.aircraftConfigs.first)
+        .displayName;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+          child: Row(children: [
+            const Text('FOR AIRCRAFT: ', style: TextStyle(color: _kDim, fontSize: 9, letterSpacing: 1)),
+            Text(acName, style: const TextStyle(color: _kAccent, fontSize: 9,
+                fontWeight: FontWeight.bold, letterSpacing: 1)),
+          ]),
         ),
-      ]);
-    }).toList(),
-  );
+        ..._kElements.map((e) {
+          final (key, label) = e;
+          return Row(children: [
+            Expanded(child: _ToggleRow(label, s.elementVisible(key), (v) {
+              s.setElementVisible(key, v);
+              s.save();
+              _changed();
+            })),
+            GestureDetector(
+              onTap: () {
+                s.resetElementOffset(s.selectedAircraft, key);
+                s.save();
+                _changed();
+              },
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: Text('↺', style: TextStyle(color: Color(0xFF3AB7FF), fontSize: 18, height: 1.0)),
+              ),
+            ),
+          ]);
+        }),
+      ],
+    );
+  }
 
   Widget _hudBody() => Column(mainAxisSize: MainAxisSize.min, children: [
     _ToggleRow('Annunciator Panel', s.showAnnunciator, (v) { s.showAnnunciator = v; _changed(); },

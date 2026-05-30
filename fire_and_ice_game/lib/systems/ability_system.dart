@@ -77,29 +77,25 @@ class AbilitySystem {
 
   /// Attempt to activate the ability in action bar slot [slotIndex] (0-based).
   ///
-  /// Fails silently (no effect) if:
-  ///  - slot is empty
-  ///  - ability is on cooldown
-  ///  - player lacks mana
-  ///
-  /// On success: spends mana, starts cooldown, spawns a visual effect.
-  static void activateAbility(GameState state, int slotIndex) {
-    if (slotIndex < 0 || slotIndex >= state.actionBarSlots.length) return;
+  /// Returns the activated [AbilityData] on success, or null on failure
+  /// (cooldown, insufficient mana, empty slot, no charges).
+  static AbilityData? activateAbility(GameState state, int slotIndex) {
+    if (slotIndex < 0 || slotIndex >= state.actionBarSlots.length) return null;
 
     final slotName = state.actionBarSlots[slotIndex];
-    if (slotName.isEmpty) return;
+    if (slotName.isEmpty) return null;
 
     final ability = state.abilityByName(slotName);
-    if (ability == null) return;
+    if (ability == null) return null;
 
     if (!state.isReady(ability)) {
       debugPrint('[AbilitySystem] ${ability.name} on cooldown');
-      return;
+      return null;
     }
 
     if (!state.hasManaFor(ability)) {
       debugPrint('[AbilitySystem] Not enough mana for ${ability.name}');
-      return;
+      return null;
     }
 
     // For expendable stores: require at least one charge remaining
@@ -107,7 +103,7 @@ class AbilitySystem {
       final remaining = state.abilityCharges[ability.name] ?? 0;
       if (remaining <= 0) {
         debugPrint('[AbilitySystem] ${ability.name} — no charges remaining');
-        return;
+        return null;
       }
       state.abilityCharges[ability.name] = remaining - 1;
     }
@@ -123,6 +119,7 @@ class AbilitySystem {
     }
 
     debugPrint('[AbilitySystem] Activated ${ability.name}');
+    return ability;
   }
 
   // ── Visual effects ────────────────────────────────────────────────────────

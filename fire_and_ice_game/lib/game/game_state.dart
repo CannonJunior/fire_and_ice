@@ -44,10 +44,16 @@ class GameState {
   int auxDisplayPage = 0; // 0=CHAT 1=VID 2=MAP 3=MIRROR 4=MANUV
   int auxMirrorIndex = 0; // 0..7 → ELMT/LOAD/STAT/MODE/NAV/TERR/FIRE/MARK
   int auxVideoIndex  = 0; // 0=LISA HAYES  1=LIN MINMEI
-  bool mapNorthUp    = true;
+  bool mapNorthUp        = true;
+  bool navSidebarOpen    = false;
+  bool navFireHeatmap    = true;   // burning-tree heat glow on NAV map
+  bool navTreeHeatmap    = true;   // vegetation dot layer on NAV map
   void scrollAuxMirror(int d) => auxMirrorIndex = (auxMirrorIndex + d + 8) % 8;
   void scrollAuxVideo(int d)  => auxVideoIndex  = (auxVideoIndex  + d + 2) % 2;
   void toggleMapOrientation() { mapNorthUp = !mapNorthUp; }
+  void toggleNavSidebar()     { navSidebarOpen   = !navSidebarOpen; }
+  void toggleNavFireHeatmap() { navFireHeatmap   = !navFireHeatmap; }
+  void toggleNavTreeHeatmap() { navTreeHeatmap   = !navTreeHeatmap; }
 
   // ── Maneuver computer ─────────────────────────────────────────────────────
 
@@ -208,6 +214,20 @@ class GameState {
     probeMoving    = true;
   }
 
+  // ── Drogue basket (SkyTanker) ─────────────────────────────────────────────
+
+  bool   drogueDeployed  = false;
+  bool   drogueMoving    = false;
+  bool   drogueTargetOut = false;
+  double drogueProgress  = 0.0;  // 0 = retracted, 1 = fully extended
+  bool   drogueConnected = false;
+
+  void triggerDrogue() {
+    if (gameMode == GameMode.taxi) return;
+    drogueTargetOut = !drogueTargetOut;
+    drogueMoving    = true;
+  }
+
   // ── Flaps ─────────────────────────────────────────────────────────────────
 
   /// Flap detent position: 0=UP  1=T/O  2=APPR  3=FULL.
@@ -288,6 +308,14 @@ class GameState {
   List<bool> fireExtinguished      = List.filled(5, false);
   int  get activeFires => fireExtinguished.where((e) => !e).length;
   bool get allFiresOut => activeFires == 0;
+
+  // ── Smoke / visibility ────────────────────────────────────────────────────
+
+  /// Accumulated smoke density [0.0 clear → 1.0 IMC]. Updated each frame.
+  double smokeOpacity = 0.0;
+
+  /// IMC: smoke so thick the pilot must fly on instruments alone.
+  bool get isIMC => smokeOpacity >= 0.85;
 
   bool get isFireBelow {
     final px = playerPosition.x, pz = playerPosition.z;

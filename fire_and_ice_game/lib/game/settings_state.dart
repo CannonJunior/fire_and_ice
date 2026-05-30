@@ -58,13 +58,30 @@ class SettingsState {
   bool cockpitDraggable = false;
   bool showCockpitInfo  = false;
 
-  // ── Per-element cockpit visibility ─────────────────────────────────────────
-  // Keys match the drag() ids in cockpit_hud.dart. Defaults to true (visible).
-  Map<String, bool> cockpitElementVisible = {};
+  // ── Per-aircraft cockpit element visibility ────────────────────────────────
+  // Keys match the drag() ids in cockpit_hud.dart.
+  // Each aircraft has its own visibility map; unset keys fall back to
+  // _defaultHiddenElements so aircraft-specific levers appear correctly
+  // without the player having to configure anything.
+  static const Map<String, Set<String>> _defaultHiddenElements = {
+    'icefighter':  {'drogue'},
+    'firefighter': {'probe', 'drogue'},
+    'skytanker':   {'probe'},
+    'seabird':     {'probe', 'drogue'},
+    'stormrider':  {'probe', 'drogue'},
+  };
 
-  bool elementVisible(String key) => cockpitElementVisible[key] ?? true;
+  Map<String, Map<String, bool>> _perAircraftVis = {};
 
-  void setElementVisible(String key, bool v) => cockpitElementVisible[key] = v;
+  bool elementVisible(String key) {
+    final overrides = _perAircraftVis[selectedAircraft];
+    if (overrides != null && overrides.containsKey(key)) return overrides[key]!;
+    final hidden = _defaultHiddenElements[selectedAircraft] ?? {};
+    return !hidden.contains(key);
+  }
+
+  void setElementVisible(String key, bool v) =>
+      _perAircraftVis.putIfAbsent(selectedAircraft, () => {})[key] = v;
 
   // ── Per-aircraft cockpit element positions ──────────────────────────────────
   // Layout: aircraftId → elementId → [dx, dy]
@@ -137,10 +154,13 @@ class SettingsState {
             }
         };
       }
-      final visJson = sp.getString('${_p}elementVisible');
+      final visJson = sp.getString('${_p}perAircraftVis');
       if (visJson != null) {
         final raw = jsonDecode(visJson) as Map<String, dynamic>;
-        cockpitElementVisible = raw.map((k, v) => MapEntry(k, v as bool));
+        _perAircraftVis = {
+          for (final e in raw.entries)
+            e.key: (e.value as Map<String, dynamic>).map((k, v) => MapEntry(k, v as bool)),
+        };
       }
       debugPrint('[Settings] Loaded from SharedPreferences');
     } catch (e) {
@@ -168,7 +188,7 @@ class SettingsState {
       await sp.setBool('${_p}showCockpitInfo',  showCockpitInfo);
       await sp.setString('${_p}aircraft',        selectedAircraft);
       await sp.setString('${_p}cockpitLayouts',  jsonEncode(cockpitLayouts));
-      await sp.setString('${_p}elementVisible',  jsonEncode(cockpitElementVisible));
+      await sp.setString('${_p}perAircraftVis',  jsonEncode(_perAircraftVis));
     } catch (e) {
       debugPrint('[Settings] Save failed: $e');
     }

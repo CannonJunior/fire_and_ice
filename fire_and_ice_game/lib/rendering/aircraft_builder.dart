@@ -244,6 +244,15 @@ class AircraftBuilder {
 
     _addSharedSurfaces(root, parts, hl, bw, bh, len,
         ctrl: Vector3(0.85, 0.65, 0.25));
+
+    // Drogue basket — trails behind the tail when deployed.
+    // Animated: position.z slides backward (+Z) as drogueProgress increases.
+    final drogue = SceneNode(id: 'drogue',
+        position: Vector3(0, -bh * 0.15, hl),
+        mesh: Mesh.cube(size: 0.55, color: Vector3(1.0, 0.55, 0.10)));
+    root.addChild(drogue);
+    parts['drogue'] = drogue;
+
     return (root: root, parts: parts);
   }
 

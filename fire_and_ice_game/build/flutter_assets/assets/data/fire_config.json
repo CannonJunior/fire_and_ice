@@ -16,6 +16,13 @@
     "windRadius": 40.0,
     "smokeTransitionAge": 0.6,
     "smokeFadeAltitude": 35.0,
+    "leanFactor": 0.12,
+    "updraftStrength": 3.0,
+    "updraftSigma": 3.0,
+    "spreadRate": 0.5,
+    "turbulenceMode": "hash",
+    "curlNoiseScale": 0.4,
+    "vortexWindThreshold": 0.35,
     "heatDistortionEnabled": true,
     "dynamicLightingEnabled": true
   },
@@ -36,6 +43,15 @@
     "edgeDamagePerSec": 6.0,
     "directConeRadius": 5.0,
     "edgeConeRadius": 15.0
+  },
+  "smoke": {
+    "radiusMultiplier": 3.5,
+    "peakAltitude": 35.0,
+    "topAltitude": 70.0,
+    "riseRate": 0.8,
+    "clearRate": 1.5,
+    "treeContribution": 0.05,
+    "imcThreshold": 0.85
   },
   "qualityPresets": {
     "low":    { "maxParticles": 400,   "heatDistortion": false, "dynamicLighting": false },

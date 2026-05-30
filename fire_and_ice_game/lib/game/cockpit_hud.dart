@@ -6,6 +6,7 @@ import 'attitude_gyro.dart';
 import 'cockpit_drag.dart';
 import 'game_state.dart';
 import 'settings_state.dart';
+import 'drogue_lever.dart';
 import 'gear_lever.dart';
 import 'probe_lever.dart';
 import 'hud_gauges.dart';
@@ -28,6 +29,9 @@ const _kOsbActBrd = Color(0xFFAAAAAA);
 const _kOsbActTxt = Color(0xFFCCCCFF);
 const _kWarn     = Color(0xFFFF6600);
 
+const _kImcAmber  = Color(0xFFFF8800);
+const _kSmkYellow = Color(0xFFFFCC00);
+
 /// Build the active HUD, switching between cockpit and third-person modes.
 Widget buildCockpitHud(
   GameState state, {
@@ -38,6 +42,7 @@ Widget buildCockpitHud(
   VoidCallback?             onGearToggle,
   VoidCallback?             onFlapsToggle,
   VoidCallback?             onProbeToggle,
+  VoidCallback?             onDrogueToggle,
   VoidCallback?             onAutopilot,
   VoidCallback?             onWaypointLock,
   VoidCallback?             onClear,
@@ -61,6 +66,10 @@ Widget buildCockpitHud(
   void Function(int)? onManeuverScroll, void Function()? onManeuverExecute, void Function()? onManeuverStop,
   VoidCallback? onOrientToggle,
   VoidCallback? onLvrToggle,
+  VoidCallback? onToggleNavSidebar,
+  VoidCallback? onToggleFireHeatmap,
+  VoidCallback? onToggleTreeHeatmap,
+  List<(double, double, int)> treeSnapshot = const [],
 }) {
   if (state.viewMode == ViewMode.thirdPerson) {
     return Stack(children: [
@@ -72,6 +81,7 @@ Widget buildCockpitHud(
         _modeBadge(state.gameMode),
         const SizedBox(width: 6),
         _viewBadge('🎮 3RD PERSON'),
+        if (state.smokeOpacity > 0.40) ...[const SizedBox(width: 6), _smokeLevelBadge(state.smokeOpacity)],
       ])),
       IgnorePointer(child: Stack(children: [
         Positioned(bottom: 12, right: 12, child: HullIntegrityArc(state: state)),
@@ -92,6 +102,7 @@ Widget buildCockpitHud(
           onGearToggle: onGearToggle,
           onFlapsToggle: onFlapsToggle,
           onProbeToggle: onProbeToggle,
+          onDrogueToggle: onDrogueToggle,
           onAutopilot: onAutopilot,
           onWaypointLock: onWaypointLock,
           onClear: onClear,
@@ -111,7 +122,11 @@ Widget buildCockpitHud(
           onAuxPage: onAuxPage, onAuxMirrorScroll: onAuxMirrorScroll, onAuxVideoScroll: onAuxVideoScroll,
           onManeuverScroll: onManeuverScroll, onManeuverExecute: onManeuverExecute, onManeuverStop: onManeuverStop,
           onOrientToggle: onOrientToggle,
-          onLvrToggle: onLvrToggle),
+          onLvrToggle: onLvrToggle,
+          onToggleNavSidebar: onToggleNavSidebar,
+          onToggleFireHeatmap: onToggleFireHeatmap,
+          onToggleTreeHeatmap: onToggleTreeHeatmap,
+          treeSnapshot: treeSnapshot),
     ),
     IgnorePointer(child: Stack(children: [
       WarningTextZone(state: state),
@@ -123,6 +138,7 @@ Widget buildCockpitHud(
       _modeBadge(state.gameMode),
       const SizedBox(width: 6),
       _viewBadge('👁 COCKPIT'),
+      if (state.smokeOpacity > 0.40) ...[const SizedBox(width: 6), _smokeLevelBadge(state.smokeOpacity)],
     ])),
     Positioned(top: 0, left: 0, right: 0, child: _portBanner()),
   ]);
@@ -177,9 +193,55 @@ Widget _portBanner() {
   );
 }
 
+// ── Smoke / IMC badge helper ──────────────────────────────────────────────────
+
+Widget _smokeLevelBadge(double smoke) {
+  final imc    = smoke >= 0.85;
+  final label  = imc ? 'IMC' : (smoke > 0.65 ? 'HEAVY SMOKE' : 'SMOKE');
+  final color  = imc ? _kImcAmber : _kSmkYellow;
+  final width  = imc ? 1.5 : 1.0;
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color:        color.withValues(alpha: imc ? 0.20 : 0.12),
+      borderRadius: BorderRadius.circular(4),
+      border:       Border.all(color: color.withValues(alpha: imc ? 1.0 : 0.70), width: width),
+    ),
+    child: Text(label,
+        style: TextStyle(color: color, fontSize: imc ? 18 : 14,
+            fontWeight: FontWeight.bold, letterSpacing: imc ? 2 : 1)),
+  );
+}
+
+// ── Smoke advisory on windshield ─────────────────────────────────────────────
+
+Widget _smokeAdvisory(GameState state) {
+  final imc   = state.isIMC;
+  final color = imc ? _kImcAmber : _kSmkYellow;
+  final label = imc ? 'IMC — FLY INSTRUMENTS'
+      : state.smokeOpacity > 0.65 ? 'HEAVY SMOKE — VISIBILITY REDUCED'
+      : 'SMOKE — REDUCED VISIBILITY';
+  return Positioned(
+    top: 72, left: 0, right: 0,
+    child: Center(child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.85), width: 1.5),
+      ),
+      child: Text(label, style: TextStyle(color: color, fontSize: 15,
+          fontWeight: FontWeight.bold, letterSpacing: 2)),
+    )),
+  );
+}
+
 // Windshield HUD — delegates to hud_cockpit.dart
 
-Widget _windshieldHud(GameState state) => buildCockpitWindshieldHud(state);
+Widget _windshieldHud(GameState state) => Stack(children: [
+  buildCockpitWindshieldHud(state),
+  if (state.smokeOpacity > 0.40) _smokeAdvisory(state),
+]);
 
 // Cockpit Panel
 
@@ -191,6 +253,7 @@ Widget _cockpitPanel(GameState state, {
   VoidCallback?       onGearToggle,
   VoidCallback?       onFlapsToggle,
   VoidCallback?       onProbeToggle,
+  VoidCallback?       onDrogueToggle,
   VoidCallback?       onAutopilot,
   VoidCallback?       onWaypointLock,
   VoidCallback?       onClear,
@@ -211,6 +274,10 @@ Widget _cockpitPanel(GameState state, {
   void Function(int)? onManeuverScroll, void Function()? onManeuverExecute, void Function()? onManeuverStop,
   VoidCallback? onOrientToggle,
   VoidCallback? onLvrToggle,
+  VoidCallback? onToggleNavSidebar,
+  VoidCallback? onToggleFireHeatmap,
+  VoidCallback? onToggleTreeHeatmap,
+  List<(double, double, int)> treeSnapshot = const [],
 }) {
   final lp       = state.leftMfdPage;
   final rp       = state.rightMfdPage;
@@ -294,11 +361,14 @@ Widget _cockpitPanel(GameState state, {
                 const SizedBox(width: 4),
                 drag('gear', 'Gear', buildGearLever(state, onTap: onGearToggle)),
               ])),
-            if (state.aircraftId == 'icefighter')
-              keep(vis('probe'), Row(mainAxisSize: MainAxisSize.min, children: [
-                const SizedBox(width: 4),
-                drag('probe', 'Refuel Probe', buildProbeLever(state, onTap: onProbeToggle)),
-              ])),
+            keep(vis('probe'), Row(mainAxisSize: MainAxisSize.min, children: [
+              const SizedBox(width: 4),
+              drag('probe', 'Refuel Probe', buildProbeLever(state, onTap: onProbeToggle)),
+            ])),
+            keep(vis('drogue'), Row(mainAxisSize: MainAxisSize.min, children: [
+              const SizedBox(width: 4),
+              drag('drogue', 'Drogue Basket', buildDrogueLever(state, onTap: onDrogueToggle)),
+            ])),
             keep(vis('throttle'), Row(mainAxisSize: MainAxisSize.min, children: [
               const SizedBox(width: 4),
               drag('throttle', 'Throttle', buildThrottleGauge(state, onModeToggle: onThrottleModeToggle)),
@@ -345,7 +415,10 @@ Widget _cockpitPanel(GameState state, {
           const SizedBox(height: 4),
           buildRightMFD(state, page: rp,
               onMapTap: onNavMapTap, onDeleteWaypoint: onDeleteWaypoint,
-              onOrientToggle: onOrientToggle),
+              onOrientToggle: onOrientToggle, treeSnapshot: treeSnapshot,
+              onToggleSidebar: onToggleNavSidebar,
+              onToggleFireHeatmap: onToggleFireHeatmap,
+              onToggleTreeHeatmap: onToggleTreeHeatmap),
           const SizedBox(height: 4),
           Center(child: _osbRow([
             _Osb('ZOOM', onTap: onMapZoom),

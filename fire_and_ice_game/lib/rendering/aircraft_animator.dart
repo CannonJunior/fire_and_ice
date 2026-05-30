@@ -93,6 +93,13 @@ class AircraftAnimator {
       n.position.z = -(2.0 + state.probeProgress * 1.5);
     });
 
+    // ── Drogue basket — slides backward from tail as drogueProgress increases ─
+    // SkyTanker hl = 2.75; basket starts at tail (+Z) and trails further back.
+    _set(parts, 'drogue', (n) {
+      n.visible    = state.drogueProgress > 0.04;
+      n.position.z = 2.75 + state.drogueProgress * 3.0;
+    });
+
     // ── Cascade world matrices ───────────────────────────────────────────────
     root.updateWorldMatrix();
   }

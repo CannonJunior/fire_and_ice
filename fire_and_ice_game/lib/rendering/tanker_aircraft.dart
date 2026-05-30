@@ -17,8 +17,8 @@ class TankerAircraft {
   static const double yankeeZ  =   0.0;
   static const double orbitY   = 100.0;
 
-  static const double _legTime  = 120.0; // seconds per north leg (timer-based)
-  static const double _speed    =   2.8; // world units/sec
+  static const double _legTime  =  42.0; // seconds per north leg — keeps same orbit length at new cruise speed
+  static const double _speed    =   8.0; // world units/sec — minimum sustainable lift at kLift 0.55 / mass 1.8
   static const double _turnRate =  15.0; // deg/s
   static const double _maxBank  =  28.0;
   static const double _captureR =  15.0; // arrival capture radius

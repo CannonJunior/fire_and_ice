@@ -100,10 +100,10 @@ class InputSystem {
         return _pressedKeys.contains('0');
 
       case GameAction.toggleView:
-        return _pressedKeys.contains('`');
+        return _pressedKeys.contains('Tab');
 
       case GameAction.cycleTarget:
-        return _pressedKeys.contains('Tab');
+        return _pressedKeys.contains('`');
 
       case GameAction.throttleUp:
         return _pressedKeys.contains(']');
@@ -117,6 +117,9 @@ class InputSystem {
 
       case GameAction.toggleProbe:
         return _pressedKeys.contains('p') || _pressedKeys.contains('P');
+
+      case GameAction.toggleDrogue:
+        return _pressedKeys.contains('o') || _pressedKeys.contains('O');
     }
   }
 

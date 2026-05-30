@@ -204,6 +204,10 @@ Widget buildRightMFD(
   Function(double, double)? onMapTap,
   Function(int)? onDeleteWaypoint,
   VoidCallback? onOrientToggle,
+  VoidCallback? onToggleSidebar,
+  VoidCallback? onToggleFireHeatmap,
+  VoidCallback? onToggleTreeHeatmap,
+  List<(double, double, int)> treeSnapshot = const [],
 }) {
   // Compute world offset to locked waypoint (for NAV map overlay)
   (double, double)? wpData;
@@ -237,37 +241,54 @@ Widget buildRightMFD(
           builder: (context, constraints) {
             final mapW = constraints.maxWidth;
             final mapH = constraints.maxHeight;
-            return GestureDetector(
-              onTapDown: onMapTap == null ? null : (details) {
-                final lx = details.localPosition.dx, ly = details.localPosition.dy;
-                if (lx < 0 || lx > mapW || ly < 0 || ly > mapH) return;
-                final scale = (state.mapZoom == 1 ? 18.0 : state.mapZoom == 2 ? 42.0 : 28.0) / 30.0;
-                final sdx = lx - mapW / 2, sdy = ly - mapH / 2;
-                if (state.mapNorthUp) {
-                  onMapTap(state.playerPosition.x + sdx / scale, state.playerPosition.z + sdy / scale);
-                } else {
-                  final h = state.playerRotation.y * math.pi / 180;
-                  onMapTap(state.playerPosition.x + (sdx * math.cos(h) + sdy * math.sin(h)) / scale,
-                           state.playerPosition.z + (-sdx * math.sin(h) + sdy * math.cos(h)) / scale);
-                }
-              },
-              child: CustomPaint(
-                painter: _TerrainMap(
-                  px: state.playerPosition.x,
-                  pz: state.playerPosition.z,
-                  heading: state.playerRotation.y,
-                  zoom: state.mapZoom,
-                  wpData: wpData,
-                  flightPlan: state.flightPlan,
-                  flightPlanIndex: state.flightPlanIndex,
-                  northUp: state.mapNorthUp,
-                  wyvernPositions: wyvernPositions,
-                  fireMarkers: fireMarkers,
-                  selectedTargetId: state.selectedTargetId,
+            return Stack(children: [
+              GestureDetector(
+                onTapDown: onMapTap == null ? null : (details) {
+                  final lx = details.localPosition.dx, ly = details.localPosition.dy;
+                  if (lx < 0 || lx > mapW || ly < 0 || ly > mapH) return;
+                  final scale = (state.mapZoom == 1 ? 18.0 : state.mapZoom == 2 ? 42.0 : 28.0) / 30.0;
+                  final sdx = lx - mapW / 2, sdy = ly - mapH / 2;
+                  if (state.mapNorthUp) {
+                    onMapTap(state.playerPosition.x + sdx / scale, state.playerPosition.z + sdy / scale);
+                  } else {
+                    final h = state.playerRotation.y * math.pi / 180;
+                    onMapTap(state.playerPosition.x + (sdx * math.cos(h) + sdy * math.sin(h)) / scale,
+                             state.playerPosition.z + (-sdx * math.sin(h) + sdy * math.cos(h)) / scale);
+                  }
+                },
+                child: CustomPaint(
+                  size: Size(mapW, mapH),
+                  painter: _TerrainMap(
+                    px: state.playerPosition.x,
+                    pz: state.playerPosition.z,
+                    heading: state.playerRotation.y,
+                    zoom: state.mapZoom,
+                    wpData: wpData,
+                    flightPlan: state.flightPlan,
+                    flightPlanIndex: state.flightPlanIndex,
+                    northUp: state.mapNorthUp,
+                    wyvernPositions: wyvernPositions,
+                    fireMarkers: fireMarkers,
+                    selectedTargetId: state.selectedTargetId,
+                    treeSnapshot: treeSnapshot,
+                    showFireHeatmap: state.navFireHeatmap,
+                    showTreeHeatmap: state.navTreeHeatmap,
+                  ),
+                  child: Container(),
                 ),
-                child: Container(),
               ),
-            );
+              Positioned(
+                right: 0, top: 0, bottom: 0,
+                child: _NavSidebar(
+                  open: state.navSidebarOpen,
+                  fireOn: state.navFireHeatmap,
+                  treeOn: state.navTreeHeatmap,
+                  onToggle: onToggleSidebar ?? () {},
+                  onToggleFire: onToggleFireHeatmap ?? () {},
+                  onToggleTree: onToggleTreeHeatmap ?? () {},
+                ),
+              ),
+            ]);
           },
         )),
         _navFooter(state),
@@ -296,6 +317,105 @@ Widget _navFooter(GameState state) {
   );
 }
 
+// ── NAV overlay sidebar ───────────────────────────────────────────────────────
+
+class _NavSidebar extends StatelessWidget {
+  final bool open;
+  final bool fireOn;
+  final bool treeOn;
+  final VoidCallback onToggle;
+  final VoidCallback onToggleFire;
+  final VoidCallback onToggleTree;
+
+  const _NavSidebar({
+    required this.open,
+    required this.fireOn,
+    required this.treeOn,
+    required this.onToggle,
+    required this.onToggleFire,
+    required this.onToggleTree,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!open) {
+      // Collapsed: narrow vertical tab on the right edge
+      return GestureDetector(
+        onTap: onToggle,
+        child: Container(
+          width: 16,
+          decoration: BoxDecoration(
+            color: _kRDim.withValues(alpha: 0.85),
+            border: Border(left: BorderSide(color: _kRDim, width: 1)),
+          ),
+          child: Center(
+            child: RotatedBox(
+              quarterTurns: 3,
+              child: Text('HM ◀',
+                  style: TextStyle(color: _kRFg, fontSize: 9,
+                      fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: 64,
+      decoration: BoxDecoration(
+        color: _kRBg.withValues(alpha: 0.94),
+        border: Border(left: BorderSide(color: _kRDim, width: 1)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // Header row with collapse button
+        GestureDetector(
+          onTap: onToggle,
+          child: Container(
+            height: 22,
+            color: _kRDim.withValues(alpha: 0.55),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(children: [
+              Expanded(child: Text('OVLY',
+                  style: TextStyle(color: _kRFg, fontSize: 9,
+                      fontWeight: FontWeight.bold, letterSpacing: 0.8))),
+              Text('▶', style: TextStyle(color: _kRFg, fontSize: 9)),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _toggle('FIRE', fireOn, onToggleFire),
+        const SizedBox(height: 6),
+        _toggle('TREE', treeOn, onToggleTree),
+      ]),
+    );
+  }
+
+  Widget _toggle(String label, bool active, VoidCallback onTap) {
+    final fg = active ? _kRFg : _kRDim;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        decoration: BoxDecoration(
+          color: active ? _kRFg.withValues(alpha: 0.12) : Colors.transparent,
+          border: Border.all(color: fg, width: 1),
+        ),
+        child: Column(children: [
+          Text(label,
+              style: TextStyle(color: fg, fontSize: 11,
+                  fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+          const SizedBox(height: 2),
+          Text(active ? 'ON' : 'OFF',
+              style: TextStyle(color: fg, fontSize: 9)),
+        ]),
+      ),
+    );
+  }
+}
+
+// ── Terrain map painter ───────────────────────────────────────────────────────
+
 class _TerrainMap extends CustomPainter {
   final double px, pz, heading;
   final int zoom;
@@ -306,6 +426,9 @@ class _TerrainMap extends CustomPainter {
   final List<(String, double, double)> wyvernPositions;
   final List<(String, double, double)> fireMarkers;  // (id, wx, wz) active fires
   final String? selectedTargetId;
+  final List<(double, double, int)> treeSnapshot;    // (wx, wz, stateIndex)
+  final bool showFireHeatmap;
+  final bool showTreeHeatmap;
 
   const _TerrainMap({
     required this.px, required this.pz, required this.heading,
@@ -316,6 +439,9 @@ class _TerrainMap extends CustomPainter {
     this.wyvernPositions = const [],
     this.fireMarkers = const [],
     this.selectedTargetId,
+    this.treeSnapshot = const [],
+    this.showFireHeatmap = true,
+    this.showTreeHeatmap = true,
   });
 
   Offset _toScreen(double wx, double wz, double cx, double cy,
@@ -344,7 +470,9 @@ class _TerrainMap extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gp);
     }
 
+    if (showFireHeatmap) _drawFireHeat(canvas, cx, cy, scale, headRad);
     _drawContours(canvas, size, cx, cy, scale, headRad);
+    if (showTreeHeatmap) _drawTreeDots(canvas, cx, cy, scale, headRad);
 
     final rp = Paint()
       ..color = const Color(0xFF005577)
@@ -454,6 +582,42 @@ class _TerrainMap extends CustomPainter {
     canvas.restore();
   }
 
+  // Fire heat layer: wide semi-transparent glow circles drawn under contours.
+  // Overlapping circles accumulate into a heat-density map for burning areas.
+  void _drawFireHeat(Canvas canvas, double cx, double cy, double scale, double headRad) {
+    if (treeSnapshot.isEmpty) return;
+    final heatP = Paint()..color = const Color(0x1AFF3300)..style = PaintingStyle.fill;
+    final glowP = Paint()..color = const Color(0x33FF5500)..style = PaintingStyle.fill;
+    for (final (tx, tz, state) in treeSnapshot) {
+      if (state != 1) continue;
+      final s = _toScreen(tx, tz, cx, cy, scale, headRad);
+      canvas.drawCircle(s, 16.0, heatP); // wide density accumulator
+      canvas.drawCircle(s,  6.0, glowP); // tighter core glow
+    }
+  }
+
+  // Tree dot layer: individual position markers drawn above contours.
+  // Alive/charred trees are sampled (every 3rd) to keep draw count low; all
+  // burning trees are always drawn since there are typically very few.
+  void _drawTreeDots(Canvas canvas, double cx, double cy, double scale, double headRad) {
+    if (treeSnapshot.isEmpty) return;
+    final aliveP   = Paint()..color = const Color(0x6622AA44)..style = PaintingStyle.fill;
+    final burningP = Paint()..color = const Color(0xFFFF7722)..style = PaintingStyle.fill;
+    final charredP = Paint()..color = const Color(0x55443322)..style = PaintingStyle.fill;
+    int i = 0;
+    for (final (tx, tz, state) in treeSnapshot) {
+      i++;
+      if (state == 0 && i % 3 != 0) continue; // thin alive/charred to ~1/3 density
+      if (state == 2 && i % 3 != 0) continue;
+      final s = _toScreen(tx, tz, cx, cy, scale, headRad);
+      switch (state) {
+        case 0: canvas.drawCircle(s, 1.5, aliveP);
+        case 1: canvas.drawCircle(s, 2.0, burningP);
+        case 2: canvas.drawCircle(s, 1.5, charredP);
+      }
+    }
+  }
+
   // Marching-squares contour lines at 2/4/6/8/10 m elevation.
   void _drawContours(Canvas c, Size sz, double cx, double cy, double sc, double hr) {
     const step = 8.0;
@@ -483,12 +647,18 @@ class _TerrainMap extends CustomPainter {
 
   @override
   bool shouldRepaint(_TerrainMap o) =>
-      o.px != px || o.pz != pz || o.heading != heading || o.zoom != zoom ||
+      // Only repaint for meaningful position change (> 1.0 world units) to
+      // reduce 2D canvas work — the tree overlay makes every-frame repaint expensive.
+      (o.px - px).abs() > 1.0 || (o.pz - pz).abs() > 1.0 ||
+      o.heading != heading || o.zoom != zoom ||
       o.wpData != wpData || o.flightPlan.length != flightPlan.length ||
       o.flightPlanIndex != flightPlanIndex || o.northUp != northUp ||
       o.wyvernPositions.length != wyvernPositions.length ||
       o.fireMarkers.length != fireMarkers.length ||
-      o.selectedTargetId != selectedTargetId;
+      o.selectedTargetId != selectedTargetId ||
+      o.treeSnapshot.length != treeSnapshot.length ||
+      o.showFireHeatmap != showFireHeatmap ||
+      o.showTreeHeatmap != showTreeHeatmap;
 }
 
 // ── Center MFD – Flight Data ──────────────────────────────────────────────────

@@ -5,6 +5,8 @@ import 'package:vector_math/vector_math.dart';
 import 'camera3d.dart';
 import 'heat_distortion.dart';
 import 'mesh.dart';
+import 'gpu_particle_system.dart';
+import 'particle_renderer.dart';
 import 'particle_system.dart';
 import 'scene_node.dart';
 import 'shader_program.dart';
@@ -49,6 +51,10 @@ class WebGLRenderer {
 
   /// GPU particle system (WebGL2 only; null if unavailable).
   GpuParticleSystem? gpuParticles;
+
+  /// Billboard quad particle renderer; replaces GL_POINTS when ready.
+  ParticleRenderer? _pRenderer;
+  bool _useParticleRenderer = false;
 
   /// Elapsed game time in seconds, used by animated shader effects.
   double _time = 0.0;
@@ -139,8 +145,7 @@ void main() {
     gl.enable(0x0B44);  // CULL_FACE
     gl.cullFace(0x0405); // BACK
 
-    // Deep navy sky matches the fire & ice elemental theme
-    gl.clearColor(0.05, 0.05, 0.15, 1.0);
+    gl.clearColor(0.25, 0.50, 0.80, 1.0);
 
     shader = ShaderProgram.fromSource(gl, defaultVertexShader, defaultFragmentShader);
 
@@ -163,7 +168,11 @@ void main() {
 
     heatDistortion = HeatDistortionPass(gl);
 
-    debugPrint('[WebGLRenderer] initialized (VAO: $_supportsVAO)');
+    // Attempt billboard renderer at init (not lazily) so failures surface early.
+    _pRenderer = ParticleRenderer(gl);
+    _useParticleRenderer = _pRenderer!.isReady;
+
+    debugPrint('[WebGLRenderer] initialized (VAO: $_supportsVAO, billboardParticles: $_useParticleRenderer)');
   }
 
   // ── VAO helpers ───────────────────────────────────────────────────────────
@@ -348,6 +357,16 @@ void main() {
     if (bufs.colorBuffer  != null) gl.deleteBuffer(bufs.colorBuffer);
   }
 
+  // ── Smoke / sky tinting ───────────────────────────────────────────────────
+
+  /// Shift sky clear-colour toward ash-brown as smoke density rises [0..1].
+  void updateSmoke(double smoke) {
+    final r = (0.25 + smoke * 0.22).clamp(0.0, 1.0);
+    final g = (0.50 - smoke * 0.30).clamp(0.0, 1.0);
+    final b = (0.80 - smoke * 0.64).clamp(0.0, 1.0);
+    gl.clearColor(r, g, b, 1.0);
+  }
+
   // ── Heat distortion pass ──────────────────────────────────────────────────
 
   /// Redirect subsequent scene draws into the heat FBO.
@@ -358,9 +377,13 @@ void main() {
 
   // ── CPU particle rendering ────────────────────────────────────────────────
 
-  /// Render CPU particles as additive GL_POINTS billboards.
+  /// Render CPU particles — billboard quads when available, GL_POINTS fallback.
   void renderParticles(List<Particle> particles, Camera3D camera) {
     if (particles.isEmpty) return;
+    if (_useParticleRenderer && _pRenderer != null) {
+      _pRenderer!.render(particles, camera, _time);
+      return;
+    }
     _particleShader ??= ShaderProgram.fromSource(gl, _particleVertSrc, _particleFragSrc);
     _particleVbo ??= gl.createBuffer();
 
@@ -437,6 +460,8 @@ void main() {
     shader.dispose();
     _particleShader?.dispose();
     if (_particleVbo != null) gl.deleteBuffer(_particleVbo);
+    _pRenderer?.dispose();
+    _pRenderer = null;
     heatDistortion.dispose();
     debugPrint('[WebGLRenderer] disposed');
   }

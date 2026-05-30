@@ -48,13 +48,21 @@ final List<_Light> _lights = [
   _Light('V1',    'ROTATE', _yellow,
       (s) => s.gameMode == GameMode.taxi && s.groundSpeed >= s.cfgLiftoffSpeed * 0.85),
   _Light('TAXI',  'MODE',   _yellow, (s) => s.gameMode == GameMode.taxi),
+
+  // ── Row 4 — Smoke / visibility ────────────────────────────────────────────
+  _Light('SMOK',  'HAZE',   _yellow, (s) => s.smokeOpacity > 0.20 && s.smokeOpacity <= 0.40),
+  _Light('SMOK',  'LIGHT',  _yellow, (s) => s.smokeOpacity > 0.40 && s.smokeOpacity <= 0.65),
+  _Light('SMOK',  'HEAVY',  _amber,  (s) => s.smokeOpacity > 0.65 && s.smokeOpacity < 0.85),
+  _Light('IMC',   'COND',   _amber,  (s) => s.isIMC && s.smokeOpacity < 0.95),
+  _Light('VIS',   'ZERO',   _red,    (s) => s.smokeOpacity >= 0.95),
 ];
 
 // ── Public widget ─────────────────────────────────────────────────────────────
 
-/// 5 × 4 annunciator panel.
+/// 5 × 5 annunciator panel.
 /// Row 0: L-ENG FIRE (interactive) | R-ENG FIRE (interactive) | 3 regular lights
 /// Rows 1–3: 5 regular lights each.
+/// Row 4: smoke / visibility indicators.
 Widget buildAnnunciatorPanel(GameState state, {VoidCallback? onChanged}) {
   return Column(
     mainAxisSize: MainAxisSize.min,
@@ -83,8 +91,8 @@ Widget buildAnnunciatorPanel(GameState state, {VoidCallback? onChanged}) {
             _cell(_lights[col], _lights[col].check(state)),
         ],
       ),
-      // Rows 1–3: regular lights
-      for (int row = 1; row < 4; row++) ...[
+      // Rows 1–4: regular lights
+      for (int row = 1; row < 5; row++) ...[
         const SizedBox(height: 2),
         Row(
           mainAxisSize: MainAxisSize.min,

@@ -67,10 +67,10 @@ enum GameAction {
   /// Key 0 - ability slot 10
   actionBar10,
 
-  /// ` (backtick) - toggle between third-person and cockpit views
+  /// Tab - toggle between third-person and cockpit views
   toggleView,
 
-  /// Tab - cycle through available targets (active fires + living wyverns)
+  /// ` (backtick) - cycle through available targets (active fires + living wyverns)
   cycleTarget,
 
   /// ] - increase throttle
@@ -87,4 +87,7 @@ enum GameAction {
 
   /// P - deploy / retract IceFighter refueling probe
   toggleProbe,
+
+  /// O - deploy / retract SkyTanker drogue basket
+  toggleDrogue,
 }

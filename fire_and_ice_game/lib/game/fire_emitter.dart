@@ -8,23 +8,18 @@ import '../systems/ability_system.dart';
 import 'game_state.dart';
 
 // ── FireEmitter ───────────────────────────────────────────────────────────────
-// Manages a single fire source: continuously emits fire and smoke particles.
-// Used for static terrain fire zones and dynamic wyvern-breath ground fires.
+// Manages a single fire source: continuously emits fire particles and bursty embers.
 
 class FireEmitter {
-  /// World-space XZ centre (Y is sampled from terrain via terrainHeight).
   final double worldX, worldZ;
-
-  /// Horizontal spread radius for particle birth positions.
-  final double radius;
-
-  /// Intensity 0..1 (0 = extinguished, stops emitting).
+  double radius;
   double intensity;
 
-  double _emitAccum = 0.0;
+  double _emitAccum    = 0.0;
+  double _emberAccum   = 0.0;
+  double _nextBurstAt  = 0.5; // seconds until next ember burst
   final math.Random _rng;
 
-  // Config (injected from FireEmitterSystem after JSON load)
   double emitRate      = 60.0;
   double fireLifeMin   = 1.2;
   double fireLifeMax   = 2.8;
@@ -32,6 +27,7 @@ class FireEmitter {
   double fireSizeMax   = 1.8;
   double smokeSizeMin  = 1.2;
   double smokeSizeMax  = 4.5;
+  double leanFactor    = 0.12; // wind lean applied at particle birth
 
   FireEmitter({
     required this.worldX,
@@ -41,60 +37,103 @@ class FireEmitter {
     math.Random? rng,
   }) : _rng = rng ?? math.Random();
 
-  /// Emit particles into [system] for this frame.
-  void tick(ParticleSystem system, double dt, double terrainY) {
+  void tick(ParticleSystem system, double dt, double terrainY, Vector3 wind) {
     if (intensity <= 0.0) return;
 
+    // Regular fire particles
     _emitAccum += emitRate * intensity * dt;
     final count = _emitAccum.floor();
     _emitAccum -= count;
-
     for (int i = 0; i < count; i++) {
-      final angle = _rng.nextDouble() * math.pi * 2;
-      final r     = _rng.nextDouble() * radius;
-      final px    = worldX + math.cos(angle) * r;
-      final pz    = worldZ + math.sin(angle) * r;
-      final py    = terrainY + _rng.nextDouble() * 1.5;
-
-      final life = fireLifeMin + _rng.nextDouble() * (fireLifeMax - fireLifeMin);
-      final size = fireSizeMin + _rng.nextDouble() * (fireSizeMax - fireSizeMin);
-
-      final vx = (_rng.nextDouble() - 0.5) * 0.4;
-      final vz = (_rng.nextDouble() - 0.5) * 0.4;
-      final vy = 1.5 + _rng.nextDouble() * 2.0;
-
-      system.emit(Particle(
-        position: Vector3(px, py, pz),
-        velocity: Vector3(vx, vy, vz),
-        lifetime: life,
-        size:     size,
-        isFire:   true,
-      ));
+      _emitFire(system, terrainY, wind);
     }
+
+    // Bursty ember emission: random burst interval 0.3–1.0 s
+    _emberAccum += dt;
+    if (_emberAccum >= _nextBurstAt) {
+      _emberAccum  = 0;
+      _nextBurstAt = 0.3 + _rng.nextDouble() * 0.7;
+      final n = 2 + _rng.nextInt(4); // 2–5 embers per burst
+      for (int i = 0; i < n; i++) {
+        _emitEmber(system, terrainY);
+      }
+    }
+  }
+
+  void _emitFire(ParticleSystem system, double terrainY, Vector3 wind) {
+    final angle = _rng.nextDouble() * math.pi * 2;
+    final r     = _rng.nextDouble() * radius;
+    final px    = worldX + math.cos(angle) * r;
+    final pz    = worldZ + math.sin(angle) * r;
+    final py    = terrainY + _rng.nextDouble() * 1.5;
+
+    final life  = fireLifeMin + _rng.nextDouble() * (fireLifeMax - fireLifeMin);
+    final size  = fireSizeMin + _rng.nextDouble() * (fireSizeMax - fireSizeMin);
+
+    // Wind lean at birth: slight horizontal offset in wind direction.
+    final vx = (_rng.nextDouble() - 0.5) * 0.4 + wind.x * leanFactor;
+    final vz = (_rng.nextDouble() - 0.5) * 0.4 + wind.z * leanFactor;
+    final vy = 1.5 + _rng.nextDouble() * 2.0;
+
+    system.emit(Particle(
+      position:     Vector3(px, py, pz),
+      velocity:     Vector3(vx, vy, vz),
+      lifetime:     life,
+      size:         size,
+      isFire:       true,
+      sourceX:      worldX,
+      sourceZ:      worldZ,
+      temperature:  0.7 + _rng.nextDouble() * 0.3,
+      fuelFraction: 1.0,
+    ));
+  }
+
+  void _emitEmber(ParticleSystem system, double terrainY) {
+    final angle = _rng.nextDouble() * math.pi * 2;
+    final r     = _rng.nextDouble() * radius * 0.5;
+    final px    = worldX + math.cos(angle) * r;
+    final pz    = worldZ + math.sin(angle) * r;
+    final py    = terrainY + 0.5 + _rng.nextDouble() * 2.0;
+
+    // Embers shoot upward with high initial velocity.
+    final vx = (_rng.nextDouble() - 0.5) * 1.2;
+    final vz = (_rng.nextDouble() - 0.5) * 1.2;
+    final vy = 3.0 + _rng.nextDouble() * 4.0;
+
+    system.emit(Particle(
+      position:     Vector3(px, py, pz),
+      velocity:     Vector3(vx, vy, vz),
+      lifetime:     6.0 + _rng.nextDouble() * 12.0,
+      size:         0.1 + _rng.nextDouble() * 0.2,
+      isFire:       false,
+      isEmber:      true,
+      sourceX:      worldX,
+      sourceZ:      worldZ,
+      temperature:  0.4 + _rng.nextDouble() * 0.3,
+      fuelFraction: 1.0,
+    ));
   }
 }
 
 // ── WyvernBreathEmitter ───────────────────────────────────────────────────────
-// A directed cone emitter representing wyvern fire breath.
-// Spawns fast-moving fire particles in a cone from the wyvern's mouth.
 
 class WyvernBreathEmitter {
-  Vector3 origin;     // Wyvern mouth world position (updated each frame)
-  Vector3 direction;  // Normalised forward direction of breath
-  double halfAngle;   // Cone half-angle in radians
-  double range;       // Maximum particle travel distance
+  Vector3 origin;
+  Vector3 direction;
+  double halfAngle;
+  double range;
   bool active = false;
   double _timer = 0.0;
   double duration = 2.5;
 
-  double emitRate    = 200.0;
-  double _emitAccum  = 0.0;
+  double emitRate   = 200.0;
+  double _emitAccum = 0.0;
   final math.Random _rng = math.Random();
 
   WyvernBreathEmitter({
     required this.origin,
     required this.direction,
-    this.halfAngle = 0.49, // ~28 degrees
+    this.halfAngle = 0.49,
     this.range     = 45.0,
   });
 
@@ -111,13 +150,11 @@ class WyvernBreathEmitter {
     _emitAccum -= count;
 
     for (int i = 0; i < count; i++) {
-      // Random direction within cone
       final theta = _rng.nextDouble() * halfAngle;
       final phi   = _rng.nextDouble() * math.pi * 2;
       final sT    = math.sin(theta);
       final cT    = math.cos(theta);
 
-      // Perturb around the main direction
       final right = _perpendicular(direction);
       final up    = direction.cross(right).normalized();
       final conDir = (direction.scaled(cT) +
@@ -129,11 +166,14 @@ class WyvernBreathEmitter {
       final life  = range / speed * (0.8 + _rng.nextDouble() * 0.4);
 
       system.emit(Particle(
-        position: Vector3.copy(origin),
-        velocity: vel,
-        lifetime: life,
-        size:     0.5 + _rng.nextDouble() * 0.8,
-        isFire:   true,
+        position:    Vector3.copy(origin),
+        velocity:    vel,
+        lifetime:    life,
+        size:        0.5 + _rng.nextDouble() * 0.8,
+        isFire:      true,
+        sourceX:     origin.x,
+        sourceZ:     origin.z,
+        temperature: 0.8,
       ));
     }
   }
@@ -147,16 +187,17 @@ class WyvernBreathEmitter {
 }
 
 // ── FireEmitterSystem ─────────────────────────────────────────────────────────
-// Owns all active FireEmitters and the ParticleSystem.
-// Loaded and ticked by game_widget.dart once per frame.
 
 class FireEmitterSystem {
   final ParticleSystem particles;
-  final List<FireEmitter> _zoneEmitters = [];
+  final List<FireEmitter> _zoneEmitters    = [];
   final List<FireEmitter> _dynamicEmitters = [];
   WyvernBreathEmitter? wyvernBreath;
 
-  // Wyvern cone damage parameters (from config)
+  // Dynamic fire spread radius per zone (GameState.firePositions stays const).
+  final Map<int, double> _zoneRadius = {};
+  double _cfgSpreadRate = 0.5;
+
   double wyvernDirectDmg  = 15.0;
   double wyvernEdgeDmg    = 6.0;
   double directConeRadius = 5.0;
@@ -164,11 +205,24 @@ class FireEmitterSystem {
   double breathRange      = 45.0;
   double breathHalfAngle  = 0.49;
 
+  // ── Smoke density config ──────────────────────────────────────────────────
+
+  double smokeRadiusMult = 3.5;   // horizontal smoke influence = zoneRadius × this
+  double smokePeakAlt    = 35.0;  // altitude (world units) of peak smoke density
+  double smokeTopAlt     = 70.0;  // altitude above which smoke fully clears
+  double smokeRiseRate   = 0.8;   // lerp rate toward higher smoke density
+  double smokeClearRate  = 1.5;   // lerp rate toward lower smoke density
+  double treeContrib     = 0.05;  // density added per burning tree
+  double imcThreshold    = 0.85;  // smokeOpacity above which IMC is declared
+
   bool _configLoaded = false;
 
   FireEmitterSystem({required this.particles});
 
   bool get configLoaded => _configLoaded;
+
+  /// Current emitter radius for zone [i] (grows with wind-driven spread).
+  double zoneRadius(int i) => _zoneRadius[i] ?? GameState.fireRadius * 0.7;
 
   Future<void> loadConfig() async {
     try {
@@ -180,22 +234,33 @@ class FireEmitterSystem {
       particles.turbulenceStr   = (f['turbulenceStrength'] as num).toDouble();
       particles.windInfluence   = (f['windInfluence']      as num).toDouble();
       particles.windRadius      = (f['windRadius']         as num).toDouble();
-      particles.smokeTransition = (f['smokeTransitionAge'] as num).toDouble();
-      particles.smokeFadeAlt    = (f['smokeFadeAltitude']  as num).toDouble();
+      particles.smokeTransition = (f['smokeTransitionAge']  as num).toDouble();
+      particles.smokeFadeAlt    = (f['smokeFadeAltitude']   as num).toDouble();
+      particles.updraftStrength = (f['updraftStrength']     as num).toDouble();
+      particles.updraftSigma    = (f['updraftSigma']        as num).toDouble();
+      double? nf(String k) => (f[k] as num?)?.toDouble();
+      particles.smokeBuoyancy   = nf('smokeBuoyancy')   ?? particles.smokeBuoyancy;
+      particles.smokeLifeMin    = nf('smokeLifetimeMin') ?? particles.smokeLifeMin;
+      particles.smokeLifeMax    = nf('smokeLifetimeMax') ?? particles.smokeLifeMax;
+      particles.smokeSizeGrowth = nf('smokeSizeGrowth')  ?? particles.smokeSizeGrowth;
 
-      final emitRate   = (f['emitRatePerSecond'] as num).toDouble();
-      final fireLifeMin = (f['fireLifetimeMin']  as num).toDouble();
-      final fireLifeMax = (f['fireLifetimeMax']  as num).toDouble();
-      final fireSzMin  = (f['fireSizeMin']       as num).toDouble();
-      final fireSzMax  = (f['fireSizeMax']       as num).toDouble();
-      final smokeSzMin = (f['smokeSizeMin']      as num).toDouble();
-      final smokeSzMax = (f['smokeSizeMax']      as num).toDouble();
+      _cfgSpreadRate = (f['spreadRate'] as num).toDouble();
+
+      final emitRate    = (f['emitRatePerSecond'] as num).toDouble();
+      final fireLifeMin = (f['fireLifetimeMin']   as num).toDouble();
+      final fireLifeMax = (f['fireLifetimeMax']   as num).toDouble();
+      final fireSzMin   = (f['fireSizeMin']        as num).toDouble();
+      final fireSzMax   = (f['fireSizeMax']        as num).toDouble();
+      final smokeSzMin  = (f['smokeSizeMin']       as num).toDouble();
+      final smokeSzMax  = (f['smokeSizeMax']       as num).toDouble();
+      final leanFactor  = (f['leanFactor']         as num).toDouble();
 
       for (final e in [..._zoneEmitters, ..._dynamicEmitters]) {
-        e.emitRate    = emitRate;
-        e.fireLifeMin = fireLifeMin;  e.fireLifeMax = fireLifeMax;
-        e.fireSizeMin = fireSzMin;    e.fireSizeMax = fireSzMax;
-        e.smokeSizeMin = smokeSzMin;  e.smokeSizeMax = smokeSzMax;
+        e.emitRate     = emitRate;
+        e.fireLifeMin  = fireLifeMin;  e.fireLifeMax  = fireLifeMax;
+        e.fireSizeMin  = fireSzMin;    e.fireSizeMax  = fireSzMax;
+        e.smokeSizeMin = smokeSzMin;   e.smokeSizeMax = smokeSzMax;
+        e.leanFactor   = leanFactor;
       }
 
       final w = data['wyvern'] as Map<String, dynamic>;
@@ -205,6 +270,18 @@ class FireEmitterSystem {
       edgeConeRadius   = (w['edgeConeRadius']      as num).toDouble();
       breathRange      = (w['breathRange']         as num).toDouble();
       breathHalfAngle  = (w['breathHalfAngle']     as num).toDouble() * math.pi / 180.0;
+
+      final sm = data['smoke'] as Map<String, dynamic>?;
+      if (sm != null) {
+        double n(String k, double fb) => (sm[k] as num?)?.toDouble() ?? fb;
+        smokeRadiusMult = n('radiusMultiplier', smokeRadiusMult);
+        smokePeakAlt    = n('peakAltitude',     smokePeakAlt);
+        smokeTopAlt     = n('topAltitude',      smokeTopAlt);
+        smokeRiseRate   = n('riseRate',          smokeRiseRate);
+        smokeClearRate  = n('clearRate',         smokeClearRate);
+        treeContrib     = n('treeContribution',  treeContrib);
+        imcThreshold    = n('imcThreshold',      imcThreshold);
+      }
 
       _configLoaded = true;
       debugPrint('[FireEmitterSystem] config loaded');
@@ -219,26 +296,24 @@ class FireEmitterSystem {
     for (int i = 0; i < GameState.firePositions.length; i++) {
       final (fx, fz) = GameState.firePositions[i];
       _zoneEmitters.add(FireEmitter(
-        worldX: fx, worldZ: fz,
-        radius: GameState.fireRadius * 0.7,
+        worldX:    fx,
+        worldZ:    fz,
+        radius:    GameState.fireRadius * 0.7,
         intensity: state.fireExtinguished[i] ? 0.0 : 1.0,
       ));
     }
   }
 
-  /// Spawn a transient ground fire at (wx, wz) lasting [duration] seconds.
   void spawnGroundFire(double wx, double wz, double duration) {
     final e = FireEmitter(worldX: wx, worldZ: wz, radius: 4.0, intensity: 1.0);
     _dynamicEmitters.add(e);
-    // Schedule extinction after duration via a simple countdown stored in intensity
-    // (intensity decays linearly to 0 over duration)
     _groundFireTimers[e] = duration;
   }
 
   final Map<FireEmitter, double> _groundFireTimers = {};
 
-  void tick(GameState state, double dt, double Function(double, double) terrainHeightAt) {
-    // Sync zone emitter intensities with extinguished flags
+  void tick(GameState state, double dt,
+      double Function(double, double) terrainHeightAt) {
     for (int i = 0; i < _zoneEmitters.length; i++) {
       _zoneEmitters[i].intensity = state.fireExtinguished[i] ? 0.0 : 1.0;
     }
@@ -246,31 +321,46 @@ class FireEmitterSystem {
     final wind = state.apparentWind;
     final pp   = state.playerPosition;
 
-    // Tick zone emitters
+    // CA fire spread: grow zone radii with wind influence.
+    _updateSpread(state, dt, wind);
+
     for (final e in _zoneEmitters) {
       final y = terrainHeightAt(e.worldX, e.worldZ);
-      e.tick(particles, dt, y);
+      e.tick(particles, dt, y, wind);
     }
 
-    // Tick dynamic ground fires + decay timers
     final toRemove = <FireEmitter>[];
     for (final e in _dynamicEmitters) {
       final remaining = (_groundFireTimers[e] ?? 0.0) - dt;
       if (remaining <= 0) { toRemove.add(e); continue; }
       _groundFireTimers[e] = remaining;
       e.intensity = (remaining / (_groundFireTimers[e]! + dt)).clamp(0.0, 1.0);
-      e.tick(particles, dt, terrainHeightAt(e.worldX, e.worldZ));
+      e.tick(particles, dt, terrainHeightAt(e.worldX, e.worldZ), wind);
     }
-    for (final e in toRemove) { _dynamicEmitters.remove(e); _groundFireTimers.remove(e); }
+    for (final e in toRemove) {
+      _dynamicEmitters.remove(e);
+      _groundFireTimers.remove(e);
+    }
 
-    // Tick wyvern breath
     wyvernBreath?.tick(particles, dt, wind);
-
-    // Apply wyvern breath damage to player
     _applyWyvernDamage(state, dt);
-
-    // Advance particle physics
     particles.tick(dt, wind, pp);
+  }
+
+  void _updateSpread(GameState state, double dt, Vector3 wind) {
+    final windStr = math.sqrt(wind.x * wind.x + wind.z * wind.z);
+    final spreadRate = _cfgSpreadRate * (1.0 + windStr * 0.5).clamp(0.5, 2.0);
+    for (int i = 0; i < _zoneEmitters.length; i++) {
+      if (state.fireExtinguished[i]) {
+        _zoneRadius[i] = GameState.fireRadius * 0.7;
+        _zoneEmitters[i].radius = GameState.fireRadius * 0.7;
+        continue;
+      }
+      final newR = (zoneRadius(i) + dt * spreadRate)
+          .clamp(GameState.fireRadius * 0.7, GameState.fireRadius * 2.0);
+      _zoneRadius[i] = newR;
+      _zoneEmitters[i].radius = newR;
+    }
   }
 
   void emitAbilityBurst(VisualEffect effect, int particleCount, double spread) {
@@ -286,11 +376,14 @@ class FireEmitterSystem {
       );
       final isFireAbility = effect.color.r > 0.5;
       particles.emit(Particle(
-        position: Vector3.copy(effect.position),
-        velocity: vel,
-        lifetime: 0.6 + rng.nextDouble() * 0.8,
-        size:     0.3 + rng.nextDouble() * 0.5,
-        isFire:   isFireAbility,
+        position:    Vector3.copy(effect.position),
+        velocity:    vel,
+        lifetime:    0.6 + rng.nextDouble() * 0.8,
+        size:        0.3 + rng.nextDouble() * 0.5,
+        isFire:      isFireAbility,
+        sourceX:     effect.position.x,
+        sourceZ:     effect.position.z,
+        temperature: 0.75,
       ));
     }
   }
@@ -303,7 +396,7 @@ class FireEmitterSystem {
     final dist     = toPlayer.length;
     if (dist > breathRange) return;
 
-    final dot = toPlayer.normalized().dot(breath.direction);
+    final dot      = toPlayer.normalized().dot(breath.direction);
     final angleDiff = math.acos(dot.clamp(-1.0, 1.0));
 
     if (angleDiff < directConeRadius / dist) {
@@ -313,7 +406,6 @@ class FireEmitterSystem {
     }
   }
 
-  /// Returns the world-space Y-centre of each active fire zone for lighting.
   List<(double, double, double, double)> get fireLightPositions {
     final result = <(double, double, double, double)>[];
     for (int i = 0; i < _zoneEmitters.length; i++) {

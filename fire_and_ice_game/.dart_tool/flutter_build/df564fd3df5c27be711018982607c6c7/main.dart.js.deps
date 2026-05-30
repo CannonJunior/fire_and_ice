@@ -998,6 +998,7 @@ file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/aux_display.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/cockpit_drag.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/cockpit_hud.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/controls_map_overlay.dart
+file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/drogue_lever.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/ff_maneuver_painter.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/fire_emitter.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/game_state.dart
@@ -1022,6 +1023,7 @@ file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/probe_lever.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/radio_system.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/settings_panel.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/settings_state.dart
+file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/smoke_overlay.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/suppression_panel.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/test_status_widget.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/throttle_quadrant.dart
@@ -1033,13 +1035,16 @@ file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/aircraft_an
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/aircraft_builder.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/camera3d.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/fire_shaders.dart
+file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/gpu_particle_system.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/heat_distortion.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/mesh.dart
+file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/particle_renderer.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/particle_system.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/scene_node.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/shader_program.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/tanker_aircraft.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/transform3d.dart
+file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/tree_renderer.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/webgl_renderer.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/wind_particles.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/systems/ability_system.dart
@@ -1053,6 +1058,7 @@ file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/terrain/infinite_terr
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/terrain/lake_generator.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/terrain/terrain_chunk.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/terrain/terrain_generator.dart
+file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/terrain/tree_system.dart
 org-dartlang-sdk:///dart-sdk/lib/_http/crypto.dart
 org-dartlang-sdk:///dart-sdk/lib/_http/embedder_config.dart
 org-dartlang-sdk:///dart-sdk/lib/_http/http.dart

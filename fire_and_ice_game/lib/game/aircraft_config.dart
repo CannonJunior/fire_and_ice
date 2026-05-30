@@ -165,7 +165,7 @@ const _fireHawk = AircraftConfig(
 );
 
 const _skyTanker = AircraftConfig(
-  id: 'skytanker', displayName: 'SkyTanker', icon: '🛢️', unlockRp: 2000,
+  id: 'skytanker', displayName: 'SkyTanker', icon: '🛢️', unlockRp: 0,
   description: 'Massive tanker. Triple payload, but handles like a barn door.',
   role: AircraftRole.tanker,
   baseStats: AircraftStats(speed: 0.35, maneuverability: 0.30,

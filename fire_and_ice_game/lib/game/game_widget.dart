@@ -33,11 +33,15 @@ import 'mission_state.dart';
 import 'settings_panel.dart';
 import 'settings_state.dart';
 import 'cockpit_hud.dart' as cockpit;
+import 'smoke_overlay.dart';
 import 'game_state_bridge.dart';
 import 'ollama_client.dart';
 import 'radio_system.dart';
 import 'controls_map_overlay.dart';
 import '../terrain/lake_generator.dart';
+import '../terrain/tree_system.dart';
+import '../rendering/tree_renderer.dart';
+import '../data/abilities.dart';
 
 class FireAndIceGame extends StatefulWidget {
   const FireAndIceGame({super.key});
@@ -107,6 +111,14 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   late final Mesh _wyvernMesh;
   final Transform3d _effectTransform = Transform3d();
 
+  // ── Trees ─────────────────────────────────────────────────────────────────
+
+  final TreeSystem   _treeSystem   = TreeSystem();
+  final TreeRenderer _treeRenderer = TreeRenderer();
+  final Map<int, FireEmitter> _treeEmitters = {};
+  // Cached snapshot rebuilt only when tree states change (avoids O(n) alloc every HUD frame).
+  List<(double, double, int)> _treeSnapshotCache = const [];
+
   // ── Fire / particle system ────────────────────────────────────────────────
 
   late FireEmitterSystem _fireSystem;
@@ -120,6 +132,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   bool _prevToggleGear   = false;
   bool _prevToggleFlaps  = false;
   bool _prevToggleProbe  = false;
+  bool _prevToggleDrogue = false;
   bool _prevCycleTarget  = false;
 
   // ── Gear + probe transit times ────────────────────────────────────────────
@@ -166,7 +179,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
 
   Future<void> _initFireSystem() async {
     final renderer = _renderer;
-    final ps = ParticleSystem(maxParticles: renderer != null ? 5000 : 100);
+    final ps = ParticleSystem(maxParticles: renderer != null ? 6000 : 100);
     _fireSystem = FireEmitterSystem(particles: ps);
     await _fireSystem.loadConfig();
     _fireSystem.initZones(_state);
@@ -302,6 +315,9 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     final ct = AirbaseGenerator.generateControlTower();
     _towerMesh = ct.mesh; _towerTransform = ct.transform;
 
+    _treeSystem.generate(seed: 42);
+    _treeRenderer.prebuild(_treeSystem); // avoids first-frame blocking rebuild
+    _treeSnapshotCache = _treeSystem.treeSnapshot();
     _tanker = TankerAircraft();
     _rebuildAircraftScene();
     for (final ab in _state.abilities) {
@@ -333,6 +349,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     AbilitySystem.update(_state, dt);
     WyvernSystem.tick(_state, dt);
     _tickFireSystem(dt);
+    _tickTrees(dt);
     _state.tickAirbaseThreat(dt);
     _checkMissionCompletion();
     if (_state.rtbActive && !_state.autopilotEnabled) _state.rtbActive = false;
@@ -358,6 +375,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
 
     _fireSystem.tick(_state, dt, TerrainGenerator.heightAt);
     _state.tickAutoSuppress(dt);
+    _updateSmokeOpacity(dt);
 
     if (_renderer != null) {
       _renderer!.fireLights = _fireSystem.fireLightPositions;
@@ -372,6 +390,42 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     } else {
       _heatIntensity = (_heatIntensity - dt * 2.0).clamp(0.0, 1.0);
     }
+  }
+
+  // ── Smoke density ─────────────────────────────────────────────────────────
+
+  void _updateSmokeOpacity(double dt) {
+    double raw = 0.0;
+    final pp = _state.playerPosition;
+    final fs = _fireSystem;
+
+    for (int i = 0; i < GameState.firePositions.length; i++) {
+      if (_state.fireExtinguished[i]) continue;
+      final (fx, fz) = GameState.firePositions[i];
+      final dx = pp.x - fx, dz = pp.z - fz;
+      final hDist = math.sqrt(dx * dx + dz * dz);
+      final smokeR = fs.zoneRadius(i) * fs.smokeRadiusMult;
+      if (hDist >= smokeR) continue;
+      // Horizontal: squared falloff so density drops sharply away from the zone.
+      final hf = math.pow(1.0 - hDist / smokeR, 1.5) as double;
+      // Vertical: rises from ground, peak at smokePeakAlt, fades to zero at smokeTopAlt.
+      final alt = pp.y;
+      final vf  = alt < 3.0
+          ? alt / 3.0
+          : alt > fs.smokeTopAlt
+              ? 0.0
+              : alt <= fs.smokePeakAlt
+                  ? 1.0
+                  : 1.0 - (alt - fs.smokePeakAlt) / (fs.smokeTopAlt - fs.smokePeakAlt);
+      raw += hf * vf.clamp(0.0, 1.0);
+    }
+    raw += _treeEmitters.length * fs.treeContrib;
+
+    final target = raw.clamp(0.0, 1.0);
+    final rate   = target > _state.smokeOpacity ? fs.smokeRiseRate : fs.smokeClearRate;
+    _state.smokeOpacity =
+        (_state.smokeOpacity + (target - _state.smokeOpacity) * rate * dt)
+            .clamp(0.0, 1.0);
   }
 
   // ── Mission completion ────────────────────────────────────────────────────
@@ -429,6 +483,16 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       dt,
     );
 
+    // Aircraft–tree collision: contact ignites the tree and applies crash damage.
+    if (_state.gameMode != GameMode.taxi) {
+      final hit = _treeSystem.checkAircraftCollision(
+          _state.playerPosition.x, _state.playerPosition.y, _state.playerPosition.z);
+      if (hit != null && hit.state == TreeState.alive) {
+        _treeSystem.igniteTree(hit);
+        _state.takeDamage(_state.cfgCrashDamageRate * 0.3 * dt);
+      }
+    }
+
     const slotActions = [
       GameAction.actionBar1, GameAction.actionBar2, GameAction.actionBar3,
       GameAction.actionBar4, GameAction.actionBar5, GameAction.actionBar6,
@@ -437,7 +501,10 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     ];
     for (int i = 0; i < slotActions.length; i++) {
       final pressed = InputSystem.isActionActive(slotActions[i]);
-      if (pressed && !_prevAbilityKeys[i]) AbilitySystem.activateAbility(_state, i);
+      if (pressed && !_prevAbilityKeys[i]) {
+        final fired = AbilitySystem.activateAbility(_state, i);
+        if (fired != null) _applyAbilityTreeEffect(fired);
+      }
       _prevAbilityKeys[i] = pressed;
     }
 
@@ -456,6 +523,10 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     final probeNow = InputSystem.isActionActive(GameAction.toggleProbe);
     if (probeNow && !_prevToggleProbe) setState(() => _state.triggerProbe());
     _prevToggleProbe = probeNow;
+
+    final drogueNow = InputSystem.isActionActive(GameAction.toggleDrogue);
+    if (drogueNow && !_prevToggleDrogue) setState(() => _state.triggerDrogue());
+    _prevToggleDrogue = drogueNow;
 
     final cycleNow = InputSystem.isActionActive(GameAction.cycleTarget);
     if (cycleNow && !_prevCycleTarget) _state.cycleTarget();
@@ -536,6 +607,24 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
         _state.gameMode = GameMode.flight;
       }
     }
+
+    // Drogue deploy / retract animation (SkyTanker)
+    if (_state.aircraftId == 'skytanker') {
+      if (_state.drogueTargetOut) {
+        _state.drogueProgress = (_state.drogueProgress + rate * dt).clamp(0.0, 1.0);
+        if (_state.drogueProgress >= 1.0) {
+          _state.drogueMoving   = false;
+          _state.drogueDeployed = true;
+        }
+      } else {
+        _state.drogueProgress = (_state.drogueProgress - rate * dt).clamp(0.0, 1.0);
+        if (_state.drogueProgress <= 0.0) {
+          _state.drogueMoving    = false;
+          _state.drogueDeployed  = false;
+          _state.drogueConnected = false;
+        }
+      }
+    }
   }
 
   // ── Mode transitions ──────────────────────────────────────────────────────
@@ -605,6 +694,8 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     if (ch > 0) camera.aspectRatio = cw / ch;
     renderer.heatDistortion.resize(cw.toInt(), ch.toInt());
 
+    renderer.updateSmoke(_state.smokeOpacity);
+
     // Pass 1: scene → FBO (or directly to screen when heat is off).
     final useHeat = _heatDistortEnabled && _heatIntensity > 0.005;
     if (useHeat) renderer.beginHeatPass();
@@ -664,11 +755,57 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       renderer.render(em, _effectTransform, camera);
     }
 
+    // Trees (batched: alive / burning / charred).
+    _treeRenderer.render(renderer, _treeSystem, camera);
+
     // Particle layer (fire, smoke, ability bursts).
     renderer.renderParticles(_fireSystem.particles.particles, camera);
 
     // Pass 2: blit FBO to screen with heat distortion.
     if (useHeat) renderer.endHeatPass(_heatIntensity);
+  }
+
+  // ── Tree system ───────────────────────────────────────────────────────────
+
+  void _tickTrees(double dt) {
+    final wasDirty = _treeSystem.dirty;
+    _treeSystem.update(dt, _state.windState.windVector3);
+    if (wasDirty || _treeSystem.dirty) {
+      _treeSnapshotCache = _treeSystem.treeSnapshot();
+    }
+
+    for (final id in _treeSystem.newlyBurningIds) {
+      if (_treeEmitters.containsKey(id)) continue;
+      final t = _treeSystem.trees[id];
+      _treeEmitters[id] = FireEmitter(
+        worldX: t.wx, worldZ: t.wz,
+        radius: t.canopyRadius * 0.7,
+        intensity: 1.0,
+      )..emitRate = 30.0;
+    }
+    _treeSystem.newlyBurningIds.clear();
+
+    for (final id in _treeSystem.newlyCharredIds) {
+      _treeEmitters.remove(id);
+    }
+    _treeSystem.newlyCharredIds.clear();
+
+    final wind = _state.windState.windVector3;
+    for (final entry in _treeEmitters.entries) {
+      final t = _treeSystem.trees[entry.key];
+      entry.value.tick(
+          _fireSystem.particles, dt, t.wy, wind);
+    }
+  }
+
+  void _applyAbilityTreeEffect(AbilityData fired) {
+    if (fired.suppressRadius != null) {
+      // Ice / cryo suppression: extinguish burning trees nearby.
+      _treeSystem.suppressInRadius(_state.playerPosition, fired.suppressRadius!);
+    } else if (fired.color.r > 0.6 && fired.color.g < 0.6) {
+      // Fire ability: ignite trees in range.
+      _treeSystem.igniteInRadius(_state.playerPosition, 14.0);
+    }
   }
 
   // ── HUD rebuild ───────────────────────────────────────────────────────────
@@ -707,6 +844,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       child: Stack(
         children: [
           WindParticleOverlay(state: _state),
+          SmokeOverlay(state: _state),
           cockpit.buildCockpitHud(
             _state,
             showAnnunciator: _settings.showAnnunciator,
@@ -715,13 +853,17 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             showTutorial:    _settings.showTutorial,
             settings:        _settings,
             onLayoutChanged: () { _settings.save(); setState(() {}); },
-            onAbilityActivate: (i) => AbilitySystem.activateAbility(_state, i),
+            onAbilityActivate: (i) {
+              final fired = AbilitySystem.activateAbility(_state, i);
+              if (fired != null) _applyAbilityTreeEffect(fired);
+            },
             onLeftPage:   (p) => setState(() => _state.leftMfdPage  = p),
             onRightPage:  (p) => setState(() => _state.rightMfdPage = p),
             onMapZoom:      ()  => setState(() => _state.mapZoom = (_state.mapZoom + 1) % 3),
             onGearToggle:   ()  => setState(() => _state.triggerGear()),
             onFlapsToggle:  ()  => setState(() => _state.cycleFlaps()),
             onProbeToggle:  ()  => setState(() => _state.triggerProbe()),
+            onDrogueToggle: ()  => setState(() => _state.triggerDrogue()),
             onAutopilot:    ()  => setState(() => _state.toggleAutopilot()),
             onWaypointLock: ()  => setState(() => _state.cycleWaypointLock()),
             onClear:        ()  => setState(() => _state.clearNav()),
@@ -744,8 +886,12 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             }),
             onManeuverExecute: ()  => setState(() => _state.startManeuver(_state.selectedManeuverIdx)),
             onManeuverStop:    ()  => setState(() => _state.stopManeuver()),
-            onOrientToggle:    ()  => setState(() => _state.toggleMapOrientation()),
-            onLvrToggle:       ()  => setState(() => _state.toggleLvr()),
+            onOrientToggle:      ()  => setState(() => _state.toggleMapOrientation()),
+            onLvrToggle:         ()  => setState(() => _state.toggleLvr()),
+            onToggleNavSidebar:  ()  => setState(() => _state.toggleNavSidebar()),
+            onToggleFireHeatmap: ()  => setState(() => _state.toggleNavFireHeatmap()),
+            onToggleTreeHeatmap: ()  => setState(() => _state.toggleNavTreeHeatmap()),
+            treeSnapshot:        _treeSnapshotCache,
           ),
 
           Positioned(
