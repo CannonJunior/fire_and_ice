@@ -4,6 +4,44 @@ Record of modifications to aircraft configurations, cockpit layouts, and related
 
 ---
 
+## 2026-05-30 — Drogue lever + per-aircraft cockpit visibility
+
+### Drogue basket lever
+
+- **New file**: `lib/game/drogue_lever.dart` — `buildDrogueLever` widget and `_DrogueLeverPainter`.
+  - Handle is an **oval** (matching the probe lever) to distinguish it from the circular gear knob.
+  - States: **RET** (cyan) → **MOVE** (amber) → **OUT** (pale blue) → **CONN** (green).
+- `lib/game/cockpit_hud.dart` — drogue lever added to the centre levers row, immediately right of the probe lever.
+- `lib/game/game_state.dart` — `drogueProgress`, `drogueDeployed`, `drogueMoving`, `drogueTargetOut`, `drogueConnected` fields; `triggerDrogue()` method.
+- `lib/models/game_action.dart` — `toggleDrogue` action.
+- `lib/systems/input_system.dart` — `toggleDrogue` mapped to key **O**; `'o'`/`'O'` added to `_maybePreventDefault` game-key set.
+- `lib/rendering/aircraft_animator.dart` — animates `drogue` node: visible when `drogueProgress > 0.04`, `position.z` trails backward from tail.
+
+### Per-aircraft cockpit element visibility
+
+- `lib/game/settings_state.dart` — replaced flat `Map<String, bool> cockpitElementVisible` with per-aircraft system:
+  - `_defaultHiddenElements` static map: each aircraft ID → set of elements hidden by default.
+  - `elementVisible(key)` checks per-aircraft overrides first, then falls back to defaults.
+  - localStorage key changed from `fai_elementVisible` to `fai_perAircraftVis`.
+- Default hidden elements per aircraft:
+  - `icefighter`: drogue
+  - `firefighter`: probe, drogue
+  - `skytanker`: probe
+  - `seabird`: probe, drogue
+  - `stormrider`: probe, drogue
+
+### Annunciator panel — smoke / visibility row
+
+- `lib/game/annunciator_panel.dart` — grid expanded from 5×4 to 5×5; Row 4 adds smoke/IMC indicators: SMOK/HAZE, SMOK/LIGHT, SMOK/HEAVY, IMC/COND, VIS/ZERO.
+- Panel height increases from 230 → 288 px.
+
+### Test coordinate updates
+
+- `tests/test_cockpit_ui.py` — `LEVERS_Y`, `LVR_LEVER_X`, `THR_GD_TOP`, `THR_TRACK_H`, `TQ_CLICK_Y` updated to match new layout positions after panel height change.
+- Suite passes 32/33 (T26 AUX MAP pre-existing failure unchanged).
+
+---
+
 ## 2026-05-30 — NPC tanker speed fix + SkyTanker unlocked
 
 ### Leviathan ART-9 NPC cruise speed

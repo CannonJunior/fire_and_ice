@@ -83,10 +83,11 @@ class ParticleSystem {
   double smokeFadeAlt    = 80.0;
   double updraftStrength = 3.0;
   double updraftSigma    = 3.0;
-  double smokeBuoyancy   = 12.0; // net upward: smokeBuoyancy + gravity
-  double smokeLifeMin    =  6.0;
-  double smokeLifeMax    = 13.0;
-  double smokeSizeGrowth =  0.45; // world-units/sec billboard expansion
+  double smokeBuoyancy    = 12.0; // net upward: smokeBuoyancy + gravity
+  double smokeLifeMin     =  5.0;
+  double smokeLifeMax     =  9.0;
+  double smokeSizeGrowth  =  0.15; // world-units/sec billboard expansion
+  double smokeInitSizeMult =  2.2; // size scale-up when fire converts to smoke
 
   ParticleSystem({this.maxParticles = 5000});
 
@@ -161,7 +162,7 @@ class ParticleSystem {
       p.isFire      = false;
       p.lifetime    = p.age + smokeLifeMin +
                       _rng.nextDouble() * (smokeLifeMax - smokeLifeMin);
-      p.size       *= 3.8;  // large initial billow
+      p.size       *= smokeInitSizeMult;
       p.velocity.y *= 0.55; // retain upward momentum
       p.rotation    = _rng.nextDouble() * math.pi * 2;
     }

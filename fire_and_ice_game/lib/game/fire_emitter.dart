@@ -242,7 +242,8 @@ class FireEmitterSystem {
       particles.smokeBuoyancy   = nf('smokeBuoyancy')   ?? particles.smokeBuoyancy;
       particles.smokeLifeMin    = nf('smokeLifetimeMin') ?? particles.smokeLifeMin;
       particles.smokeLifeMax    = nf('smokeLifetimeMax') ?? particles.smokeLifeMax;
-      particles.smokeSizeGrowth = nf('smokeSizeGrowth')  ?? particles.smokeSizeGrowth;
+      particles.smokeSizeGrowth  = nf('smokeSizeGrowth')   ?? particles.smokeSizeGrowth;
+      particles.smokeInitSizeMult = nf('smokeInitSizeMult') ?? particles.smokeInitSizeMult;
 
       _cfgSpreadRate = (f['spreadRate'] as num).toDouble();
 

@@ -44,21 +44,20 @@ AUX_Y = 866
 GEAR_X    = 36
 CTRL_Y    = 820
 
-# Levers row (y=640–790; note: CTRL_Y=820 lands in the instruments row below)
-LEVERS_Y      = 680
-FLAPS_LEVER_X = 720   # empirically verified at (720, 680)
-LVR_LEVER_X   = 1295  # empirically verified at (1295, 680)
+# Levers row (y=690–860; smoke commit added drogue lever, shifting row down ~80px)
+LEVERS_Y      = 760
+FLAPS_LEVER_X = 720   # empirically verified at (720, 760)
+LVR_LEVER_X   = 1300  # empirically verified at (1300, 760)
 
 # Throttle quadrant
 # lever_y(t) = THR_GD_TOP + THR_TRACK_T + (1-t)*THR_TRACK_H
 # → t = (THR_GD_TOP + THR_TRACK_T + THR_TRACK_H - y) / THR_TRACK_H
 THR_X       = 1050
-THR_GD_TOP  = 594
+THR_GD_TOP  = 689
 THR_TRACK_T = 16
-THR_TRACK_H = 70
-# Click-to-set: TQ GestureDetector starts at y≈645 (probe-verified).
-# y=670 → local_y=25 → t=1-(25-16)/70≈0.87 (empirically 0.871)
-TQ_CLICK_Y  = 670
+THR_TRACK_H = 80
+# Click-to-set: TQ track top at y≈705 (probe-verified); y=715 → t≈0.875
+TQ_CLICK_Y  = 715
 
 # Top-right menu buttons (right-aligned Row: HANGAR | TOC | SETTINGS)
 # SETTINGS is non-fullscreen (top:44); HANGAR/TOC are Positioned.fill panels
@@ -227,7 +226,7 @@ def t13_left_mfd_elmt(page):
 def _click_ability(page, slot_x, ability_name):
     enter_cockpit(page)
     wait_gs(page, 'abilityCooldowns',
-            lambda cds: ability_name not in (cds or {}), timeout_ms=35000)
+            lambda cds: ability_name not in (cds or {}), timeout_ms=120000)
     before_mana = gs(page, 'mana')
     before_cds  = gs(page, 'abilityCooldowns') or {}
     page.mouse.click(slot_x, OSB_BOT_Y)

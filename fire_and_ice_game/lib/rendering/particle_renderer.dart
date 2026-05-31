@@ -172,7 +172,8 @@ class ParticleRenderer {
     }
 
     gl.bindBuffer(0x8892, _vbo);
-    gl.bufferData(0x8892, _vboData, 0x88E8); // DYNAMIC_DRAW
+    final uploadCount = quadCount * _vertsPerQuad * _floatsPerVertex;
+    gl.bufferData(0x8892, Float32List.view(_vboData.buffer, 0, uploadCount), 0x88E8);
 
     shader.use();
     shader.setUniformMatrix4('uViewProj',    viewProj);

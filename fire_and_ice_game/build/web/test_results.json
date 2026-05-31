@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-05-30T19:43:40Z",
+  "timestamp": "2026-05-30T20:12:32Z",
   "passed": 27,
   "total": 33,
   "tests": [
@@ -71,7 +71,7 @@
     {
       "name": "T14 Ability OSB slot 0",
       "passed": false,
-      "detail": "wait_gs timeout: key='abilityCooldowns' last={'Inferno Strike': 6.5}"
+      "detail": "wait_gs timeout: key='abilityCooldowns' last={'Inferno Strike': 6.95}"
     },
     {
       "name": "T15 Ability OSB slot 1",
@@ -146,7 +146,7 @@
     {
       "name": "T29 Throttle drag",
       "passed": false,
-      "detail": "Throttle did not increase: 0.185 \u2192 0.185"
+      "detail": "Throttle did not increase: 0.230 \u2192 0.230"
     },
     {
       "name": "T30 Settings panel",
@@ -166,7 +166,7 @@
     {
       "name": "T33 Throttle quad click",
       "passed": false,
-      "detail": "wait_gs timeout: key='throttle' last=0.0"
+      "detail": "wait_gs timeout: key='throttle' last=0.005"
     }
   ]
 }

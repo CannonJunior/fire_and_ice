@@ -135,6 +135,11 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   bool _prevToggleDrogue = false;
   bool _prevCycleTarget  = false;
 
+  // ── Canvas size tracking ──────────────────────────────────────────────────
+
+  int _lastCanvasW = 0;
+  int _lastCanvasH = 0;
+
   // ── Gear + probe transit times ────────────────────────────────────────────
 
   static const double _gearTransitTime  = 3.0;
@@ -692,7 +697,13 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     }
 
     if (ch > 0) camera.aspectRatio = cw / ch;
-    renderer.heatDistortion.resize(cw.toInt(), ch.toInt());
+    final cwi = cw.toInt(), chi = ch.toInt();
+    if (cwi > 0 && chi > 0 && (cwi != _lastCanvasW || chi != _lastCanvasH)) {
+      renderer.resize(cwi, chi);
+      _lastCanvasW = cwi;
+      _lastCanvasH = chi;
+    }
+    renderer.heatDistortion.resize(cwi, chi);
 
     renderer.updateSmoke(_state.smokeOpacity);
 

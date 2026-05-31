@@ -143,7 +143,7 @@ class InputSystem {
       ' ',      // Space
       '1', '2', '3', '4', '5',
       '6', '7', '8', '9', '0',
-      'Alt', 'Tab', '`', 'f', 'F', 'g', 'G', 'p', 'P', '[', ']',
+      'Alt', 'Tab', '`', 'f', 'F', 'g', 'G', 'o', 'O', 'p', 'P', '[', ']',
       'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
     };
 

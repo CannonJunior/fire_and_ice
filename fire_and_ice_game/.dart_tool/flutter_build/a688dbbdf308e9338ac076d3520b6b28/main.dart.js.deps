@@ -998,6 +998,7 @@ file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/aux_display.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/cockpit_drag.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/cockpit_hud.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/controls_map_overlay.dart
+file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/drogue_lever.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/ff_maneuver_painter.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/fire_emitter.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/game_state.dart
@@ -1022,6 +1023,7 @@ file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/probe_lever.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/radio_system.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/settings_panel.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/settings_state.dart
+file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/smoke_overlay.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/suppression_panel.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/test_status_widget.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/throttle_quadrant.dart

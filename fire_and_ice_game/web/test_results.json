@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-05-30T19:56:20Z",
-  "passed": 27,
+  "timestamp": "2026-05-31T01:30:09Z",
+  "passed": 32,
   "total": 33,
   "tests": [
     {
@@ -70,8 +70,8 @@
     },
     {
       "name": "T14 Ability OSB slot 0",
-      "passed": false,
-      "detail": "wait_gs timeout: key='abilityCooldowns' last={'Inferno Strike': 6.3}"
+      "passed": true,
+      "detail": ""
     },
     {
       "name": "T15 Ability OSB slot 1",
@@ -140,13 +140,13 @@
     },
     {
       "name": "T28 Flaps lever cycle",
-      "passed": false,
-      "detail": "wait_gs timeout: key='flapsLevel' last=0"
+      "passed": true,
+      "detail": ""
     },
     {
       "name": "T29 Throttle drag",
-      "passed": false,
-      "detail": "Throttle did not increase: 0.163 \u2192 0.163"
+      "passed": true,
+      "detail": ""
     },
     {
       "name": "T30 Settings panel",
@@ -160,13 +160,13 @@
     },
     {
       "name": "T32 LVR lever click",
-      "passed": false,
-      "detail": "wait_gs timeout: key='lvrOn' last=False"
+      "passed": true,
+      "detail": ""
     },
     {
       "name": "T33 Throttle quad click",
-      "passed": false,
-      "detail": "wait_gs timeout: key='throttle' last=0.0"
+      "passed": true,
+      "detail": ""
     }
   ]
 }

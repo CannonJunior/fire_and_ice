@@ -136,16 +136,15 @@ void main() {
   float d    = length(vUV - 0.5) * 2.0;
   // Sharper outer silhouette → distinct billow edges (not soft blobs).
   float mask = 1.0 - smoothstep(0.18, 0.88, d);
-  mask = pow(mask, 0.70);
+  mask = sqrt(mask);
 
-  // Three-octave turbulence: slow drift on large scale, tighter detail inside.
+  // Two-octave turbulence: slow drift on large scale, tighter detail inside.
   vec2 nuv = vUV * 2.6 + vec2(uTime * 0.08, -uTime * 0.34);
   float n1 = _noise(nuv);
   float n2 = _noise(nuv * 2.4 + vec2(0.49, 0.82)) * 0.50;
-  float n3 = _noise(nuv * 5.3 + vec2(1.24, 0.31)) * 0.22;
-  float n  = (n1 + n2 + n3) * (1.0 / 1.72);
+  float n  = (n1 + n2) * (1.0 / 1.50);
   // Boost contrast → distinct lobes instead of uniform grey mass.
-  n = pow(n, 0.62);
+  n = sqrt(n);
 
   float alpha = mask * n * vColor.a;
   if (alpha < 0.012) discard;
