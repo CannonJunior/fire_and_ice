@@ -14,14 +14,20 @@ const _kWarn  = Color(0xFFFF4400);
 
 /// Aircraft stores-management display.
 ///
-/// Top view of the aircraft silhouette with expendable stores on wing pylons
-/// and rechargeable systems indicated inside the fuselage bay.
-/// Inspired by the F-35 SMS (Stores Management System) display.
+/// Layout:
+///   • Cryo Bombs — two vertical columns flanking the fuselage centerline.
+///   • Other expendables (Heat Seeker, Frost Missile) — inner wing pylons.
+///   • Rechargeable systems — internal bay slots.
 Widget buildLoadoutPage(GameState state) {
   final expendable = state.abilities.where((a) => a.isExpendable).toList();
   final recharge   = state.abilities.where((a) => !a.isExpendable).toList();
-  final totalLeft  = expendable.fold(0, (s, a) => s + (state.abilityCharges[a.name] ?? a.maxCharges));
-  final totalMax   = expendable.fold(0, (s, a) => s + a.maxCharges);
+
+  // Totals account for aircraft-specific store overrides (e.g. CB count).
+  final overrides  = state.currentAircraft.storeCharges;
+  final totalLeft  = expendable.fold(0, (s, a) =>
+      s + (state.abilityCharges[a.name] ?? (overrides[a.name] ?? a.maxCharges)));
+  final totalMax   = expendable.fold(0, (s, a) =>
+      s + (overrides[a.name] ?? a.maxCharges));
   final armed      = state.suppressionArmed;
 
   return Column(children: [
@@ -74,14 +80,19 @@ class _LoadoutPainter extends CustomPainter {
   final List<AbilityData> recharge;
   const _LoadoutPainter({required this.state, required this.expendable, required this.recharge});
 
+  // Station fill order: inner-left (1), inner-right (2), outer-left (0), outer-right (3).
+  // Maximises symmetry — 2 stores go on inner pylons, spread outward after that.
+  static const _stationOrder = [1, 2, 0, 3];
+
   @override
   void paint(Canvas canvas, Size size) {
     final cx  = size.width / 2;
     final top = 6.0;
-    final ws  = size.width * 0.40; // half-wingspan in pixels
+    final ws  = size.width * 0.40;
 
     _drawAircraft(canvas, cx, top, ws);
     _drawInternalBay(canvas, cx, top);
+    _drawCryoBombColumns(canvas, cx, top);
     _drawPylonStations(canvas, cx, top, ws);
   }
 
@@ -89,14 +100,14 @@ class _LoadoutPainter extends CustomPainter {
 
   void _drawAircraft(Canvas canvas, double cx, double top, double ws) {
     final path = Path()
-      ..moveTo(cx,        top +   6)   // nose tip
+      ..moveTo(cx,        top +   6)
       ..lineTo(cx + 10,   top +  22)
-      ..lineTo(cx + ws,   top +  72)   // right wing tip
+      ..lineTo(cx + ws,   top +  72)
       ..lineTo(cx + ws * 0.74, top + 96)
       ..lineTo(cx + 19,   top + 110)
-      ..lineTo(cx + 22,   top + 126)   // right tail fin
+      ..lineTo(cx + 22,   top + 126)
       ..lineTo(cx + 12,   top + 138)
-      ..lineTo(cx,        top + 143)   // tail centre
+      ..lineTo(cx,        top + 143)
       ..lineTo(cx - 12,   top + 138)
       ..lineTo(cx - 22,   top + 126)
       ..lineTo(cx - 19,   top + 110)
@@ -113,7 +124,6 @@ class _LoadoutPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0);
 
-    // Cockpit canopy outline
     canvas.drawOval(
       Rect.fromCenter(center: Offset(cx, top + 28), width: 11, height: 20),
       Paint()..color = _kDim..style = PaintingStyle.stroke..strokeWidth = 0.5,
@@ -128,7 +138,6 @@ class _LoadoutPainter extends CustomPainter {
       ..color = _kDim.withValues(alpha: 0.45)
       ..style = PaintingStyle.fill);
 
-    // One slot per rechargeable ability
     for (int i = 0; i < math.min(recharge.length, 5); i++) {
       final ab  = recharge[i];
       final cd  = state.abilityCooldowns[ab.name] ?? 0.0;
@@ -139,30 +148,106 @@ class _LoadoutPainter extends CustomPainter {
         Paint()..color = (rdy ? _kFg : _kAmber).withValues(alpha: 0.35)..style = PaintingStyle.fill,
       );
     }
-
     _tp(canvas, 'SYS', cx, top + 46, _kDim, 5.5, center: true);
   }
 
+  // ── Cryo Bomb centerline columns ─────────────────────────────────────────
+  //
+  // Bombs are laid out in two vertical columns flanking the fuselage (cx ± 11).
+  // Slots are interleaved L/R (left=even indices, right=odd indices) so both
+  // columns deplete in step.  Live slots are bright green; expended slots dim.
+
+  void _drawCryoBombColumns(Canvas canvas, double cx, double top) {
+    final abIdx = expendable.indexWhere((a) => a.name == 'Cryo Bomb');
+    if (abIdx < 0) return;
+
+    final ab       = expendable[abIdx];
+    final overrides = state.currentAircraft.storeCharges;
+    final maxChrg  = overrides[ab.name] ?? ab.maxCharges;
+    final charges  = state.abilityCharges[ab.name] ?? maxChrg;
+    if (maxChrg == 0) return;
+
+    final leftCount  = (maxChrg + 1) ~/ 2;  // ceil — left column is one larger when odd
+    final rightCount = maxChrg ~/ 2;
+
+    final leftX  = cx - 11.0;
+    final rightX = cx + 11.0;
+    const startY = 50.0;
+    const stepY  = 11.5;
+
+    // Left column — even slot indices (0, 2, 4, …)
+    for (int li = 0; li < leftCount; li++) {
+      final slotIdx = li * 2;
+      _drawBomb(canvas, leftX, top + startY + li * stepY, slotIdx < charges);
+    }
+    // Right column — odd slot indices (1, 3, 5, …)
+    for (int ri = 0; ri < rightCount; ri++) {
+      final slotIdx = ri * 2 + 1;
+      _drawBomb(canvas, rightX, top + startY + ri * stepY, slotIdx < charges);
+    }
+
+    // Column header
+    _tp(canvas, 'CB', cx, top + startY - 9, _kDim, 5.5, center: true);
+
+    // Count below the tallest column
+    final rows   = math.max(leftCount, rightCount);
+    final countY = top + startY + rows * stepY + 2;
+    final col    = charges == 0 ? _kWarn : _kFg;
+    _tp(canvas, '$charges/$maxChrg', cx, countY, col, 7.5, center: true);
+  }
+
+  void _drawBomb(Canvas canvas, double x, double y, bool live) {
+    final col = live ? _kFg : _kDim.withValues(alpha: 0.25);
+    // Nose cone
+    final nose = Path()
+      ..moveTo(x,       y - 5.5)
+      ..lineTo(x - 2.5, y - 2.5)
+      ..lineTo(x + 2.5, y - 2.5)
+      ..close();
+    canvas.drawPath(nose, Paint()..color = col..style = PaintingStyle.fill);
+    // Body
+    canvas.drawRect(Rect.fromLTWH(x - 2.5, y - 2.5, 5.0, 6.5),
+        Paint()..color = live ? col.withValues(alpha: 0.28) : col..style = PaintingStyle.fill);
+    canvas.drawRect(Rect.fromLTWH(x - 2.5, y - 2.5, 5.0, 6.5),
+        Paint()..color = col..style = PaintingStyle.stroke..strokeWidth = 0.8);
+    // Tail fins
+    canvas.drawLine(Offset(x - 4, y + 2.5), Offset(x - 2.5, y + 4),
+        Paint()..color = col..strokeWidth = 0.8);
+    canvas.drawLine(Offset(x + 4, y + 2.5), Offset(x + 2.5, y + 4),
+        Paint()..color = col..strokeWidth = 0.8);
+  }
+
   // ── Wing pylon stations ──────────────────────────────────────────────────
+  //
+  // Shows all expendables except Cryo Bombs (those are in centerline columns).
+  // Placed from inner pylons outward for visual symmetry.
 
   void _drawPylonStations(Canvas canvas, double cx, double top, double ws) {
-    // Four stations: left-outer, left-inner, right-inner, right-outer
-    final stations = [
-      (cx - ws * 0.74, top + 66.0, 0),
-      (cx - ws * 0.44, top + 58.0, 1),
-      (cx + ws * 0.44, top + 58.0, 2),
-      (cx + ws * 0.74, top + 66.0, 3),
+    final pylonAbs = expendable.where((a) => a.name != 'Cryo Bomb').toList();
+
+    // Station positions: [0]=L-outer, [1]=L-inner, [2]=R-inner, [3]=R-outer
+    final stationXY = [
+      (cx - ws * 0.74, top + 66.0),
+      (cx - ws * 0.44, top + 58.0),
+      (cx + ws * 0.44, top + 58.0),
+      (cx + ws * 0.74, top + 66.0),
     ];
 
-    for (final (sx, sy, si) in stations) {
-      if (si >= expendable.length) {
+    // Map station index → ability (fill from inner outward)
+    final assigned = <int, AbilityData>{};
+    for (int i = 0; i < pylonAbs.length && i < _stationOrder.length; i++) {
+      assigned[_stationOrder[i]] = pylonAbs[i];
+    }
+
+    for (int si = 0; si < 4; si++) {
+      final (sx, sy) = stationXY[si];
+      final ab = assigned[si];
+      if (ab == null) {
         _drawEmptyStation(canvas, sx, sy);
       } else {
-        final ab      = expendable[si];
         final charges = state.abilityCharges[ab.name] ?? ab.maxCharges;
         final cd      = state.abilityCooldowns[ab.name] ?? 0.0;
-        final rdy     = charges > 0 && cd <= 0.0;
-        _drawStore(canvas, sx, sy, ab, charges, rdy);
+        _drawStore(canvas, sx, sy, ab, charges, charges > 0 && cd <= 0.0);
       }
     }
   }
@@ -170,11 +255,9 @@ class _LoadoutPainter extends CustomPainter {
   void _drawStore(Canvas canvas, double sx, double sy, AbilityData ab, int charges, bool rdy) {
     final col = charges <= 0 ? _kWarn : (rdy ? _kFg : _kAmber);
 
-    // Pylon arm
     canvas.drawLine(Offset(sx - 3, sy), Offset(sx + 3, sy),
         Paint()..color = _kDim..strokeWidth = 0.5);
 
-    // Store body (missile/pod shape)
     final body = RRect.fromRectAndRadius(
       Rect.fromCenter(center: Offset(sx, sy + 12), width: 7, height: 16),
       const Radius.circular(3),
@@ -187,15 +270,12 @@ class _LoadoutPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.9);
 
-    // Fin at rear
     canvas.drawLine(Offset(sx - 4, sy + 19), Offset(sx + 4, sy + 19),
         Paint()..color = col..strokeWidth = 0.8);
 
-    // Charge count above store
     final label = charges <= 0 ? 'X' : '$charges';
     _tp(canvas, label, sx, sy - 3, col, 7.5, center: true, bold: true);
 
-    // Abbreviated ability label below
     final abbr = ab.name.split(' ').map((w) => w[0]).join();
     _tp(canvas, abbr, sx, sy + 26, _kDim, 5.5, center: true);
   }

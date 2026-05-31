@@ -53,8 +53,8 @@ final _iceBreath = AbilityData(
 
 final _cryoBomb = AbilityData(
   name: 'Cryo Bomb',
-  description: 'Cryo-suppression pod — flash-freezes a fire zone.',
-  cooldown: 20.0, manaCost: 30.0, icon: '💥',
+  description: 'Drop from aircraft — flash-freezes a fire zone. No mana cost; charges vary by airframe.',
+  cooldown: 5.0, manaCost: 0.0, icon: '💥',
   color: Vector3(0.0, 0.8, 1.0),
   isExpendable: true, maxCharges: 4, suppressRadius: 25.0,
 );

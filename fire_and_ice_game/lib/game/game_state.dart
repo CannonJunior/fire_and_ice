@@ -531,6 +531,7 @@ class GameState {
   double cfgGroundBrake     = 8.0;
   double cfgLiftoffSpeed    = 8.0;
   double cfgGroundTurnRate  = 55.0;
+  double cfgRunwayStartX    = -150.0;
   double cfgRunwayStartZ    = 78.0;
   double cfgThrottleRate    = 0.45;
   double cfgFlightSpeedAccel = 2.5;
@@ -582,7 +583,7 @@ class GameState {
     applyAeroConfig();
     _setupDefaultActionBar();
     _resetCharges();
-    playerPosition = Vector3(0.0, cfgStartAltitude, cfgRunwayStartZ);
+    playerPosition = Vector3(cfgRunwayStartX, cfgStartAltitude, cfgRunwayStartZ);
     flightAltitude = cfgStartAltitude;
     flightSpeed    = cfgFlightSpeed;
     verticalSpeed  = 0.0;
@@ -649,6 +650,7 @@ class GameState {
       cfgGroundBrake      = (t['groundBrake']     as num).toDouble();
       cfgLiftoffSpeed     = (t['liftoffSpeed']    as num).toDouble();
       cfgGroundTurnRate   = (t['groundTurnRate']  as num).toDouble();
+      cfgRunwayStartX     = (t['runwayStartX']    as num?)?.toDouble() ?? cfgRunwayStartX;
       cfgRunwayStartZ     = (t['runwayStartZ']    as num).toDouble();
       cfgThrottleRate     = (t['throttleRate']    as num).toDouble();
       cfgFlightSpeedAccel = (t['flightSpeedAccel'] as num).toDouble();
@@ -690,9 +692,13 @@ class GameState {
   }
 
   /// Reset all expendable stores to their full charge count (called on init/respawn).
+  /// Per-aircraft [AircraftConfig.storeCharges] overrides take precedence.
   void _resetCharges() {
+    final overrides = currentAircraft.storeCharges;
     for (final ab in abilities) {
-      if (ab.isExpendable) abilityCharges[ab.name] = ab.maxCharges;
+      if (ab.isExpendable) {
+        abilityCharges[ab.name] = overrides[ab.name] ?? ab.maxCharges;
+      }
     }
   }
 

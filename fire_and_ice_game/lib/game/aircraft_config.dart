@@ -87,6 +87,10 @@ class AircraftConfig {
   /// Research points required to unlock (0 = available from start).
   final int unlockRp;
 
+  /// Per-ability maximum charge overrides for this airframe.
+  /// Abilities not listed fall back to [AbilityData.maxCharges].
+  final Map<String, int> storeCharges;
+
   const AircraftConfig({
     required this.id,
     required this.displayName,
@@ -98,6 +102,7 @@ class AircraftConfig {
     required this.aero,
     this.gearLeverPosition = GearLeverPosition.center,
     this.unlockRp = 0,
+    this.storeCharges = const {},
   });
 
   factory AircraftConfig.fromJson(Map<String, dynamic> json) {
@@ -132,6 +137,7 @@ const _iceFighter = AircraftConfig(
   id: 'icefighter', displayName: 'IceFighter', icon: '❄️', unlockRp: 0,
   description: 'Ice-elemental interceptor. Heightened ability amplification and exceptional agility — the premier anti-fire platform.',
   role: AircraftRole.elemental,
+  storeCharges: const {'Cryo Bomb': 6},
   baseStats: AircraftStats(speed: 0.80, maneuverability: 0.90,
       payload: 0.40, durability: 0.70, climbRate: 0.85),
   upgradeSlots: UpgradeSlots(airframe: 22, systems: 32, payload: 16),
@@ -148,6 +154,7 @@ const _fireHawk = AircraftConfig(
   id: 'firefighter', displayName: 'FireHawk', icon: '🔥', unlockRp: 0,
   description: 'Balanced fighter-bomber. Responsive and forgiving — ideal starter.',
   role: AircraftRole.fighter,
+  storeCharges: const {'Cryo Bomb': 2},
   baseStats: AircraftStats(speed: 0.65, maneuverability: 0.80,
       payload: 0.45, durability: 0.65, climbRate: 0.75),
   upgradeSlots: UpgradeSlots(airframe: 28, systems: 20, payload: 18),
@@ -164,6 +171,7 @@ const _skyTanker = AircraftConfig(
   id: 'skytanker', displayName: 'SkyTanker', icon: '🛢️', unlockRp: 0,
   description: 'Massive tanker. Triple payload, but handles like a barn door.',
   role: AircraftRole.tanker,
+  storeCharges: const {'Cryo Bomb': 12},
   baseStats: AircraftStats(speed: 0.35, maneuverability: 0.30,
       payload: 0.95, durability: 0.90, climbRate: 0.40),
   upgradeSlots: UpgradeSlots(airframe: 32, systems: 18, payload: 36),
