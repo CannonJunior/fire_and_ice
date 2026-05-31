@@ -4,13 +4,29 @@ Record of modifications to aircraft configurations, cockpit layouts, and related
 
 ---
 
+## 2026-05-30 — Smoke / fire performance tuning
+
+### Particle system
+
+- `lib/rendering/fire_shaders.dart` — smoke fragment shader reduced from 3-octave fBm + `pow()` to 2-octave turbulence + `sqrt()` for sharper billowing edges at lower GPU cost in swiftshader (headless Chromium).
+- `lib/rendering/particle_renderer.dart` — `_drawBatch` now uploads only the active portion of the VBO (`Float32List.view` slice) instead of the full 1.5 MB buffer every frame.
+- `lib/rendering/particle_system.dart` — smoke lifecycle tuned: `smokeLifeMin` 6→5 s, `smokeLifeMax` 13→9 s; `smokeSizeGrowth` 0.45→0.15 world-units/sec; `smokeInitSizeMult` field added (default 2.2, was hardcoded 3.8).
+- `lib/game/fire_emitter.dart` — `loadConfig()` reads new `smokeInitSizeMult` field from `fire_config.json`.
+- `assets/data/fire_config.json` — added `smokeInitSizeMult: 2.2`, `smokeSizeGrowth: 0.15`; updated smoke lifetime range to 5–9 s; removed duplicate `smokeLifetimeMin`/`smokeLifetimeMax` keys.
+
+### WebGL canvas resize
+
+- `lib/game/game_widget.dart` — `_lastCanvasW`/`_lastCanvasH` guards added so `renderer.resize()` is called only when the canvas dimensions actually change, preventing redundant framebuffer reallocations.
+
+---
+
 ## 2026-05-30 — Drogue lever + per-aircraft cockpit visibility
 
 ### Drogue basket lever
 
 - **New file**: `lib/game/drogue_lever.dart` — `buildDrogueLever` widget and `_DrogueLeverPainter`.
-  - Handle is an **oval** (matching the probe lever) to distinguish it from the circular gear knob.
-  - States: **RET** (cyan) → **MOVE** (amber) → **OUT** (pale blue) → **CONN** (green).
+  - Handle is a **diamond** to distinguish it from the probe (oval) and gear (circle) knobs.
+  - States: **RET** (teal) → **MOVE** (amber) → **OUT** (orange) → **CONN** (green).
 - `lib/game/cockpit_hud.dart` — drogue lever added to the centre levers row, immediately right of the probe lever.
 - `lib/game/game_state.dart` — `drogueProgress`, `drogueDeployed`, `drogueMoving`, `drogueTargetOut`, `drogueConnected` fields; `triggerDrogue()` method.
 - `lib/models/game_action.dart` — `toggleDrogue` action.

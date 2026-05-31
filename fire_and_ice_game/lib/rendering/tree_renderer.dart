@@ -57,8 +57,10 @@ class TreeRenderer {
   // ── Tree geometry ──────────────────────────────────────────────────────────
 
   void _addLivingTree(_MeshBuilder mb, TreeInstance t) {
-    final trunkH = t.height * 0.28;
-    // Tapered trunk: full radius at base, 65% at crown junction.
+    final trunkH  = t.height * 0.28;
+    // Crown starts 25% into the trunk so the base wraps around the trunk top,
+    // hiding the narrow-trunk / wide-crown junction.
+    final crownY  = t.wy + trunkH * 0.75;
     _addTaperedPrism(mb, t.wx, t.wy, t.wy + trunkH, t.wz,
         t.trunkRadius, t.trunkRadius * 0.65, 0.34, 0.20, 0.09);
 
@@ -70,27 +72,26 @@ class TreeRenderer {
           t.trunkRadius * 0.45, t.height * 0.20, 0.28, 0.20, 0.12);
     } else if (t.type == 0) {
       // Pine: 3-tier overlapping cone crown.
-      _addPineTiers(mb, t.wx, t.wy + trunkH, t.wz, t.canopyRadius, t.height - trunkH);
+      _addPineTiers(mb, t.wx, crownY, t.wz, t.canopyRadius, t.height - trunkH * 0.75);
     } else {
       // Deciduous: 4-ring rounded dome crown.
-      _addRoundedCrown(mb, t.wx, t.wy + trunkH, t.wz,
-          t.canopyRadius, t.height * 0.72, 0.20, 0.50, 0.15);
+      _addRoundedCrown(mb, t.wx, crownY, t.wz,
+          t.canopyRadius, t.height * 0.72 + trunkH * 0.25, 0.20, 0.50, 0.15);
     }
   }
 
   void _addBurningTree(_MeshBuilder mb, TreeInstance t) {
     final trunkH = t.height * 0.28;
-    // Scorched tapered trunk.
+    final crownY = t.wy + trunkH * 0.75;
     _addTaperedPrism(mb, t.wx, t.wy, t.wy + trunkH, t.wz,
         t.trunkRadius, t.trunkRadius * 0.65, 0.22, 0.14, 0.06);
     if (t.type != 2) {
-      // Glowing crown: dark orange-red embers.
       if (t.type == 0) {
-        _addPineTiersBurning(mb, t.wx, t.wy + trunkH, t.wz,
-            t.canopyRadius * 0.85, t.height - trunkH);
+        _addPineTiersBurning(mb, t.wx, crownY, t.wz,
+            t.canopyRadius * 0.85, t.height - trunkH * 0.75);
       } else {
-        _addRoundedCrown(mb, t.wx, t.wy + trunkH, t.wz,
-            t.canopyRadius * 0.85, t.height * 0.60, 0.65, 0.18, 0.04);
+        _addRoundedCrown(mb, t.wx, crownY, t.wz,
+            t.canopyRadius * 0.85, t.height * 0.60 + trunkH * 0.25, 0.65, 0.18, 0.04);
       }
     }
   }

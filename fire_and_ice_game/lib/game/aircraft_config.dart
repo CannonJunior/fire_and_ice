@@ -102,26 +102,22 @@ class AircraftConfig {
 
   factory AircraftConfig.fromJson(Map<String, dynamic> json) {
     final id = json['id'] as String;
-    // Inherit aero config from the hardcoded defaults by aircraft id.
-    final defaultAero = AircraftConfig.defaults
+    // Inherit aero config, stats, and slots from hardcoded defaults by aircraft id.
+    final def = AircraftConfig.defaults
         .firstWhere((a) => a.id == id,
-            orElse: () => AircraftConfig.defaults.first)
-        .aero;
+            orElse: () => AircraftConfig.defaults.first);
     return AircraftConfig(
       id:          id,
       displayName: json['displayName'] as String,
       icon:        json['icon']        as String,
       description: json['description'] as String,
-      role:        AircraftRole.values.firstWhere(
-                     (r) => r.name == (json['role'] as String? ?? 'fighter'),
-                     orElse: () => AircraftRole.fighter),
-      baseStats:   const AircraftStats(speed: 0.6, maneuverability: 0.7,
-                       payload: 0.5, durability: 0.7, climbRate: 0.7),
-      upgradeSlots: const UpgradeSlots(airframe: 28, systems: 20, payload: 22),
+      role:        def.role,
+      baseStats:   def.baseStats,
+      upgradeSlots: def.upgradeSlots,
       gearLeverPosition: (json['gearLeverPosition'] as String?) == 'leftOfLeft'
           ? GearLeverPosition.leftOfLeft : GearLeverPosition.center,
       unlockRp: (json['unlockRp'] as int?) ?? 0,
-      aero: defaultAero,
+      aero: def.aero,
     );
   }
 

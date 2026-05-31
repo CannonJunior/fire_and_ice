@@ -120,8 +120,12 @@ void main() {
 ''';
 
 // ── Smoke fragment shader (standard alpha blending) ──────────────────────────
-// Multi-octave fBm for large volumetric billows matching fire_03/forest_fire_01
-// reference aesthetics: sharp-edged cauliflower silhouette, turbulent interior.
+// Three-octave fBm producing a dense cauliflower billow:
+//   • Very opaque core (alpha stays near vColor.a for 60% of radius).
+//   • Sharp, lobed silhouette edge (not a soft Gaussian blob).
+//   • Noise only adds surface texture; it cannot reduce the core below 0.72.
+// Reference: wildfire smoke from billow_01–04 images — the interior of a real
+// smoke column is almost completely opaque; only the outer fringes are wispy.
 const String smokeFragShader = '''
 precision mediump float;
 
@@ -133,21 +137,29 @@ uniform float uTime;
 $_noiseGlsl
 
 void main() {
-  float d    = length(vUV - 0.5) * 2.0;
-  // Sharper outer silhouette → distinct billow edges (not soft blobs).
-  float mask = 1.0 - smoothstep(0.18, 0.88, d);
-  mask = sqrt(mask);
+  float d = length(vUV - 0.5) * 2.0;
 
-  // Two-octave turbulence: slow drift on large scale, tighter detail inside.
-  vec2 nuv = vUV * 2.6 + vec2(uTime * 0.08, -uTime * 0.34);
+  // Dense inner core (d < 0.55) stays fully opaque; lobed fringe beyond that.
+  float coreMask = 1.0 - smoothstep(0.55, 1.05, d);
+  // Cauliflower outer lobe: steep falloff at the edge.
+  float edgeMask = 1.0 - smoothstep(0.72, 1.0, d);
+  // Blend: inner core is flat-topped, outer fringe falls off sharply.
+  float mask = max(coreMask, edgeMask * 0.60);
+
+  // Three-octave noise for billowing surface texture.
+  vec2 nuv = vUV * 2.8 + vec2(uTime * 0.06, -uTime * 0.28);
   float n1 = _noise(nuv);
-  float n2 = _noise(nuv * 2.4 + vec2(0.49, 0.82)) * 0.50;
-  float n  = (n1 + n2) * (1.0 / 1.50);
-  // Boost contrast → distinct lobes instead of uniform grey mass.
-  n = sqrt(n);
+  float n2 = _noise(nuv * 2.2 + vec2(0.53, 0.79)) * 0.45;
+  float n3 = _noise(nuv * 4.7 + vec2(0.11, 0.44)) * 0.20;
+  float n  = (n1 + n2 + n3) * (1.0 / 1.65);
 
-  float alpha = mask * n * vColor.a;
-  if (alpha < 0.012) discard;
+  // Noise only modulates edge; the core is held at near-full opacity.
+  // This prevents smoke from looking transparent/wispy in the interior.
+  float edgeFrac = smoothstep(0.30, 0.85, d);
+  float noisedMask = mix(mask, mask * (n * 0.55 + 0.45), edgeFrac);
+
+  float alpha = noisedMask * vColor.a;
+  if (alpha < 0.01) discard;
   gl_FragColor = vec4(vColor.rgb, alpha);
 }
 ''';

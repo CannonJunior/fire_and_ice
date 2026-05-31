@@ -239,11 +239,12 @@ class FireEmitterSystem {
       particles.updraftStrength = (f['updraftStrength']     as num).toDouble();
       particles.updraftSigma    = (f['updraftSigma']        as num).toDouble();
       double? nf(String k) => (f[k] as num?)?.toDouble();
-      particles.smokeBuoyancy   = nf('smokeBuoyancy')   ?? particles.smokeBuoyancy;
-      particles.smokeLifeMin    = nf('smokeLifetimeMin') ?? particles.smokeLifeMin;
-      particles.smokeLifeMax    = nf('smokeLifetimeMax') ?? particles.smokeLifeMax;
-      particles.smokeSizeGrowth  = nf('smokeSizeGrowth')   ?? particles.smokeSizeGrowth;
-      particles.smokeInitSizeMult = nf('smokeInitSizeMult') ?? particles.smokeInitSizeMult;
+      particles.smokeBuoyancy      = nf('smokeBuoyancy')      ?? particles.smokeBuoyancy;
+      particles.smokeLifeMin       = nf('smokeLifetimeMin')   ?? particles.smokeLifeMin;
+      particles.smokeLifeMax       = nf('smokeLifetimeMax')   ?? particles.smokeLifeMax;
+      particles.smokeSizeGrowth    = nf('smokeSizeGrowth')    ?? particles.smokeSizeGrowth;
+      particles.smokeInitSizeMult  = nf('smokeInitSizeMult')  ?? particles.smokeInitSizeMult;
+      particles.smokeWindInfluence = nf('smokeWindInfluence') ?? particles.smokeWindInfluence;
 
       _cfgSpreadRate = (f['spreadRate'] as num).toDouble();
 

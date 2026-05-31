@@ -77,6 +77,13 @@
       "icon": "❄️",
       "description": "Cryo interceptor — side-mounted gear lever, dual ice systems",
       "gearLeverPosition": "leftOfLeft"
+    },
+    {
+      "id": "skytanker",
+      "displayName": "SkyTanker",
+      "icon": "🛢️",
+      "description": "Massive tanker. Triple payload, but handles like a barn door.",
+      "gearLeverPosition": "center"
     }
   ]
 }

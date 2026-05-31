@@ -52,18 +52,28 @@ class Particle {
   }
 
   /// Fire/ember: GPU owns RGB via blackbody; we pass (temperature, 0, 0, fade).
-  /// Smoke: near-black charcoal with a warm brown tint when fresh.
+  /// Smoke: dark charcoal at birth (near fire), ages to cream/tan as it rises.
   void writeColor(Vector4 out) {
     final t_ = t;
     if (isFire || isEmber) {
       out.setValues(temperature, 0.0, 0.0, 1.0 - t_ * 0.4);
     } else {
-      // Fresh smoke: very dark warm brown (fire_03 reference style).
-      // Ages toward slightly lighter charcoal as it rises and dissipates.
-      final dark  = 0.07 + t_ * 0.14;                      // 0.07→0.21
-      final warm  = (1.0 - t_) * 0.07;                     // warm tint fades out
-      final alpha = (0.82 * (1.0 - t_ * 0.52)).clamp(0.0, 1.0);
-      out.setValues(dark + warm, dark + warm * 0.35, dark, alpha);
+      // Color: near-black at birth → medium gray mid-life → cream/tan at top.
+      // This matches wildfire reference: dark base column, lighter billowing top.
+      final r = t_ < 0.4
+          ? 0.06 + t_ * 0.60        // 0.06 → 0.30 (dark soot → gray)
+          : 0.30 + (t_ - 0.4) * 0.90; // 0.30 → 0.84 (gray → cream)
+      final g = t_ < 0.4
+          ? 0.05 + t_ * 0.50
+          : 0.25 + (t_ - 0.4) * 0.85;
+      final b = t_ < 0.4
+          ? 0.04 + t_ * 0.38
+          : 0.19 + (t_ - 0.4) * 0.70;
+      // Hold at near-full opacity for 70% of life, then fade out sharply.
+      final alpha = t_ < 0.70
+          ? 0.92
+          : 0.92 * (1.0 - (t_ - 0.70) / 0.30);
+      out.setValues(r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0), alpha);
     }
   }
 }
@@ -75,19 +85,20 @@ class ParticleSystem {
   final List<Particle> _particles = [];
   final math.Random _rng = math.Random();
 
-  double buoyancy        = 5.2;
-  double turbulenceStr   = 0.8;
-  double windInfluence   = 0.55;
-  double windRadius      = 40.0;
-  double smokeTransition = 0.6;
-  double smokeFadeAlt    = 80.0;
-  double updraftStrength = 3.0;
-  double updraftSigma    = 3.0;
-  double smokeBuoyancy    = 12.0; // net upward: smokeBuoyancy + gravity
-  double smokeLifeMin     =  5.0;
-  double smokeLifeMax     =  9.0;
-  double smokeSizeGrowth  =  0.15; // world-units/sec billboard expansion
-  double smokeInitSizeMult =  2.2; // size scale-up when fire converts to smoke
+  double buoyancy          = 5.2;
+  double turbulenceStr     = 0.8;
+  double windInfluence     = 0.55;
+  double smokeWindInfluence = 0.88; // smoke drifts much more strongly with wind
+  double windRadius        = 60.0;
+  double smokeTransition   = 0.6;
+  double smokeFadeAlt      = 200.0;
+  double updraftStrength   = 3.0;
+  double updraftSigma      = 3.0;
+  double smokeBuoyancy     =  9.0;
+  double smokeLifeMin      = 22.0;
+  double smokeLifeMax      = 40.0;
+  double smokeSizeGrowth   =  0.9;  // world-units/sec billboard expansion
+  double smokeInitSizeMult =  5.0;  // size scale-up when fire converts to smoke
 
   ParticleSystem({this.maxParticles = 5000});
 
@@ -97,7 +108,9 @@ class ParticleSystem {
     for (final p in _particles) {
       if (p.isDead) continue;
 
-      // Wind attenuation: fire/ember use source distance; others use player distance.
+      // Wind attenuation: fire/ember attenuate by distance from source;
+      // smoke uses player distance but a much higher influence factor so it
+      // visibly drifts in wind direction matching real wildfire plume behaviour.
       final double windDist;
       if (p.isFire || p.isEmber) {
         final dx = p.position.x - p.sourceX;
@@ -106,8 +119,9 @@ class ParticleSystem {
       } else {
         windDist = (p.position - playerPos).length;
       }
-      final wFactor   = (1.0 - windDist / windRadius).clamp(0.0, 1.0);
-      final windForce = wind.scaled(windInfluence * wFactor);
+      final wFactor = (1.0 - windDist / windRadius).clamp(0.0, 1.0);
+      final wInfluence = (p.isFire || p.isEmber) ? windInfluence : smokeWindInfluence;
+      final windForce = wind.scaled(wInfluence * wFactor);
 
       // Turbulence: lightweight hash noise on XZ position.
       final hx  = _hash(p.position.x * 3.7 + p.age * 0.8);
