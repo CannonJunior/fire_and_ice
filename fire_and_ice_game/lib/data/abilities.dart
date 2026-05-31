@@ -33,16 +33,23 @@ class AbilityData {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Expendable stores  — wing pylons, finite charges, long recharge cooldown
+// Primary weapon — hold key "1" for sustained ice-breath beam
 // ══════════════════════════════════════════════════════════════════════════════
 
-final _infernoStrike = AbilityData(
-  name: 'Inferno Strike',
-  description: 'Precision fire-suppression bomb — drops retardant on target.',
-  cooldown: 20.0, manaCost: 30.0, icon: '🚀',
-  color: Vector3(1.0, 0.35, 0.0),
-  isExpendable: true, maxCharges: 4, suppressRadius: 22.0,
+/// Hold key "1" to sustain.  No cooldown or one-shot mana cost — mana drains
+/// continuously at 18/sec while firing.  Longer holds widen and intensify the
+/// beam.  Game-widget handles this ability specially; AbilitySystem is bypassed.
+final _iceBreath = AbilityData(
+  name: 'Ice Breath',
+  description: 'Hold to sustain — dragon ice beam suppresses fire in a forward cone.',
+  cooldown: 0.0, manaCost: 0.0, icon: '❄',
+  color: Vector3(0.2, 0.82, 1.0),
+  suppressRadius: 28.0,
 );
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Expendable stores  — wing pylons, finite charges, long recharge cooldown
+// ══════════════════════════════════════════════════════════════════════════════
 
 final _cryoBomb = AbilityData(
   name: 'Cryo Bomb',
@@ -104,13 +111,13 @@ final _flameWard = AbilityData(
 
 /// Full 8-slot loadout for IceFighter and all other aircraft.
 final List<AbilityData> windwalkerAbilities = [
-  _infernoStrike, _cryoBomb, _heatSeeker, _frostMissile, // pylons
-  _fireBolt, _iceShard, _windGust, _flameWard,            // internal
+  _iceBreath, _cryoBomb, _heatSeeker, _frostMissile, // slot 1 = ice breath + pylons
+  _fireBolt, _iceShard, _windGust, _flameWard,        // internal
 ];
 
-/// FireHawk loadout — 7 slots (no Frost Missile; fire-focused airframe).
+/// FireHawk loadout — 7 slots (fire-focused airframe; ice breath in slot 1).
 final List<AbilityData> fireHawkAbilities = [
-  _infernoStrike, _cryoBomb, _heatSeeker,      // 3 pylon stores
+  _iceBreath, _cryoBomb, _heatSeeker,          // slot 1 = ice breath + pylons
   _fireBolt, _iceShard, _windGust, _flameWard, // internal systems
 ];
 

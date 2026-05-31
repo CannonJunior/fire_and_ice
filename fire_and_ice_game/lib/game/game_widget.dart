@@ -21,12 +21,14 @@ import '../systems/physics_system.dart';
 import '../systems/wyvern_system.dart';
 import '../terrain/airbase_generator.dart';
 import '../terrain/airfield_generator.dart';
+import '../terrain/cloud_system.dart';
 import '../terrain/infinite_terrain_manager.dart';
 import '../terrain/terrain_generator.dart';
 import '../models/game_action.dart';
 import '../rendering/wind_particles.dart';
 import 'fire_emitter.dart';
 import 'game_state.dart';
+import 'ice_breath_emitter.dart';
 import 'hangar_screen.dart';
 import 'mission_screen.dart';
 import 'mission_state.dart';
@@ -125,6 +127,18 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   double _heatIntensity     = 0.0;
   bool   _heatDistortEnabled = true;
 
+  // ── Cloud system ──────────────────────────────────────────────────────────
+
+  final CloudSystem _cloudSystem = CloudSystem();
+  double _cloudOverlayOpacity    = 0.0; // fly-through mist alpha (lerped)
+
+  // ── Ice Breath ────────────────────────────────────────────────────────────
+
+  late final IceBreathEmitter _iceBreathEmitter;
+  bool   _iceBreathActive     = false;
+  double _iceBreathSupprTimer = 0.0;
+  static const double _iceBreathManaDrain = 18.0; // mana/sec while beam held
+
   // ── Edge detection ────────────────────────────────────────────────────────
 
   final List<bool> _prevAbilityKeys = List.filled(10, false);
@@ -175,6 +189,8 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _registerKeyListeners();
     _buildScene();
     await _initFireSystem();
+    await _cloudSystem.loadConfig();
+    _cloudSystem.generate(150.0); // 150 world-unit radius around origin
     await WyvernSystem.loadConfig();
     WyvernSystem.spawnDefault(_state);
     RadioSystem.reset();
@@ -324,6 +340,10 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _treeRenderer.prebuild(_treeSystem); // avoids first-frame blocking rebuild
     _treeSnapshotCache = _treeSystem.treeSnapshot();
     _tanker = TankerAircraft();
+    _iceBreathEmitter = IceBreathEmitter(
+      origin:    Vector3.copy(_state.playerPosition),
+      direction: Vector3(0.0, 0.0, 1.0),
+    );
     _rebuildAircraftScene();
     for (final ab in _state.abilities) {
       final key = _colorKey(ab.color);
@@ -355,6 +375,8 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     WyvernSystem.tick(_state, dt);
     _tickFireSystem(dt);
     _tickTrees(dt);
+    _cloudSystem.tick(dt, _state.windState.windVector3, _state.playerPosition);
+    _tickCloudTurbulence(dt);
     _state.tickAirbaseThreat(dt);
     _checkMissionCompletion();
     if (_state.rtbActive && !_state.autopilotEnabled) _state.rtbActive = false;
@@ -378,6 +400,19 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       }
     }
 
+    // Ice breath: update nose position/direction and tick emitter while held.
+    if (_iceBreathActive) {
+      final yaw  = _state.playerRotation.y * math.pi / 180.0;
+      final pit  = _state.flightPitchAngle  * math.pi / 180.0;
+      final cosP = math.cos(pit);
+      final fwd  = Vector3(math.sin(yaw) * cosP, math.sin(pit), math.cos(yaw) * cosP)
+          ..normalize();
+      _iceBreathEmitter
+        ..origin.setFrom(_state.playerPosition + fwd.scaled(2.5))
+        ..direction.setFrom(fwd);
+      _iceBreathEmitter.tick(_fireSystem.particles, dt, _state.apparentWind);
+    }
+
     _fireSystem.tick(_state, dt, TerrainGenerator.heightAt);
     _state.tickAutoSuppress(dt);
     _updateSmokeOpacity(dt);
@@ -394,6 +429,17 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
           .clamp(0.0, 1.0);
     } else {
       _heatIntensity = (_heatIntensity - dt * 2.0).clamp(0.0, 1.0);
+    }
+  }
+
+  // ── Cloud turbulence ──────────────────────────────────────────────────────
+
+  void _tickCloudTurbulence(double dt) {
+    _cloudOverlayOpacity = _cloudSystem.flyThroughOpacity;
+    if (_cloudSystem.isInCB(_state.playerPosition)) {
+      // CB turbulence: sinusoidal vertical jitter on the aircraft.
+      _state.playerPosition.y +=
+          0.45 * math.sin(_gameTime * 11.3 + _state.playerPosition.x) * dt;
     }
   }
 
@@ -504,7 +550,29 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       GameAction.actionBar7, GameAction.actionBar8, GameAction.actionBar9,
       GameAction.actionBar10,
     ];
-    for (int i = 0; i < slotActions.length; i++) {
+
+    // Slot 0 (key "1"): Ice Breath — hold for sustained beam, no cooldown.
+    final iceHeld = InputSystem.isActionActive(slotActions[0]);
+    if (iceHeld && _state.mana > 0) {
+      if (!_iceBreathActive) {
+        _iceBreathActive = true;
+        _iceBreathEmitter.startBreath();
+      }
+      _state.spendMana(_iceBreathManaDrain * dt);
+      _iceBreathSupprTimer -= dt;
+      if (_iceBreathSupprTimer <= 0) {
+        _iceBreathSupprTimer = 0.5;
+        _state.suppressFiresInRadius(28.0);
+        _treeSystem.suppressInRadius(_state.playerPosition, 18.0);
+      }
+    } else if (_iceBreathActive) {
+      _iceBreathActive = false;
+      _iceBreathEmitter.stopBreath();
+    }
+    _prevAbilityKeys[0] = iceHeld;
+
+    // Slots 1–9: normal edge-detect activation.
+    for (int i = 1; i < slotActions.length; i++) {
       final pressed = InputSystem.isActionActive(slotActions[i]);
       if (pressed && !_prevAbilityKeys[i]) {
         final fired = AbilitySystem.activateAbility(_state, i);
@@ -769,8 +837,16 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     // Trees (batched: alive / burning / charred).
     _treeRenderer.render(renderer, _treeSystem, camera);
 
+    // Atmospheric smoke plumes — far-field macro billboards rendered before
+    // close-range particles so near particles composite on top.
+    renderer.renderAtmosphericSmoke(
+        _fireSystem.atmosphericSmokeBillboards(camera.position), camera);
+
     // Particle layer (fire, smoke, ability bursts).
     renderer.renderParticles(_fireSystem.particles.particles, camera);
+
+    // Cloud billboards — rendered last among 3D objects (above smoke).
+    renderer.renderClouds(_cloudSystem.chunks, camera);
 
     // Pass 2: blit FBO to screen with heat distortion.
     if (useHeat) renderer.endHeatPass(_heatIntensity);
@@ -856,6 +932,12 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
         children: [
           WindParticleOverlay(state: _state),
           SmokeOverlay(state: _state),
+          if (_cloudOverlayOpacity > 0.01)
+            IgnorePointer(
+              child: Container(
+                color: const Color(0xFFDDE8F0).withValues(alpha: _cloudOverlayOpacity),
+              ),
+            ),
           cockpit.buildCockpitHud(
             _state,
             showAnnunciator: _settings.showAnnunciator,
@@ -907,7 +989,9 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
 
           Positioned(
             top: 12, right: 12,
-            child: Row(children: [
+            child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              cockpit.buildStatusBadgeRow(_state),
+              const SizedBox(width: 8),
               _menuButton('⊞ HANGAR',   _showHangar,   () { setState(() { _showHangar   = !_showHangar;  _showSettings = false; _showMission = false; }); }),
               _menuButton('⚡ TOC',     _showMission,  () { setState(() { _showMission  = !_showMission; _showHangar   = false;  _showSettings = false; }); }),
               _menuButton('⚙ SETTINGS', _showSettings, () { setState(() { _showSettings = !_showSettings; _showHangar  = false; _showMission  = false; }); }),

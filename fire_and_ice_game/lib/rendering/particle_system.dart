@@ -28,6 +28,10 @@ class Particle {
   /// Fuel remaining [0..1] — dims fire colour as the particle ages.
   double fuelFraction;
 
+  /// Ice-breath particle — crystal sparks (isEmber=true) or frost mist (!isEmber).
+  /// writeColor() outputs blue-white; crystals go additive, mist goes alpha-blend.
+  bool isIce;
+
   Particle({
     required this.position,
     required this.velocity,
@@ -35,6 +39,7 @@ class Particle {
     required this.size,
     required this.isFire,
     this.isEmber      = false,
+    this.isIce        = false,
     this.sourceX      = 0.0,
     this.sourceZ      = 0.0,
     this.temperature  = 0.8,
@@ -52,9 +57,25 @@ class Particle {
   }
 
   /// Fire/ember: GPU owns RGB via blackbody; we pass (temperature, 0, 0, fade).
+  /// Ice crystal (isEmber+isIce): bright blue-white → additive sparks.
+  /// Ice mist (!isEmber, isIce): pale electric blue → alpha-blend fog.
   /// Smoke: dark charcoal at birth (near fire), ages to cream/tan as it rises.
   void writeColor(Vector4 out) {
     final t_ = t;
+    if (isIce) {
+      if (isEmber) {
+        // Crystal shard: blue-white, fade out over lifetime.
+        final fade = (1.0 - t_ * 0.55).clamp(0.0, 1.0);
+        out.setValues(0.68, 0.91, 1.0, fade * 0.95);
+      } else {
+        // Frost mist: electric blue, brief fade-in then slow fade-out.
+        final fade = t_ < 0.14
+            ? t_ / 0.14
+            : (1.0 - (t_ - 0.14) / 0.86).clamp(0.0, 1.0);
+        out.setValues(0.28, 0.70, 1.0, fade * 0.52);
+      }
+      return;
+    }
     if (isFire || isEmber) {
       out.setValues(temperature, 0.0, 0.0, 1.0 - t_ * 0.4);
     } else {
