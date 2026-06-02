@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'aircraft_config.dart';
+import 'cockpit_drag.dart';
 import 'settings_state.dart';
 import 'test_status_widget.dart';
 
@@ -245,7 +246,15 @@ class _SettingsPanelState extends State<SettingsPanel> {
             })),
             GestureDetector(
               onTap: () {
-                s.resetElementOffset(s.selectedAircraft, key);
+                final screen = MediaQuery.of(context).size;
+                final bounds = CockpitRegistry.bounds(key);
+                if (bounds != null) {
+                  final dx = screen.width  / 2 - bounds.width  / 2 - bounds.left;
+                  final dy = screen.height / 2 - bounds.height / 2 - bounds.top;
+                  s.setCockpitOffset(s.selectedAircraft, key, dx, dy);
+                } else {
+                  s.resetElementOffset(s.selectedAircraft, key);
+                }
                 s.save();
                 _changed();
               },
@@ -261,6 +270,8 @@ class _SettingsPanelState extends State<SettingsPanel> {
   }
 
   Widget _hudBody() => Column(mainAxisSize: MainAxisSize.min, children: [
+    _ToggleRow('Disable Haze / IMC', s.disableHaze, (v) { s.disableHaze = v; s.save(); _changed(); },
+        hint: 'Hide smoke overlay and sky tint — for play-testing'),
     _ToggleRow('Annunciator Panel', s.showAnnunciator, (v) { s.showAnnunciator = v; _changed(); },
         hint: 'Master-warning lights above Flight Data'),
     _ToggleRow('Flight Telemetry', s.showTelemetry, (v) { s.showTelemetry = v; _changed(); },

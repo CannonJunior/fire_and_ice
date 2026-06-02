@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:vector_math/vector_math.dart';
+import '../rendering/atmospheric_smoke_plume.dart';
 import '../rendering/particle_system.dart';
 import '../systems/ability_system.dart';
 import 'game_state.dart';
@@ -198,6 +199,9 @@ class FireEmitterSystem {
   final Map<int, double> _zoneRadius = {};
   double _cfgSpreadRate = 0.5;
 
+  // Long-range atmospheric smoke plumes (one per zone).
+  AtmosphericSmokeSystem? _atmosphericSmoke;
+
   double wyvernDirectDmg  = 15.0;
   double wyvernEdgeDmg    = 6.0;
   double directConeRadius = 5.0;
@@ -285,6 +289,18 @@ class FireEmitterSystem {
         imcThreshold    = n('imcThreshold',      imcThreshold);
       }
 
+      final atm = data['atmosphericSmoke'] as Map<String, dynamic>?;
+      if (atm != null && _atmosphericSmoke != null) {
+        double na(String k, double fb) => (atm[k] as num?)?.toDouble() ?? fb;
+        int    ia(String k, int fb)    => (atm[k] as num?)?.toInt()    ?? fb;
+        _atmosphericSmoke!.segmentsPerPlume   = ia('segmentsPerPlume', _atmosphericSmoke!.segmentsPerPlume);
+        _atmosphericSmoke!.baseWidth          = na('baseWidth',         _atmosphericSmoke!.baseWidth);
+        _atmosphericSmoke!.topWidth           = na('topWidth',          _atmosphericSmoke!.topWidth);
+        _atmosphericSmoke!.maxHeight          = na('maxHeight',         _atmosphericSmoke!.maxHeight);
+        _atmosphericSmoke!.billowingFrequency = na('billowingFrequency',_atmosphericSmoke!.billowingFrequency);
+        _atmosphericSmoke!.windDriftScale     = na('windDriftScale',    _atmosphericSmoke!.windDriftScale);
+      }
+
       _configLoaded = true;
       debugPrint('[FireEmitterSystem] config loaded');
     } catch (e) {
@@ -295,6 +311,7 @@ class FireEmitterSystem {
 
   void initZones(GameState state) {
     _zoneEmitters.clear();
+    _atmosphericSmoke = AtmosphericSmokeSystem();
     for (int i = 0; i < GameState.firePositions.length; i++) {
       final (fx, fz) = GameState.firePositions[i];
       _zoneEmitters.add(FireEmitter(
@@ -303,8 +320,12 @@ class FireEmitterSystem {
         radius:    GameState.fireRadius * 0.7,
         intensity: state.fireExtinguished[i] ? 0.0 : 1.0,
       ));
+      _atmosphericSmoke!.addPlume(i, fx, fz);
     }
   }
+
+  List<SmokeColumnBillboard> atmosphericSmokeBillboards(Vector3 cameraPos) =>
+      _atmosphericSmoke?.getAllBillboards(cameraPos) ?? const [];
 
   void spawnGroundFire(double wx, double wz, double duration) {
     final e = FireEmitter(worldX: wx, worldZ: wz, radius: 4.0, intensity: 1.0);
@@ -347,6 +368,12 @@ class FireEmitterSystem {
     wyvernBreath?.tick(particles, dt, wind);
     _applyWyvernDamage(state, dt);
     particles.tick(dt, wind, pp);
+
+    // Tick long-range atmospheric plumes (one per zone, intensity mirrors close-range).
+    for (int i = 0; i < _zoneEmitters.length; i++) {
+      _atmosphericSmoke?.tickPlume(
+          i, state.fireExtinguished[i] ? 0.0 : 1.0, wind, dt);
+    }
   }
 
   void _updateSpread(GameState state, double dt, Vector3 wind) {
@@ -408,12 +435,17 @@ class FireEmitterSystem {
     }
   }
 
+  // Pre-allocated — avoids a list + tuple alloc on every frame this is read.
+  final List<(double, double, double, double)> _fireLightsBuf = [];
+
   List<(double, double, double, double)> get fireLightPositions {
-    final result = <(double, double, double, double)>[];
+    if (_fireLightsBuf.length != _zoneEmitters.length) {
+      _fireLightsBuf.length = _zoneEmitters.length;
+    }
     for (int i = 0; i < _zoneEmitters.length; i++) {
       final e = _zoneEmitters[i];
-      result.add((e.worldX, 2.0, e.worldZ, e.intensity));
+      _fireLightsBuf[i] = (e.worldX, 2.0, e.worldZ, e.intensity);
     }
-    return result;
+    return _fireLightsBuf;
   }
 }

@@ -34,6 +34,12 @@ class IceBreathEmitter {
   double _mAccum = 0.0;
   final math.Random _rng = math.Random();
 
+  // Scratch vectors for _coneDir — eliminates ~7 allocs per particle emitted.
+  final Vector3 _rightScratch = Vector3.zero();
+  final Vector3 _upScratch    = Vector3.zero();
+  final Vector3 _dirScratch   = Vector3.zero();
+  final Vector3 _velScratch   = Vector3.zero();
+
   IceBreathEmitter({required this.origin, required this.direction});
 
   void startBreath() {
@@ -70,17 +76,20 @@ class IceBreathEmitter {
   }
 
   void _emitCrystal(ParticleSystem system, Vector3 wind) {
-    // Cone widens slightly as the weapon charges.
     final halfA = (crystalHalfAngle + chargeTime * 0.012).clamp(0.0, 0.30);
-    final conDir = _coneDir(direction, halfA);
+    _coneDir(direction, halfA, _dirScratch);
 
     final speed = crystalSpeed + _rng.nextDouble() * 11.0;
-    final vel   = conDir.scaled(speed) + wind.scaled(0.06);
-    final life  = crystalRange / speed * (0.65 + _rng.nextDouble() * 0.60);
+    _velScratch.setFrom(_dirScratch);
+    _velScratch.scale(speed);
+    _velScratch.x += wind.x * 0.06;
+    _velScratch.y += wind.y * 0.06;
+    _velScratch.z += wind.z * 0.06;
+    final life = crystalRange / speed * (0.65 + _rng.nextDouble() * 0.60);
 
     system.emit(Particle(
       position:    Vector3.copy(origin),
-      velocity:    vel,
+      velocity:    Vector3.copy(_velScratch),
       lifetime:    life,
       size:        0.09 + _rng.nextDouble() * 0.21,
       isFire:      false,
@@ -93,18 +102,21 @@ class IceBreathEmitter {
   }
 
   void _emitMist(ParticleSystem system, Vector3 wind, double scale) {
-    final halfA  = (mistHalfAngle + chargeTime * 0.08).clamp(0.0, 0.52);
-    final conDir = _coneDir(direction, halfA);
+    final halfA = (mistHalfAngle + chargeTime * 0.08).clamp(0.0, 0.52);
+    _coneDir(direction, halfA, _dirScratch);
 
-    final speed  = mistSpeed + _rng.nextDouble() * 5.0;
-    final vel    = conDir.scaled(speed) + wind.scaled(0.12);
-    final life   = mistRange / speed * (0.80 + _rng.nextDouble() * 0.40);
-    // Mist blobs grow larger as the weapon charges.
-    final sz = 1.3 + _rng.nextDouble() * 2.5 * math.min(scale * 0.7, 2.0);
+    final speed = mistSpeed + _rng.nextDouble() * 5.0;
+    _velScratch.setFrom(_dirScratch);
+    _velScratch.scale(speed);
+    _velScratch.x += wind.x * 0.12;
+    _velScratch.y += wind.y * 0.12;
+    _velScratch.z += wind.z * 0.12;
+    final life = mistRange / speed * (0.80 + _rng.nextDouble() * 0.40);
+    final sz   = 1.3 + _rng.nextDouble() * 2.5 * math.min(scale * 0.7, 2.0);
 
     system.emit(Particle(
       position: Vector3.copy(origin),
-      velocity: vel,
+      velocity: Vector3.copy(_velScratch),
       lifetime: life,
       size:     sz,
       isFire:   false,
@@ -115,24 +127,31 @@ class IceBreathEmitter {
     ));
   }
 
-  /// Returns a unit vector within [halfAngle] radians of [axis], uniformly
-  /// distributed across the cone surface (not area-weighted).
-  Vector3 _coneDir(Vector3 axis, double halfAngle) {
+  /// Writes a unit vector within [halfAngle] radians of [axis] into [out].
+  /// Uses pre-allocated scratch vectors — no heap allocations.
+  void _coneDir(Vector3 axis, double halfAngle, Vector3 out) {
     final theta = _rng.nextDouble() * halfAngle;
     final phi   = _rng.nextDouble() * math.pi * 2;
     final sT    = math.sin(theta);
     final cT    = math.cos(theta);
-    final right = _perp(axis);
-    final up    = axis.cross(right).normalized();
-    return (axis.scaled(cT)
-          + right.scaled(sT * math.cos(phi))
-          + up.scaled(sT * math.sin(phi))).normalized();
+    _perpInto(axis, _rightScratch);
+    axis.crossInto(_rightScratch, _upScratch);
+    _upScratch.normalize();
+    // out = axis*cT + right*sT*cos(phi) + up*sT*sin(phi)
+    out.setFrom(axis);
+    out.scale(cT);
+    _rightScratch.scale(sT * math.cos(phi));
+    out.add(_rightScratch);
+    _upScratch.scale(sT * math.sin(phi));
+    out.add(_upScratch);
+    out.normalize();
   }
 
-  static Vector3 _perp(Vector3 v) {
+  static void _perpInto(Vector3 v, Vector3 out) {
     final a = v.x.abs(), b = v.y.abs(), c = v.z.abs();
-    if (a <= b && a <= c) return Vector3(0.0, -v.z, v.y).normalized();
-    if (b <= c)           return Vector3(-v.z, 0.0, v.x).normalized();
-    return Vector3(-v.y, v.x, 0.0).normalized();
+    if (a <= b && a <= c) { out.setValues(0.0, -v.z,  v.y); }
+    else if (b <= c)      { out.setValues(-v.z, 0.0,  v.x); }
+    else                  { out.setValues(-v.y,  v.x, 0.0); }
+    out.normalize();
   }
 }

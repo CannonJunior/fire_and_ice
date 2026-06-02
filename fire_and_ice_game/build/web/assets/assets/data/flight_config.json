@@ -31,6 +31,7 @@
     "groundBrake": 8.0,
     "liftoffSpeed": 8.0,
     "groundTurnRate": 55.0,
+    "runwayStartX": -150.0,
     "runwayStartZ": 78.0,
     "throttleRate": 0.45,
     "flightSpeedAccel": 2.5
@@ -77,6 +78,13 @@
       "icon": "❄️",
       "description": "Cryo interceptor — side-mounted gear lever, dual ice systems",
       "gearLeverPosition": "leftOfLeft"
+    },
+    {
+      "id": "skytanker",
+      "displayName": "SkyTanker",
+      "icon": "🛢️",
+      "description": "Massive tanker. Triple payload, but handles like a barn door.",
+      "gearLeverPosition": "center"
     }
   ]
 }

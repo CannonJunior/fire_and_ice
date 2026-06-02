@@ -282,3 +282,155 @@ void main() {
 
 const String gpuFireFragShader  = fireFragShader;
 const String gpuSmokeFragShader = smokeFragShader;
+
+// ── Atmospheric smoke plume vertex shader ─────────────────────────────────────
+// Each billboard segment has an independent width/height for the stacked column.
+// aLayerIndex drives the fragment altitude fade (0 = soot base, 4 = cream top).
+const String atmosphericSmokeVertSrc = '''
+attribute vec3  aWorldPos;
+attribute vec2  aCorner;
+attribute vec4  aColor;
+attribute float aWidth;
+attribute float aHeight;
+attribute float aLayerIndex;
+
+uniform mat4 uViewProj;
+uniform vec3 uCameraRight;
+uniform vec3 uCameraUp;
+
+varying vec2  vUV;
+varying vec4  vColor;
+varying float vHeightFactor;
+
+void main() {
+  vec3 pos = aWorldPos
+    + uCameraRight * aCorner.x * aWidth
+    + uCameraUp    * aCorner.y * aHeight;
+  vUV          = aCorner * 0.5 + 0.5;
+  vColor       = aColor;
+  vHeightFactor = aLayerIndex / 4.0;
+  gl_Position  = uViewProj * vec4(pos, 1.0);
+}
+''';
+
+// ── Atmospheric smoke plume fragment shader ────────────────────────────────────
+// Dense core (flat-topped), slow 4-octave fBm, altitude fade top and bottom.
+// Designed for far-field plumes that must read as solid geological features.
+const String atmosphericSmokeFragSrc = '''
+precision mediump float;
+
+varying vec2  vUV;
+varying vec4  vColor;
+varying float vHeightFactor;
+
+uniform float uTime;
+
+float ahash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+float anoise(vec2 p) {
+  vec2 i = floor(p); vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float n0 = mix(ahash(i),             ahash(i + vec2(1.0, 0.0)), f.x);
+  float n1 = mix(ahash(i + vec2(0.0,1.0)), ahash(i + vec2(1.0,1.0)), f.x);
+  return mix(n0, n1, f.y);
+}
+float afbm(vec2 p) {
+  float r = 0.0; float a = 0.5;
+  for (int i = 0; i < 4; i++) { r += a * anoise(p); p *= 2.0; a *= 0.5; }
+  return r;
+}
+
+void main() {
+  float d = length(vUV - 0.5);
+
+  // Dense flat-topped core; sharp lobed fringe.
+  float core = 1.0 - smoothstep(0.28, 0.50, d);
+  float edge = 1.0 - smoothstep(0.42, 0.68, d);
+  float mask = max(core, edge * 0.70);
+
+  // Very slow billowing (massive plume must feel geological).
+  vec2  billowUV = vUV * 2.0 + vec2(uTime * 0.03, sin(uTime * 0.02) * 0.22);
+  float billowing = afbm(billowUV);
+
+  // Altitude fade: solid at low layers, wispy near the top.
+  float altFade = smoothstep(0.0, 0.25, 1.0 - vHeightFactor)
+                * smoothstep(1.1, 0.55, vHeightFactor);
+
+  float alpha = vColor.a * mask * (0.45 + billowing * 0.55) * altFade;
+  if (alpha < 0.015) discard;
+  gl_FragColor = vec4(vColor.rgb, alpha);
+}
+''';
+
+// ── Cloud billboard vertex shader ─────────────────────────────────────────────
+// Shared by cumulus, CB, cirrus, and pyrocumulus billboard quads.
+// Supports per-billboard rotation for visual variety.
+const String cloudVertSrc = '''
+attribute vec3  aWorldPos;
+attribute vec2  aCorner;
+attribute vec4  aColor;
+attribute float aSize;
+attribute float aRotation;
+
+uniform mat4 uViewProj;
+uniform vec3 uCameraRight;
+uniform vec3 uCameraUp;
+
+varying vec2 vUV;
+varying vec4 vColor;
+
+void main() {
+  float cosR = cos(aRotation);
+  float sinR = sin(aRotation);
+  vec2  rc   = vec2(cosR * aCorner.x - sinR * aCorner.y,
+                    sinR * aCorner.x + cosR * aCorner.y);
+  vec3 pos = aWorldPos
+    + uCameraRight * rc.x * aSize
+    + uCameraUp    * rc.y * aSize;
+  vUV         = aCorner * 0.5 + 0.5;
+  vColor      = aColor;
+  gl_Position = uViewProj * vec4(pos, 1.0);
+}
+''';
+
+// ── Cloud billboard fragment shader ──────────────────────────────────────────
+// Fluffy cumulus shape: opaque rounded core, small-scale bumps on silhouette,
+// gentle interior shading. Same non-texture approach as the fire/smoke shaders.
+const String cloudFragSrc = '''
+precision mediump float;
+
+varying vec2 vUV;
+varying vec4 vColor;
+
+uniform float uTime;
+
+float chash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+float cnoise(vec2 p) {
+  vec2 i = floor(p); vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float n0 = mix(chash(i),             chash(i + vec2(1.0, 0.0)), f.x);
+  float n1 = mix(chash(i + vec2(0.0,1.0)), chash(i + vec2(1.0,1.0)), f.x);
+  return mix(n0, n1, f.y);
+}
+
+void main() {
+  float d = length(vUV - 0.5) * 2.0;
+
+  // Rounded core + edge bumps → cauliflower silhouette
+  float core = 1.0 - smoothstep(0.42, 0.98, d);
+  vec2  edgeUV = vUV * 4.5 + vec2(uTime * 0.018, uTime * 0.012);
+  float bump = cnoise(edgeUV) * 0.20;
+  float mask = clamp(core + bump * (1.0 - core), 0.0, 1.0);
+
+  // Gentle interior shading (clouds are brighter near the light-facing centre).
+  vec2  intUV   = vUV * 3.0 + vec2(uTime * 0.009, -uTime * 0.007);
+  float interior = cnoise(intUV) * 0.22 + 0.78;
+
+  float alpha = mask * interior * vColor.a;
+  if (alpha < 0.008) discard;
+  gl_FragColor = vec4(vColor.rgb, alpha);
+}
+''';

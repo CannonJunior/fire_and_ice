@@ -32,6 +32,18 @@ const _kWarn     = Color(0xFFFF6600);
 const _kImcAmber  = Color(0xFFFF8800);
 const _kSmkYellow = Color(0xFFFFCC00);
 
+/// Row of mode/view/smoke badges for placement alongside the top-right menu buttons.
+Widget buildStatusBadgeRow(GameState state, {bool disableHaze = false}) => Row(
+  mainAxisSize: MainAxisSize.min,
+  crossAxisAlignment: CrossAxisAlignment.center,
+  children: [
+    _modeBadge(state.gameMode),
+    const SizedBox(width: 6),
+    _viewBadge(state.viewMode == ViewMode.thirdPerson ? '🎮 3RD PERSON' : '👁 COCKPIT'),
+    if (!disableHaze && state.smokeOpacity > 0.40) ...[const SizedBox(width: 6), _smokeLevelBadge(state.smokeOpacity)],
+  ],
+);
+
 /// Build the active HUD, switching between cockpit and third-person modes.
 Widget buildCockpitHud(
   GameState state, {
@@ -77,12 +89,6 @@ Widget buildCockpitHud(
           showTelemetry: showTelemetry,
           showActionBar: showActionBar,
           showTutorial:  showTutorial),
-      Positioned(top: 12, right: 115, child: Row(mainAxisSize: MainAxisSize.min, children: [
-        _modeBadge(state.gameMode),
-        const SizedBox(width: 6),
-        _viewBadge('🎮 3RD PERSON'),
-        if (state.smokeOpacity > 0.40) ...[const SizedBox(width: 6), _smokeLevelBadge(state.smokeOpacity)],
-      ])),
       IgnorePointer(child: Stack(children: [
         Positioned(bottom: 12, right: 12, child: HullIntegrityArc(state: state)),
       ])),
@@ -91,7 +97,7 @@ Widget buildCockpitHud(
   }
 
   return Stack(children: [
-    IgnorePointer(child: _windshieldHud(state)),
+    IgnorePointer(child: _windshieldHud(state, disableHaze: settings?.disableHaze ?? false)),
     Align(
       alignment: Alignment.bottomCenter,
       child: _cockpitPanel(state,
@@ -133,12 +139,6 @@ Widget buildCockpitHud(
       Positioned(bottom: 12, right: 12,
           child: HullIntegrityArc(state: state)),
       if (showTutorial) buildTutorialOverlay(state),
-    ])),
-    Positioned(top: 12, right: 115, child: Row(mainAxisSize: MainAxisSize.min, children: [
-      _modeBadge(state.gameMode),
-      const SizedBox(width: 6),
-      _viewBadge('👁 COCKPIT'),
-      if (state.smokeOpacity > 0.40) ...[const SizedBox(width: 6), _smokeLevelBadge(state.smokeOpacity)],
     ])),
     Positioned(top: 0, left: 0, right: 0, child: _portBanner()),
   ]);
@@ -238,9 +238,9 @@ Widget _smokeAdvisory(GameState state) {
 
 // Windshield HUD — delegates to hud_cockpit.dart
 
-Widget _windshieldHud(GameState state) => Stack(children: [
+Widget _windshieldHud(GameState state, {bool disableHaze = false}) => Stack(children: [
   buildCockpitWindshieldHud(state),
-  if (state.smokeOpacity > 0.40) _smokeAdvisory(state),
+  if (!disableHaze && state.smokeOpacity > 0.40) _smokeAdvisory(state),
 ]);
 
 // Cockpit Panel
@@ -299,6 +299,7 @@ Widget _cockpitPanel(GameState state, {
     return CockpitDragGroup(
       key:           ValueKey('${aid}_$id'),
       label:         label,
+      elementId:     id,
       initialOffset: Offset(dx, dy),
       draggable:     isDraggable,
       showInfo:      settings?.showCockpitInfo  ?? false,

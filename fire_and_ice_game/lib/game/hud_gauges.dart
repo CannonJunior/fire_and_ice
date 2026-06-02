@@ -358,7 +358,7 @@ class WarningTextZone extends StatelessWidget {
     if (state.mana < 15)                      warnings.add('LOW MANA');
     if (state.health < 20)                    warnings.add('HULL CRITICAL');
     if (state.flightSpeed < 1.0 && state.flightAltitude > 2) warnings.add('STALL');
-    if (state.flightAltitude < 3)             warnings.add('PULL UP');
+    if (state.flightAltitude < 3 && state.gameMode != GameMode.taxi) warnings.add('PULL UP');
 
     return Align(
       alignment: const Alignment(0, -0.72),

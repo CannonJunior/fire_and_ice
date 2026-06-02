@@ -57,26 +57,29 @@ class TreeRenderer {
   // ── Tree geometry ──────────────────────────────────────────────────────────
 
   void _addLivingTree(_MeshBuilder mb, TreeInstance t) {
-    final trunkH  = t.height * 0.28;
-    // Crown starts 25% into the trunk so the base wraps around the trunk top,
-    // hiding the narrow-trunk / wide-crown junction.
-    final crownY  = t.wy + trunkH * 0.75;
+    final trunkH = t.height * 0.28;
+    final crownY = t.wy + trunkH * 0.75;
+    // Low-frequency per-tree color shift: blue-green (cv=0) → yellow-green (cv=1).
+    // Avoids the "uniform green carpet" artifact common in naïve forest systems.
+    final cv = (math.sin(t.wx * 0.053 + t.wz * 0.071) + 1.0) * 0.5;
+
     _addTaperedPrism(mb, t.wx, t.wy, t.wy + trunkH, t.wz,
         t.trunkRadius, t.trunkRadius * 0.65, 0.34, 0.20, 0.09);
 
     if (t.type == 2) {
-      // Dead snag: tall tapered upper shaft + asymmetric branch stubs.
       _addTaperedPrism(mb, t.wx, t.wy + trunkH, t.wy + t.height, t.wz,
           t.trunkRadius * 0.65, t.trunkRadius * 0.30, 0.30, 0.22, 0.14);
       _addSnagBranches(mb, t.wx, t.wz, t.wy + t.height * 0.62,
           t.trunkRadius * 0.45, t.height * 0.20, 0.28, 0.20, 0.12);
     } else if (t.type == 0) {
-      // Pine: 3-tier overlapping cone crown.
-      _addPineTiers(mb, t.wx, crownY, t.wz, t.canopyRadius, t.height - trunkH * 0.75);
+      _addPineTiers(mb, t.wx, crownY, t.wz, t.canopyRadius, t.height - trunkH * 0.75, cv);
     } else {
-      // Deciduous: 4-ring rounded dome crown.
+      // Deciduous base color varies: ±8% on green, ±6% on blue per-tree.
+      final dr = 0.17 + cv * 0.06;
+      final dg = 0.46 + cv * 0.08;
+      final db = 0.14 - cv * 0.05;
       _addRoundedCrown(mb, t.wx, crownY, t.wz,
-          t.canopyRadius, t.height * 0.72 + trunkH * 0.25, 0.20, 0.50, 0.15);
+          t.canopyRadius, t.height * 0.72 + trunkH * 0.25, dr, dg, db);
     }
   }
 
@@ -105,17 +108,18 @@ class TreeRenderer {
   // ── Crown builders ─────────────────────────────────────────────────────────
 
   /// Three overlapping cone tiers for a pine crown.
+  /// [cv] is a 0–1 per-tree color variance: shifts from blue-green to yellow-green.
   void _addPineTiers(_MeshBuilder mb, double cx, double baseY, double cz,
-      double baseR, double crownH) {
+      double baseR, double crownH, [double cv = 0.5]) {
     final t1Apex = baseY + crownH * 0.46;
     final t2Apex = baseY + crownH * 0.72;
     final t3Apex = baseY + crownH;
-    // Bottom tier — widest, darkest
-    _addCone(mb, cx, baseY, cz, baseR, t1Apex, 0.12, 0.36, 0.10);
-    // Mid tier — starts 22% up
-    _addCone(mb, cx, baseY + crownH * 0.22, cz, baseR * 0.70, t2Apex, 0.14, 0.42, 0.12);
-    // Top tier — narrow, slightly lighter
-    _addCone(mb, cx, baseY + crownH * 0.48, cz, baseR * 0.42, t3Apex, 0.17, 0.46, 0.14);
+    // Green channel: 0.34–0.42. Blue channel: 0.06–0.12.
+    final pg = 0.34 + cv * 0.08;
+    final pb = 0.12 - cv * 0.06;
+    _addCone(mb, cx, baseY, cz, baseR, t1Apex, 0.11, pg, pb);
+    _addCone(mb, cx, baseY + crownH * 0.22, cz, baseR * 0.70, t2Apex, 0.13, pg * 1.14, pb * 0.90);
+    _addCone(mb, cx, baseY + crownH * 0.48, cz, baseR * 0.42, t3Apex, 0.16, pg * 1.24, pb * 0.80);
   }
 
   /// Three burning ember tiers.

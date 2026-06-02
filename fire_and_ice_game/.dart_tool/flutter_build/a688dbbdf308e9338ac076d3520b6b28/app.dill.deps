@@ -1011,6 +1011,7 @@ file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/hud_ability_hex.
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/hud_gauges.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/hud_tutorial.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/hud_widgets.dart
+file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/ice_breath_emitter.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/loadout_page.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/lvr_lever.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/game/mana_arc.dart
@@ -1034,7 +1035,10 @@ file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/models/aircraft_upgra
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/models/game_action.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/aircraft_animator.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/aircraft_builder.dart
+file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/atmospheric_smoke_plume.dart
+file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/atmospheric_smoke_renderer.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/camera3d.dart
+file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/cloud_renderer.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/fire_shaders.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/gpu_particle_system.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/rendering/heat_distortion.dart
@@ -1055,6 +1059,7 @@ file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/systems/physics_syste
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/systems/wyvern_system.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/terrain/airbase_generator.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/terrain/airfield_generator.dart
+file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/terrain/cloud_system.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/terrain/infinite_terrain_manager.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/terrain/lake_generator.dart
 file:///home/junior/src/fire_and_ice/fire_and_ice_game/lib/terrain/terrain_chunk.dart

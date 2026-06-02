@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:math' as math;
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:vector_math/vector_math.dart';
 import 'terrain_generator.dart';
 
@@ -38,17 +41,44 @@ class TreeSystem {
 
   final math.Random _rng;
 
-  static const double _kGridCell   = 16.0; // world units per spatial grid cell
-  static const double _kSpreadR    = 14.0; // fire spread radius (world units)
-  static const double _kSpreadRate = 0.10; // base spread probability per second
-  static const double _kBurnTime   = 8.0;  // seconds burning→charred (height-scaled)
-  static const double _kAircraftR  = 1.5;  // aircraft bounding sphere radius
+  static const double _kGridCell   = 16.0;
+  static const double _kSpreadR    = 14.0;
+  static const double _kSpreadRate = 0.10;
+  static const double _kBurnTime   = 8.0;
+  static const double _kAircraftR  = 1.5;
+
+  // ── Generation config (loaded from game_config.json) ──────────────────────
+  double _scatterMinGap              = 10.0;
+  double _scatterDensityThreshold    = 0.62;
+  double _clusterSeedSpacing         = 28.0;
+  double _clusterSeedDensityThreshold = 0.45;
+  int    _clusterCountMin            = 2;
+  int    _clusterCountMax            = 5;
 
   TreeSystem({int rngSeed = 777}) : _rng = math.Random(rngSeed);
 
+  Future<void> loadConfig() async {
+    try {
+      final raw = await rootBundle.loadString('config/game_config.json');
+      final cfg = (jsonDecode(raw) as Map<String, dynamic>)['trees'] as Map<String, dynamic>?;
+      if (cfg == null) return;
+      _scatterMinGap               = (cfg['scatterMinGap']               as num?)?.toDouble() ?? _scatterMinGap;
+      _scatterDensityThreshold     = (cfg['scatterDensityThreshold']     as num?)?.toDouble() ?? _scatterDensityThreshold;
+      _clusterSeedSpacing          = (cfg['clusterSeedSpacing']          as num?)?.toDouble() ?? _clusterSeedSpacing;
+      _clusterSeedDensityThreshold = (cfg['clusterSeedDensityThreshold'] as num?)?.toDouble() ?? _clusterSeedDensityThreshold;
+      _clusterCountMin             = (cfg['clusterCountMin']             as int?) ?? _clusterCountMin;
+      _clusterCountMax             = (cfg['clusterCountMax']             as int?) ?? _clusterCountMax;
+      debugPrint('[TreeSystem] config loaded — scatter gap: $_scatterMinGap, cluster max: $_clusterCountMax');
+    } catch (e) {
+      debugPrint('[TreeSystem] config load failed ($e) — using defaults');
+    }
+  }
+
   // ── Generation ─────────────────────────────────────────────────────────────
 
-  /// Deterministically place trees across the initial 240×240 playable area.
+  /// Deterministically place trees across the 240×240 playable area.
+  /// Uses two-layer placement: Poisson-disk scattered background + clustered
+  /// groupings, which produces the organic density variation seen in real forests.
   void generate({int seed = 42}) {
     trees.clear();
     _grid.clear();
@@ -56,42 +86,140 @@ class TreeSystem {
     newlyCharredIds.clear();
     dirty = true;
 
-    const double worldMin = -120.0, worldMax = 120.0, spacing = 7.0;
+    const double worldMin = -120.0, worldMax = 120.0;
+    final rng = math.Random(seed);
     int id = 0;
 
-    for (double gx = worldMin; gx <= worldMax; gx += spacing) {
-      for (double gz = worldMin; gz <= worldMax; gz += spacing) {
-        // Deterministic jitter so the grid doesn't look artificial.
-        final jx = math.sin(gx * 0.37 + gz * 0.71 + seed) * 2.8;
-        final jz = math.cos(gx * 0.59 + gz * 0.43 + seed) * 2.8;
-        final wx = gx + jx;
-        final wz = gz + jz;
+    // Multi-octave density field: combines three sine octaves for natural variation.
+    double densityAt(double x, double z) =>
+        ((math.sin(x * 0.17 + z * 0.29 + seed) * 0.50 +
+          math.sin(x * 0.09 - z * 0.11 + seed * 1.7) * 0.35 +
+          math.sin(x * 0.31 + z * 0.13 + seed * 0.5) * 0.15) + 1.0) * 0.5;
 
+    // Layer 1 — scattered background via Poisson disk sampling.
+    final scatter = _poissonDisk(_scatterMinGap, worldMin, worldMax, worldMin, worldMax,
+        20, math.Random(seed));
+    for (final (wx, wz) in scatter) {
+      if (densityAt(wx, wz) < _scatterDensityThreshold) continue;
+      final wy = TerrainGenerator.heightAt(wx, wz);
+      if (wy < 0.6 || wy > 11.0) continue;
+      trees.add(_makeTree(id++, wx, wy, wz, seed));
+    }
+
+    // Layer 2 — cluster fills: coarse PDS seeds each expanded into a tight group.
+    final seeds = _poissonDisk(_clusterSeedSpacing, worldMin, worldMax, worldMin, worldMax,
+        20, math.Random(seed + 99));
+    for (final (sx, sz) in seeds) {
+      if (densityAt(sx, sz) < _clusterSeedDensityThreshold) continue;
+      final sy = TerrainGenerator.heightAt(sx, sz);
+      if (sy < 0.6 || sy > 11.0) continue;
+      final countRange = _clusterCountMax - _clusterCountMin;
+      final count = _clusterCountMin + (densityAt(sx, sz) * countRange).round();
+      for (int c = 0; c < count; c++) {
+        final angle = rng.nextDouble() * math.pi * 2;
+        // Two-uniform sum approximates Gaussian falloff, sigma ≈ 4 units.
+        final r  = (rng.nextDouble() + rng.nextDouble()) * 5.0;
+        final wx = (sx + math.cos(angle) * r).clamp(worldMin, worldMax);
+        final wz = (sz + math.sin(angle) * r).clamp(worldMin, worldMax);
         final wy = TerrainGenerator.heightAt(wx, wz);
-        if (wy < 0.8 || wy > 10.0) continue;
-
-        // Density varies by elevation: densest on mid-slopes.
-        final targetDensity = wy < 2.0 ? 0.12 : (wy < 6.0 ? 0.35 : 0.18);
-        final densityNoise  = (math.sin(wx * 0.23 + wz * 0.47 + seed * 0.01) + 1.0) * 0.5;
-        if (densityNoise > targetDensity) continue;
-
-        // Type: 70% pine, 20% deciduous, 10% dead snag.
-        final typeNoise = (math.sin(wx * 0.99 + wz * 1.31) + 1.0) * 0.5;
-        final type = typeNoise < 0.70 ? 0 : (typeNoise < 0.90 ? 1 : 2);
-
-        final sizeNoise  = (math.sin(wx * 2.1 + wz * 1.7) + 1.0) * 0.5;
-        final height     = type == 2 ? 4.0 + sizeNoise * 3.0 : 6.0 + sizeNoise * 6.0;
-        final canopyR    = height * (type == 0 ? 0.22 : 0.28);
-        final trunkR     = 0.22 + sizeNoise * 0.14;
-
-        trees.add(TreeInstance(
-          id: id++, wx: wx, wy: wy, wz: wz,
-          height: height, canopyRadius: canopyR, trunkRadius: trunkR, type: type,
-        ));
+        if (wy < 0.6 || wy > 11.0) continue;
+        trees.add(_makeTree(id++, wx, wy, wz, seed));
       }
     }
 
     _rebuildGrid();
+  }
+
+  /// Poisson disk sampling — guarantees minimum separation [minDist] between
+  /// all returned points, producing blue-noise spatial distribution.
+  List<(double, double)> _poissonDisk(
+      double minDist, double xMin, double xMax, double zMin, double zMax,
+      int maxAttempts, math.Random rng) {
+    final result = <(double, double)>[];
+    final active  = <int>[];
+    final cell    = minDist / math.sqrt(2.0);
+    final cols    = ((xMax - xMin) / cell).ceil() + 1;
+    final rows    = ((zMax - zMin) / cell).ceil() + 1;
+    final grid    = List<int>.filled(cols * rows, -1);
+
+    int gIdx(double x, double z) =>
+        ((z - zMin) / cell).floor().clamp(0, rows - 1) * cols +
+        ((x - xMin) / cell).floor().clamp(0, cols - 1);
+
+    bool valid(double x, double z) {
+      final col = ((x - xMin) / cell).floor();
+      final row = ((z - zMin) / cell).floor();
+      final md2 = minDist * minDist;
+      for (int dr = -2; dr <= 2; dr++) {
+        for (int dc = -2; dc <= 2; dc++) {
+          final r = row + dr, c = col + dc;
+          if (r < 0 || r >= rows || c < 0 || c >= cols) continue;
+          final idx = grid[r * cols + c];
+          if (idx < 0) continue;
+          final dx = result[idx].$1 - x;
+          final dz = result[idx].$2 - z;
+          if (dx * dx + dz * dz < md2) return false;
+        }
+      }
+      return true;
+    }
+
+    void add(double x, double z) {
+      final i = result.length;
+      result.add((x, z));
+      active.add(i);
+      grid[gIdx(x, z)] = i;
+    }
+
+    add(xMin + rng.nextDouble() * (xMax - xMin),
+        zMin + rng.nextDouble() * (zMax - zMin));
+
+    while (active.isNotEmpty) {
+      final ri  = rng.nextInt(active.length);
+      final src = result[active[ri]];
+      bool found = false;
+      for (int k = 0; k < maxAttempts; k++) {
+        final angle = rng.nextDouble() * math.pi * 2;
+        final dist  = minDist * (1.0 + rng.nextDouble());
+        final nx    = src.$1 + math.cos(angle) * dist;
+        final nz    = src.$2 + math.sin(angle) * dist;
+        if (nx < xMin || nx > xMax || nz < zMin || nz > zMax) continue;
+        if (!valid(nx, nz)) continue;
+        add(nx, nz);
+        found = true;
+        break;
+      }
+      if (!found) active.removeAt(ri);
+    }
+    return result;
+  }
+
+  /// Build a single tree instance from world position.
+  /// Species assigned by elevation: pines on ridges, deciduous in valleys.
+  TreeInstance _makeTree(int id, double wx, double wy, double wz, int seed) {
+    final elevNorm  = ((wy - 0.6) / 10.4).clamp(0.0, 1.0);
+    final typeNoise = (math.sin(wx * 0.99 + wz * 1.31) + 1.0) * 0.5;
+    final type = elevNorm > 0.58
+        ? 0 // pine on ridges
+        : typeNoise < 0.11
+            ? 2 // snag (~10%)
+            : typeNoise < 0.56
+                ? 0 // pine
+                : 1; // deciduous
+
+    final sizeNoise   = (math.sin(wx * 2.1 + wz * 1.7) + 1.0) * 0.5;
+    final scaleFactor = 0.72 + sizeNoise * 0.58; // 0.72×–1.30× scale variation
+    final baseH       = type == 2 ? 3.5 + sizeNoise * 3.5 : 5.5 + sizeNoise * 6.5;
+    final height      = baseH * scaleFactor;
+    // ±12% canopy radius jitter breaks "army of clones" silhouette.
+    final canopyJitter = 0.90 + (math.sin(wx * 3.7 + wz * 2.9) + 1.0) * 0.10;
+    final canopyR      = height * (type == 0 ? 0.22 : 0.28) * canopyJitter;
+    final trunkR       = (0.20 + sizeNoise * 0.16) * math.sqrt(scaleFactor);
+
+    return TreeInstance(
+      id: id, wx: wx, wy: wy, wz: wz,
+      height: height, canopyRadius: canopyR, trunkRadius: trunkR, type: type,
+    );
   }
 
   // ── Update ─────────────────────────────────────────────────────────────────
@@ -230,10 +358,21 @@ class TreeSystem {
     }
   }
 
-  /// Lightweight snapshot of all trees for NAV map rendering.
-  /// Returns list of (worldX, worldZ, stateIndex) — stateIndex: 0=alive, 1=burning, 2=charred.
-  List<(double, double, int)> treeSnapshot() =>
-      trees.map((t) => (t.wx, t.wz, t.state.index)).toList();
+  // Pre-allocated snapshot buffer — updated in-place to avoid per-update list alloc.
+  final List<(double, double, int)> _snapshotBuf = [];
+
+  /// Updates the cached tree snapshot and returns it.
+  /// stateIndex: 0=alive, 1=burning, 2=charred.
+  List<(double, double, int)> treeSnapshot() {
+    if (_snapshotBuf.length != trees.length) {
+      _snapshotBuf.length = trees.length;
+    }
+    for (int i = 0; i < trees.length; i++) {
+      final t = trees[i];
+      _snapshotBuf[i] = (t.wx, t.wz, t.state.index);
+    }
+    return _snapshotBuf;
+  }
 
   static String _gridKey(double x, double z) =>
       '${(x / _kGridCell).floor()}_${(z / _kGridCell).floor()}';

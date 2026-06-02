@@ -57,6 +57,7 @@ class SettingsState {
   bool showTutorial     = false;
   bool cockpitDraggable = false;
   bool showCockpitInfo  = false;
+  bool disableHaze      = false;
 
   // ── Per-aircraft cockpit element visibility ────────────────────────────────
   // Keys match the drag() ids in cockpit_hud.dart.
@@ -142,6 +143,7 @@ class SettingsState {
       showTutorial      = sp.getBool('${_p}showTutorial')       ?? showTutorial;
       cockpitDraggable  = sp.getBool('${_p}cockpitDraggable')  ?? cockpitDraggable;
       showCockpitInfo   = sp.getBool('${_p}showCockpitInfo')   ?? showCockpitInfo;
+      disableHaze       = sp.getBool('${_p}disableHaze')       ?? disableHaze;
       selectedAircraft  = sp.getString('${_p}aircraft')        ?? selectedAircraft;
       final layoutJson  = sp.getString('${_p}cockpitLayouts');
       if (layoutJson != null) {
@@ -186,6 +188,7 @@ class SettingsState {
       await sp.setBool('${_p}showTutorial',      showTutorial);
       await sp.setBool('${_p}cockpitDraggable', cockpitDraggable);
       await sp.setBool('${_p}showCockpitInfo',  showCockpitInfo);
+      await sp.setBool('${_p}disableHaze',      disableHaze);
       await sp.setString('${_p}aircraft',        selectedAircraft);
       await sp.setString('${_p}cockpitLayouts',  jsonEncode(cockpitLayouts));
       await sp.setString('${_p}perAircraftVis',  jsonEncode(_perAircraftVis));

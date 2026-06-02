@@ -1,172 +1,172 @@
 {
-  "timestamp": "2026-05-30T20:12:32Z",
-  "passed": 27,
+  "timestamp": "2026-05-31T14:30:10Z",
+  "passed": 0,
   "total": 33,
   "tests": [
     {
       "name": "T01 Page loads",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8011/\nCall log:\n  - navigating to \"http://localhost:8011/\", waiting until \"networkidle\"\n"
     },
     {
       "name": "T02 View toggle Tab",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Page.evaluate: Execution context was destroyed, most likely because of a navigation"
     },
     {
       "name": "T03 Throttle up ] key",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T04 Throttle down [ key",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T05 Gear G key",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T06 Flaps extend F key",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T07 Flaps retract f key",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T08 Forward W key",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T09 Ability slot 1 key",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T10 Left MFD ABLT tab",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T11 Left MFD STAT tab",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T12 Left MFD MODE tab",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T13 Left MFD ELMT tab",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T14 Ability OSB slot 0",
       "passed": false,
-      "detail": "wait_gs timeout: key='abilityCooldowns' last={'Inferno Strike': 6.95}"
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T15 Ability OSB slot 1",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T16 Right MFD TERR tab",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T17 Right MFD TGT tab",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T18 Right MFD MARK tab",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T19 Right MFD NAV tab",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T20 ZOOM button",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T21 AUTO button",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T22 LOCK button",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T23 CLR button",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T24 AUX CHAT tab",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T25 AUX VID tab",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T26 AUX MAP tab",
       "passed": false,
-      "detail": "wait_gs timeout: key='auxDisplayPage' last=1"
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T27 Gear button click",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T28 Flaps lever cycle",
       "passed": false,
-      "detail": "wait_gs timeout: key='flapsLevel' last=0"
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T29 Throttle drag",
       "passed": false,
-      "detail": "Throttle did not increase: 0.230 \u2192 0.230"
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T30 Settings panel",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T31 Hangar panel",
-      "passed": true,
-      "detail": ""
+      "passed": false,
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T32 LVR lever click",
       "passed": false,
-      "detail": "wait_gs timeout: key='lvrOn' last=False"
+      "detail": "Game-state bridge element not found"
     },
     {
       "name": "T33 Throttle quad click",
       "passed": false,
-      "detail": "wait_gs timeout: key='throttle' last=0.005"
+      "detail": "Game-state bridge element not found"
     }
   ]
 }

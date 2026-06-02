@@ -1,5 +1,19 @@
 import 'package:flutter/material.dart';
 
+// ── CockpitRegistry ───────────────────────────────────────────────────────────
+
+/// Records each draggable element's natural (pre-offset) screen bounds.
+/// Populated by [CockpitDragGroup._mount] when drag mode is enabled.
+/// The settings panel ↺ button reads this to compute a centering offset.
+class CockpitRegistry {
+  static final Map<String, Rect> _bounds = {};
+
+  static void register(String id, Offset naturalPos, Size size) =>
+      _bounds[id] = Rect.fromLTWH(naturalPos.dx, naturalPos.dy, size.width, size.height);
+
+  static Rect? bounds(String id) => _bounds[id];
+}
+
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
 const _kBg      = Color(0xFF06100A);
@@ -25,10 +39,13 @@ const _kHeaderH = 32.0;
 /// An invisible [Opacity] placeholder stays in the original Row/Column slot to
 /// preserve layout dimensions.  Positions are persisted via [onOffsetChanged].
 class CockpitDragGroup extends StatefulWidget {
-  final String label;
-  final Widget child;
-  final bool   draggable;
-  final bool   showInfo;
+  final String  label;
+  final Widget  child;
+  final bool    draggable;
+  final bool    showInfo;
+  /// Registry key — when set, natural position is recorded in [CockpitRegistry]
+  /// at mount time so the settings ↺ button can compute a centering offset.
+  final String? elementId;
   /// Persisted offset loaded from SettingsState for the current aircraft.
   final Offset initialOffset;
   /// Fired on drag-end and on ↺ reset so the caller can save the position.
@@ -40,6 +57,7 @@ class CockpitDragGroup extends StatefulWidget {
     required this.child,
     this.draggable       = false,
     this.showInfo        = false,
+    this.elementId,
     this.initialOffset   = Offset.zero,
     this.onOffsetChanged,
   });
@@ -106,6 +124,8 @@ class _CockpitDragGroupState extends State<CockpitDragGroup> {
 
     final base = box.localToGlobal(Offset.zero);
     final sz   = box.size;
+
+    if (widget.elementId != null) CockpitRegistry.register(widget.elementId!, base, sz);
 
     _live.value = _offset;
     _entry?.remove();

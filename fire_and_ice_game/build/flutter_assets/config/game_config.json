@@ -39,6 +39,14 @@
     "tileSize": 2.0,
     "maxHeight": 12.0
   },
+  "trees": {
+    "scatterMinGap": 10.0,
+    "scatterDensityThreshold": 0.62,
+    "clusterSeedSpacing": 28.0,
+    "clusterSeedDensityThreshold": 0.45,
+    "clusterCountMin": 2,
+    "clusterCountMax": 5
+  },
   "airbase": {
     "center": [0.0, 0.5, -55.0],
     "criticalThreatRadius": 60.0

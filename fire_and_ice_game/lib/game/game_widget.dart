@@ -187,6 +187,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     if (_settings.defaultCockpit) _state.viewMode = ViewMode.cockpit;
     _setupCanvas();
     _registerKeyListeners();
+    await _treeSystem.loadConfig();
     _buildScene();
     await _initFireSystem();
     await _cloudSystem.loadConfig();
@@ -324,7 +325,8 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _lakeMesh      = lake.mesh;
     _lakeTransform = lake.transform;
 
-    // Airbase complex
+    // Airbase complex — offset west so the airbase is clear of all fire zones.
+    final abX = _state.cfgRunwayStartX;
     final apron  = AirbaseGenerator.generateApron();
     _apronMesh = apron.mesh; _apronTransform = apron.transform;
     final mh = AirbaseGenerator.generateMainHangar();
@@ -335,6 +337,10 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _tocMesh = toc.mesh; _tocTransform = toc.transform;
     final ct = AirbaseGenerator.generateControlTower();
     _towerMesh = ct.mesh; _towerTransform = ct.transform;
+    for (final t in [
+      _airfieldTransform, _apronTransform, _mainHgrTransform,
+      _secHgrTransform, _tocTransform, _towerTransform,
+    ]) { t?.position.x += abX; }
 
     _treeSystem.generate(seed: 42);
     _treeRenderer.prebuild(_treeSystem); // avoids first-frame blocking rebuild
@@ -405,7 +411,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       final yaw  = _state.playerRotation.y * math.pi / 180.0;
       final pit  = _state.flightPitchAngle  * math.pi / 180.0;
       final cosP = math.cos(pit);
-      final fwd  = Vector3(math.sin(yaw) * cosP, math.sin(pit), math.cos(yaw) * cosP)
+      final fwd  = Vector3(-math.sin(yaw) * cosP, math.sin(pit), -math.cos(yaw) * cosP)
           ..normalize();
       _iceBreathEmitter
         ..origin.setFrom(_state.playerPosition + fwd.scaled(2.5))
@@ -773,7 +779,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     }
     renderer.heatDistortion.resize(cwi, chi);
 
-    renderer.updateSmoke(_state.smokeOpacity);
+    renderer.updateSmoke(_settings.disableHaze ? 0.0 : _state.smokeOpacity);
 
     // Pass 1: scene → FBO (or directly to screen when heat is off).
     final useHeat = _heatDistortEnabled && _heatIntensity > 0.005;
@@ -931,7 +937,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       child: Stack(
         children: [
           WindParticleOverlay(state: _state),
-          SmokeOverlay(state: _state),
+          if (!_settings.disableHaze) SmokeOverlay(state: _state),
           if (_cloudOverlayOpacity > 0.01)
             IgnorePointer(
               child: Container(
@@ -990,7 +996,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
           Positioned(
             top: 12, right: 12,
             child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-              cockpit.buildStatusBadgeRow(_state),
+              cockpit.buildStatusBadgeRow(_state, disableHaze: _settings.disableHaze),
               const SizedBox(width: 8),
               _menuButton('⊞ HANGAR',   _showHangar,   () { setState(() { _showHangar   = !_showHangar;  _showSettings = false; _showMission = false; }); }),
               _menuButton('⚡ TOC',     _showMission,  () { setState(() { _showMission  = !_showMission; _showHangar   = false;  _showSettings = false; }); }),

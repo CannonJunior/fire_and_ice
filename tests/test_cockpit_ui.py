@@ -29,7 +29,11 @@ VH  = 900
 # Left MFD top OSBs (ELMT/ABLT/STAT/MODE) — x=250/330/410/490, pitch=80px
 L_ELMT, L_ABLT, L_STAT, L_MODE = 250, 330, 410, 490
 OSB_TOP_Y  = 405   # y-centre of MFD top tab rows (calibrated)
-OSB_BOT_Y  = 848   # y-centre of left MFD ability OSBs
+# Ability OSBs sit in a narrower Center within the MFD column — shifted +55px right
+# relative to the tab OSBs. OSB_BOT_Y probe-verified at y=840.
+ABLT_OSB0_X = 305  # ability slot 0 x-centre
+ABLT_OSB1_X = 385  # ability slot 1 x-centre
+OSB_BOT_Y   = 840  # y-centre of left MFD ability OSBs (probe-verified)
 
 # Right MFD top/bottom OSBs — NAV/TERR/FIRE/MARK and ZOOM/AUTO/LOCK/CLR
 R_NAV, R_TERR, R_TGT, R_MARK = 1530, 1610, 1690, 1770
@@ -226,7 +230,7 @@ def t13_left_mfd_elmt(page):
 def _click_ability(page, slot_x, ability_name):
     enter_cockpit(page)
     wait_gs(page, 'abilityCooldowns',
-            lambda cds: ability_name not in (cds or {}), timeout_ms=120000)
+            lambda cds: (cds or {}).get(ability_name, -1) <= 0, timeout_ms=120000)
     before_mana = gs(page, 'mana')
     before_cds  = gs(page, 'abilityCooldowns') or {}
     page.mouse.click(slot_x, OSB_BOT_Y)
@@ -237,8 +241,8 @@ def _click_ability(page, slot_x, ability_name):
     assert changed, f'Ability OSB at x={slot_x} had no effect'
 
 
-def t14_ability_osb_0(page): _click_ability(page, L_ELMT, 'Inferno Strike')
-def t15_ability_osb_1(page): _click_ability(page, L_ABLT, 'Cryo Bomb')
+def t14_ability_osb_0(page): _click_ability(page, ABLT_OSB0_X, 'Ice Breath')
+def t15_ability_osb_1(page): _click_ability(page, ABLT_OSB1_X, 'Cryo Bomb')
 
 
 def t16_right_mfd_terr(page):

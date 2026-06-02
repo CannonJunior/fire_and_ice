@@ -2,7 +2,11 @@ import 'dart:html' as html;
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:vector_math/vector_math.dart';
+import '../terrain/cloud_system.dart';
+import 'atmospheric_smoke_plume.dart';
+import 'atmospheric_smoke_renderer.dart';
 import 'camera3d.dart';
+import 'cloud_renderer.dart';
 import 'heat_distortion.dart';
 import 'mesh.dart';
 import 'gpu_particle_system.dart';
@@ -55,6 +59,12 @@ class WebGLRenderer {
   /// Billboard quad particle renderer; replaces GL_POINTS when ready.
   ParticleRenderer? _pRenderer;
   bool _useParticleRenderer = false;
+
+  /// Long-range atmospheric smoke plume renderer.
+  AtmosphericSmokeRenderer? _atmRenderer;
+
+  /// Cloud billboard renderer.
+  CloudRenderer? _cloudRenderer;
 
   /// Elapsed game time in seconds, used by animated shader effects.
   double _time = 0.0;
@@ -171,6 +181,9 @@ void main() {
     // Attempt billboard renderer at init (not lazily) so failures surface early.
     _pRenderer = ParticleRenderer(gl);
     _useParticleRenderer = _pRenderer!.isReady;
+
+    _atmRenderer   = AtmosphericSmokeRenderer(gl);
+    _cloudRenderer = CloudRenderer(gl);
 
     debugPrint('[WebGLRenderer] initialized (VAO: $_supportsVAO, billboardParticles: $_useParticleRenderer)');
   }
@@ -440,6 +453,21 @@ void main() {
     _activeProgram = null;
   }
 
+  // ── Atmospheric smoke + cloud rendering ───────────────────────────────────
+
+  /// Render long-range atmospheric smoke plume billboards.
+  /// Call after scene meshes and trees, before close-range particles.
+  void renderAtmosphericSmoke(
+      List<SmokeColumnBillboard> billboards, Camera3D camera) {
+    _atmRenderer?.render(billboards, camera, _time);
+  }
+
+  /// Render cloud billboard chunks.
+  /// Call after close-range particles (clouds are highest in the scene).
+  void renderClouds(List<CloudChunk> chunks, Camera3D camera) {
+    _cloudRenderer?.render(chunks, camera, _time);
+  }
+
   /// Update canvas + viewport dimensions on window resize.
   void resize(int width, int height) {
     canvas.width  = width;
@@ -462,6 +490,10 @@ void main() {
     if (_particleVbo != null) gl.deleteBuffer(_particleVbo);
     _pRenderer?.dispose();
     _pRenderer = null;
+    _atmRenderer?.dispose();
+    _atmRenderer = null;
+    _cloudRenderer?.dispose();
+    _cloudRenderer = null;
     heatDistortion.dispose();
     debugPrint('[WebGLRenderer] disposed');
   }

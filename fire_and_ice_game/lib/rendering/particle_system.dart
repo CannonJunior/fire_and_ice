@@ -121,6 +121,12 @@ class ParticleSystem {
   double smokeSizeGrowth   =  0.9;  // world-units/sec billboard expansion
   double smokeInitSizeMult =  5.0;  // size scale-up when fire converts to smoke
 
+  // Pre-allocated scratch vectors — eliminates ~36k Vector3 allocs/frame at 6k particles.
+  final Vector3 _windScratch  = Vector3.zero();
+  final Vector3 _turbScratch  = Vector3.zero();
+  final Vector3 _accelScratch = Vector3.zero();
+  final Vector3 _dtmpScratch  = Vector3.zero();
+
   ParticleSystem({this.maxParticles = 5000});
 
   List<Particle> get particles => _particles;
@@ -129,35 +135,36 @@ class ParticleSystem {
     for (final p in _particles) {
       if (p.isDead) continue;
 
-      // Wind attenuation: fire/ember attenuate by distance from source;
-      // smoke uses player distance but a much higher influence factor so it
-      // visibly drifts in wind direction matching real wildfire plume behaviour.
+      // Wind attenuation — no Vector3 allocation for distance.
       final double windDist;
       if (p.isFire || p.isEmber) {
         final dx = p.position.x - p.sourceX;
         final dz = p.position.z - p.sourceZ;
         windDist = math.sqrt(dx * dx + dz * dz);
       } else {
-        windDist = (p.position - playerPos).length;
+        final dx = p.position.x - playerPos.x;
+        final dy = p.position.y - playerPos.y;
+        final dz = p.position.z - playerPos.z;
+        windDist = math.sqrt(dx * dx + dy * dy + dz * dz);
       }
-      final wFactor = (1.0 - windDist / windRadius).clamp(0.0, 1.0);
+      final wFactor    = (1.0 - windDist / windRadius).clamp(0.0, 1.0);
       final wInfluence = (p.isFire || p.isEmber) ? windInfluence : smokeWindInfluence;
-      final windForce = wind.scaled(wInfluence * wFactor);
+      _windScratch.setFrom(wind);
+      _windScratch.scale(wInfluence * wFactor);
 
-      // Turbulence: lightweight hash noise on XZ position.
-      final hx  = _hash(p.position.x * 3.7 + p.age * 0.8);
-      final hz  = _hash(p.position.z * 5.1 + p.age * 0.6);
-      final turb = Vector3(hx * 2 - 1, 0, hz * 2 - 1)..scale(turbulenceStr);
+      // Turbulence — reuse scratch, no alloc.
+      final hx = _hash(p.position.x * 3.7 + p.age * 0.8);
+      final hz = _hash(p.position.z * 5.1 + p.age * 0.6);
+      _turbScratch.setValues(hx * 2 - 1, 0, hz * 2 - 1);
+      _turbScratch.scale(turbulenceStr);
 
-      // Buoyancy: fire and embers use fire buoyancy; smoke uses its own
-      // higher value so it actually rises (fire's 0.3 fraction < gravity).
       const gravity = -9.8;
       final double netUp;
-      if (p.isEmber)      { netUp = buoyancy * 0.5 + gravity; }
-      else if (p.isFire)  { netUp = buoyancy + gravity; }
-      else                { netUp = smokeBuoyancy + gravity; }
+      if (p.isEmber)     { netUp = buoyancy * 0.5 + gravity; }
+      else if (p.isFire) { netUp = buoyancy + gravity; }
+      else               { netUp = smokeBuoyancy + gravity; }
 
-      // Updraft column (Gaussian plume from birth source; skip if > 3σ).
+      // Updraft column (Gaussian plume; skip if > 3σ).
       double updraftY = 0.0;
       if (p.isFire || p.isEmber) {
         final dx = p.position.x - p.sourceX;
@@ -169,26 +176,42 @@ class ParticleSystem {
         }
       }
 
-      final accel = Vector3(0, netUp + updraftY, 0) + windForce + turb;
-      p.velocity.add(accel.scaled(dt));
-      p.position.add(p.velocity.scaled(dt));
+      // Compose acceleration in-place — no intermediate Vector3 allocs.
+      _accelScratch.setValues(0, netUp + updraftY, 0);
+      _accelScratch.add(_windScratch);
+      _accelScratch.add(_turbScratch);
+
+      _dtmpScratch.setFrom(_accelScratch);
+      _dtmpScratch.scale(dt);
+      p.velocity.add(_dtmpScratch);
+
+      _dtmpScratch.setFrom(p.velocity);
+      _dtmpScratch.scale(dt);
+      p.position.add(_dtmpScratch);
       p.age += dt;
 
-      // Decay fuel fraction with age for fire particles.
       if (p.isFire) p.fuelFraction = (1.0 - p.t).clamp(0.0, 1.0);
 
-      // Smoke: rotate slowly and expand size (billowing growth).
       if (!p.isFire && !p.isEmber) {
         p.rotation += dt * 0.28;
         p.size     += smokeSizeGrowth * dt;
       }
 
-      // Convert fire → smoke at transition age.
       if (p.isFire && p.t >= smokeTransition && !p.isDead) {
         _maybeTurnToSmoke(p);
       }
     }
-    _particles.removeWhere((p) => p.isDead);
+
+    // Swap-remove dead particles — O(n) single pass, no list reallocation.
+    int i = 0;
+    while (i < _particles.length) {
+      if (_particles[i].isDead) {
+        _particles[i] = _particles.last;
+        _particles.removeLast();
+      } else {
+        i++;
+      }
+    }
   }
 
   void _maybeTurnToSmoke(Particle p) {
