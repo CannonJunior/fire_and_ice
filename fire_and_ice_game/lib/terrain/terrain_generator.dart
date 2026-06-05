@@ -4,22 +4,48 @@ import 'package:vector_math/vector_math.dart';
 import '../rendering/mesh.dart';
 import '../rendering/transform3d.dart';
 
-/// TerrainGenerator - Procedural heightmap terrain as a single mesh.
+/// TerrainGenerator - Procedural heightmap terrain generation.
 ///
-/// Generates a 64×64 grid using sin/cos-based pseudo-noise (no external
-/// Perlin library needed). Height-based vertex coloring produces a visually
-/// rich landscape: deep blue valleys, green mid-lands, grey peaks, white snow.
-///
-/// Returns a (mesh, transform) record so callers can position the terrain
-/// independently of generation. The mesh itself is centered on the origin.
-///
-/// Usage:
-/// ```dart
-/// final (:mesh, :transform) = TerrainGenerator.generate();
-/// renderer.render(mesh, transform, camera);
-/// ```
+/// Uses bilinear value noise (smoothstep-interpolated hash lattice) for FBM.
+/// Height-based vertex coloring: blue valleys → sandy lowlands → green
+/// mid-terrain → grey highlands → white snow peaks.
+/// Flat zones can be registered (e.g. around the airfield) to suppress hills.
 class TerrainGenerator {
   TerrainGenerator._(); // Static-only class
+
+  /// Canonical max terrain height in world units.
+  /// Must match [InfiniteTerrainManager._maxHeight].
+  static const double kTerrainMaxHeight = 80.0;
+
+  // ── Flat zones ────────────────────────────────────────────────────────────
+  // Flat zones suppress terrain height to 0 within a given radius (with a
+  // smooth blend) so that structures like the airfield sit flush with
+  // the ground.  Call addFlatZone() before preloading terrain chunks.
+
+  static final List<(double, double, double, double)> _flatZones = [];
+
+  /// Register a circular flat zone centred at world (wx, wz).
+  static void addFlatZone(double wx, double wz, double radius,
+      {double blend = 40.0}) =>
+      _flatZones.add((wx, wz, radius, blend));
+
+  static void clearFlatZones() => _flatZones.clear();
+
+  /// Smoothly suppress [h] toward 0 if the point (worldX, worldZ) falls
+  /// inside any registered flat zone.
+  static double _applyFlatZones(double worldX, double worldZ, double h) {
+    for (final (fx, fz, r, blend) in _flatZones) {
+      final dx = worldX - fx;
+      final dz = worldZ - fz;
+      final d = math.sqrt(dx * dx + dz * dz);
+      if (d < r) return 0.0;
+      if (d < r + blend) {
+        final t = (d - r) / blend;
+        return h * t * t * (3.0 - 2.0 * t); // smoothstep blend
+      }
+    }
+    return h;
+  }
 
   // ── Public API ───────────────────────────────────────────────────────────
 
@@ -37,22 +63,21 @@ class TerrainGenerator {
 
   /// Return the terrain height at world position (wx, wz).
   ///
-  /// Uses the same noise formula and parameters as the default [generate] call
-  /// (gridSize=64, tileSize=2.0, maxHeight=12.0, seed=1337, centered) so the
-  /// physics system can query ground elevation without storing the heightmap.
+  /// Mirrors the chunk generator formula exactly so physics queries are
+  /// consistent with the visual mesh.  Flat zones are applied so physics
+  /// agrees with terrain suppressed under the airfield.
   static double heightAt(double wx, double wz) {
-    const seedOff = 1337 * 0.123; // = 164.451
-    // World → normalized grid coordinates (same transform as _generateHeightmap)
-    final nx = wx / 128.0 + 0.5 + seedOff;
-    final nz = wz / 128.0 + 0.5 + seedOff;
-    double h = 0.5    * _noise(nx * 2.1,  nz * 2.1);
-    h       += 0.25   * _noise(nx * 4.3,  nz * 4.3);
-    h       += 0.125  * _noise(nx * 8.7,  nz * 8.7);
-    h       += 0.0625 * _noise(nx * 17.1, nz * 17.1);
+    const so = 1337 * 8.37; // seed offset — matches _generateChunkHeightmap
+    final nx = wx + so;
+    final nz = wz + so;
+    double h = 0.5000 * (_noise(nx * 0.01641, nz * 0.01641) * 2 - 1);
+    h       += 0.2500 * (_noise(nx * 0.03359, nz * 0.03359) * 2 - 1);
+    h       += 0.1250 * (_noise(nx * 0.06797, nz * 0.06797) * 2 - 1);
+    h       += 0.0625 * (_noise(nx * 0.13359, nz * 0.13359) * 2 - 1);
     h = (h + 0.9375) / 1.875;
-    h = h.clamp(0.0, 1.0) * 12.0;
-    if (h < 1.8) h *= 0.4; // flatten valley bottoms (12.0 × 0.15 = 1.8)
-    return h;
+    h = h.clamp(0.0, 1.0) * kTerrainMaxHeight;
+    if (h < kTerrainMaxHeight * 0.15) h *= 0.4;
+    return _applyFlatZones(wx, wz, h);
   }
 
   /// Generate one chunk of an infinite terrain grid.
@@ -66,7 +91,7 @@ class TerrainGenerator {
     required int chunkZ,
     int gridSize     = 32,
     double tileSize  = 2.0,
-    double maxHeight = 12.0,
+    double maxHeight = kTerrainMaxHeight,
     int seed         = 1337,
   }) {
     final heights = _generateChunkHeightmap(
@@ -76,11 +101,7 @@ class TerrainGenerator {
 
   // ── Heightmap generation ─────────────────────────────────────────────────
 
-  /// Build a 2D heightmap using layered sin/cos noise as a Perlin substitute.
-  ///
-  /// Multiple frequency octaves are summed to create natural-looking terrain.
-  /// Reason: dart:math sin/cos avoids external dependencies and runs fast
-  /// in the browser, while still producing visually convincing landscapes.
+  /// Build a 2D heightmap for the single-tile (legacy) API using FBM value noise.
   static List<List<double>> _generateHeightmap(
     int size,
     double maxHeight,
@@ -99,21 +120,13 @@ class TerrainGenerator {
         final nx = x / size.toDouble() + seedOff;
         final nz = z / size.toDouble() + seedOff;
 
-        // Octave 1: large hills
-        double h = 0.5  * _noise(nx * 2.1,  nz * 2.1);
-        // Octave 2: medium features
-        h       += 0.25 * _noise(nx * 4.3,  nz * 4.3);
-        // Octave 3: small bumps
-        h       += 0.125 * _noise(nx * 8.7, nz * 8.7);
-        // Octave 4: micro detail
-        h       += 0.0625 * _noise(nx * 17.1, nz * 17.1);
+        double h = 0.5000 * (_noise(nx * 2.1,  nz * 2.1)  * 2 - 1);
+        h       += 0.2500 * (_noise(nx * 4.3,  nz * 4.3)  * 2 - 1);
+        h       += 0.1250 * (_noise(nx * 8.7,  nz * 8.7)  * 2 - 1);
+        h       += 0.0625 * (_noise(nx * 17.1, nz * 17.1) * 2 - 1);
 
-        // Normalise to [0, 1] then scale to maxHeight
-        // Sum amplitude = 0.9375; bias to positive
         h = (h + 0.9375) / 1.875;
         h = h.clamp(0.0, 1.0) * maxHeight;
-
-        // Flatten valley bottoms slightly for visual interest
         if (h < maxHeight * 0.15) h *= 0.4;
 
         heights[z][x] = h;
@@ -139,21 +152,21 @@ class TerrainGenerator {
 
     for (int iz = 0; iz <= size; iz++) {
       for (int ix = 0; ix <= size; ix++) {
-        // Absolute world-space coordinates — same values at shared edges
-        final wx = (chunkX * size + ix) * tileSize + so;
-        final wz = (chunkZ * size + iz) * tileSize + so;
+        // World-space coordinates (absolute) — ensures seamless chunk edges.
+        final worldX = (chunkX * size + ix) * tileSize;
+        final worldZ = (chunkZ * size + iz) * tileSize;
+        final wx = worldX + so; // noise input (seed-shifted)
+        final wz = worldZ + so;
 
-        // Same octave structure as the single-mesh generator, expressed in
-        // world-unit frequencies (derived by dividing the original per-mesh
-        // frequencies by the original mesh world size of 128 units).
-        double h = 0.5000 * _noise(wx * 0.01641, wz * 0.01641);
-        h       += 0.2500 * _noise(wx * 0.03359, wz * 0.03359);
-        h       += 0.1250 * _noise(wx * 0.06797, wz * 0.06797);
-        h       += 0.0625 * _noise(wx * 0.13359, wz * 0.13359);
+        double h = 0.5000 * (_noise(wx * 0.01641, wz * 0.01641) * 2 - 1);
+        h       += 0.2500 * (_noise(wx * 0.03359, wz * 0.03359) * 2 - 1);
+        h       += 0.1250 * (_noise(wx * 0.06797, wz * 0.06797) * 2 - 1);
+        h       += 0.0625 * (_noise(wx * 0.13359, wz * 0.13359) * 2 - 1);
 
-        h = (h + 0.9375) / 1.875;          // normalise to [0, 1]
+        h = (h + 0.9375) / 1.875;
         h = h.clamp(0.0, 1.0) * maxHeight;
-        if (h < maxHeight * 0.15) h *= 0.4; // flatten valleys
+        if (h < maxHeight * 0.15) h *= 0.4;
+        h = _applyFlatZones(worldX, worldZ, h);
 
         heights[iz][ix] = h;
       }
@@ -161,22 +174,37 @@ class TerrainGenerator {
     return heights;
   }
 
-  /// Smooth, continuous noise function using sine products.
-  ///
-  /// Not true Perlin noise but produces similar visual results without
-  /// requiring gradient tables or a lattice structure.
+  // ── Value noise ──────────────────────────────────────────────────────────
+  // Bilinear value noise with smoothstep interpolation.
+  // Returns [0, 1].  Callers use (noise * 2 - 1) to get [-1, 1] for FBM.
+  // Unlike the old sin/cos product, this has no zero-crossing grid lines and
+  // no long-range periodicity at playable render distances.
+
+  static double _fract(double x) => x - x.floorToDouble();
+
+  static double _hash(double x, double z) {
+    final v = math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+    return _fract(v.abs()); // [0, 1)
+  }
+
+  static double _mix(double a, double b, double t) => a + (b - a) * t;
+
   static double _noise(double x, double z) {
-    return math.sin(x * 1.7 + z * 0.3) *
-           math.cos(z * 1.4 - x * 0.7) *
-           math.sin((x + z) * 0.9);
+    final ix = x.floorToDouble();
+    final iz = z.floorToDouble();
+    final fx = x - ix;
+    final fz = z - iz;
+    final ux = fx * fx * (3.0 - 2.0 * fx); // smoothstep
+    final uz = fz * fz * (3.0 - 2.0 * fz);
+    return _mix(
+      _mix(_hash(ix,       iz),       _hash(ix + 1.0, iz),       ux),
+      _mix(_hash(ix,       iz + 1.0), _hash(ix + 1.0, iz + 1.0), ux),
+      uz,
+    );
   }
 
   // ── Mesh construction ────────────────────────────────────────────────────
 
-  /// Build the terrain Mesh from a heightmap.
-  ///
-  /// Computes smooth normals by averaging cross-products of adjacent triangles
-  /// so the terrain lights convincingly under directional illumination.
   /// Build the terrain Mesh from a heightmap.
   ///
   /// [center] = true  → vertices span (−half, 0, −half) to (+half, ?, +half),
@@ -309,46 +337,47 @@ class TerrainGenerator {
   /// Map a normalized height value (0-1) to a landscape color.
   ///
   /// Biome thresholds (approximate):
-  ///  - 0.00–0.12: deep blue water/valleys
-  ///  - 0.12–0.35: sandy/earthy lowlands
-  ///  - 0.35–0.65: green mid-terrain
-  ///  - 0.65–0.82: grey rocky highlands
-  ///  - 0.82–1.00: white snow peaks
+  ///  - 0.00–0.10: flat lowland (dry earth / scrub)
+  ///  - 0.10–0.35: grassy lowlands
+  ///  - 0.35–0.60: green mid-terrain
+  ///  - 0.60–0.78: grey rocky highlands
+  ///  - 0.78–1.00: white snow peaks
   static Vector3 _heightColor(double t) {
-    if (t < 0.12) {
-      // Deep blue valleys
-      return Vector3(0.05, 0.15, 0.55) * (0.5 + t * 4.0);
+    if (t < 0.10) {
+      // Dry earth lowlands — tan/brown, clearly visible from altitude
+      final f = t / 0.10;
+      return Vector3(0.55 + f * 0.05, 0.45 + f * 0.05, 0.28 + f * 0.02);
     } else if (t < 0.35) {
-      // Sandy/earthy transition
-      final f = (t - 0.12) / 0.23;
+      // Sandy to grassy transition
+      final f = (t - 0.10) / 0.25;
       return Vector3(
-        0.55 + f * 0.1,
-        0.42 + f * 0.18,
-        0.15 + f * 0.05,
+        0.60 - f * 0.35,
+        0.50 + f * 0.10,
+        0.30 - f * 0.18,
       );
-    } else if (t < 0.65) {
-      // Grassy mid-terrain
-      final f = (t - 0.35) / 0.30;
+    } else if (t < 0.60) {
+      // Grassy mid-terrain — bright green
+      final f = (t - 0.35) / 0.25;
       return Vector3(
-        0.2  + f * 0.15,
-        0.52 - f * 0.1,
-        0.12 - f * 0.04,
+        0.25 + f * 0.10,
+        0.60 - f * 0.08,
+        0.12 - f * 0.02,
       );
-    } else if (t < 0.82) {
+    } else if (t < 0.78) {
       // Rocky grey highlands
-      final f = (t - 0.65) / 0.17;
+      final f = (t - 0.60) / 0.18;
       return Vector3(
-        0.42 + f * 0.25,
-        0.42 + f * 0.25,
         0.40 + f * 0.28,
+        0.44 + f * 0.22,
+        0.38 + f * 0.26,
       );
     } else {
       // Snow-capped peaks
-      final f = ((t - 0.82) / 0.18).clamp(0.0, 1.0);
+      final f = ((t - 0.78) / 0.22).clamp(0.0, 1.0);
       return Vector3(
-        0.75 + f * 0.25,
-        0.80 + f * 0.20,
-        0.88 + f * 0.12,
+        0.72 + f * 0.28,
+        0.78 + f * 0.22,
+        0.85 + f * 0.15,
       );
     }
   }

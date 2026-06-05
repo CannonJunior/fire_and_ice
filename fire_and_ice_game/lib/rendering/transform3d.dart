@@ -33,6 +33,28 @@ class Transform3d {
   /// Pre-allocated model matrix — returned by toMatrix() without heap allocation.
   final Matrix4 _modelMatrix = Matrix4.identity();
 
+  // ── Direction cache — valid until rotation changes ────────────────────────
+  final Vector3 _fwdCache   = Vector3(0, 0, -1);
+  final Vector3 _rightCache = Vector3(1, 0, 0);
+  final Vector3 _upCache    = Vector3(0, 1, 0);
+  double _cacheYaw   = double.infinity;
+  double _cachePitch = double.infinity;
+
+  void _refreshDirections() {
+    if (rotation.y == _cacheYaw && rotation.x == _cachePitch) return;
+    _cacheYaw   = rotation.y;
+    _cachePitch = rotation.x;
+    final yawRad   = radians(_cacheYaw);
+    final pitchRad = radians(_cachePitch);
+    final cosP = math.cos(pitchRad);
+    _fwdCache.setValues(-math.sin(yawRad) * cosP, math.sin(pitchRad), -math.cos(yawRad) * cosP);
+    _fwdCache.normalize();
+    _rightCache.setValues(math.cos(yawRad), 0, -math.sin(yawRad));
+    _rightCache.normalize();
+    _fwdCache.crossInto(_rightCache, _upCache);
+    _upCache.normalize();
+  }
+
   Transform3d({
     Vector3? position,
     Vector3? rotation,
@@ -59,31 +81,15 @@ class Transform3d {
   }
 
   /// Forward direction vector computed from yaw and pitch.
-  ///
-  /// In our coordinate system forward is -Z (same as OpenGL default).
-  Vector3 get forward {
-    final yawRad   = radians(rotation.y);
-    final pitchRad = radians(rotation.x);
-
-    return Vector3(
-      -math.sin(yawRad) * math.cos(pitchRad),
-       math.sin(pitchRad),
-      -math.cos(yawRad) * math.cos(pitchRad),
-    ).normalized();
-  }
+  /// Cached: trig is recomputed only when rotation.x/y change.
+  Vector3 get forward { _refreshDirections(); return _fwdCache; }
 
   /// Right direction vector computed from yaw only.
-  Vector3 get right {
-    final yawRad = radians(rotation.y);
-    return Vector3(
-       math.cos(yawRad),
-       0,
-      -math.sin(yawRad),
-    ).normalized();
-  }
+  /// Cached: trig is recomputed only when rotation.y changes.
+  Vector3 get right { _refreshDirections(); return _rightCache; }
 
-  /// Up direction vector (cross product of forward and right).
-  Vector3 get up => forward.cross(right).normalized();
+  /// Up direction vector (cross product of forward × right). Cached; no allocation.
+  Vector3 get up { _refreshDirections(); return _upCache; }
 
   /// Move position by a delta vector.
   void translate(Vector3 delta) {

@@ -19,8 +19,8 @@ class ManaSegmentBar extends StatelessWidget {
     AbilityData? ref;
     for (final name in state.actionBarSlots) {
       if (name.isNotEmpty) {
-        ref = state.abilityByName(name);
-        if (ref != null) break;
+        final a = state.abilityByName(name);
+        if (a != null && a.manaCost > 0) { ref = a; break; }
       }
     }
     if (ref == null) return const SizedBox.shrink();
@@ -192,7 +192,7 @@ class _HexPainter extends CustomPainter {
   final bool   isReady;
   final double manaCostFrac; // ability.manaCost / maxMana
 
-  const _HexPainter({
+  _HexPainter({
     required this.abilityColor,
     required this.cdFrac,
     required this.hasMana,
@@ -200,8 +200,13 @@ class _HexPainter extends CustomPainter {
     required this.manaCostFrac,
   });
 
-  /// Pointy-top hexagon path centred at (cx, cy) with circumradius r.
+  // Hex path cached for the last-seen circumradius — size is fixed (120×120 SizedBox).
+  Path?  _cachedHexPath;
+  double _cachedR = -1;
+
   Path _hexPath(double cx, double cy, double r) {
+    if (r == _cachedR && _cachedHexPath != null) return _cachedHexPath!;
+    _cachedR = r;
     final path = Path();
     for (int i = 0; i < 6; i++) {
       final a = (i * 60 - 90) * math.pi / 180.0;
@@ -209,7 +214,7 @@ class _HexPainter extends CustomPainter {
       final y = cy + r * math.sin(a);
       i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
     }
-    return path..close();
+    return _cachedHexPath = path..close();
   }
 
   @override

@@ -82,16 +82,15 @@ class AtmosphericSmokeRenderer {
     final camUp    = Vector3(viewMat[1], viewMat[5], viewMat[9]);
 
     final count = billboards.length.clamp(0, _maxQuads);
-    const stride = _floatsPerVertex;
 
     for (int i = 0; i < count; i++) {
       final b  = billboards[i];
-      final vi = i * _vertsPerQuad * stride;
+      final vi = i * _vertsPerQuad * _floatsPerVertex;
       for (int v = 0; v < _vertsPerQuad; v++) {
-        final base = vi + v * stride;
-        _vboData[base]     = b.position.x;
-        _vboData[base + 1] = b.position.y;
-        _vboData[base + 2] = b.position.z;
+        final base = vi + v * _floatsPerVertex;
+        _vboData[base]     = b.posX;
+        _vboData[base + 1] = b.posY;
+        _vboData[base + 2] = b.posZ;
         _vboData[base + 3] = _corners[v * 2];
         _vboData[base + 4] = _corners[v * 2 + 1];
         _vboData[base + 5] = b.color.r;
@@ -105,10 +104,7 @@ class AtmosphericSmokeRenderer {
     }
 
     gl.bindBuffer(0x8892, _vbo);
-    gl.bufferData(0x8892,
-        Float32List.view(_vboData.buffer, 0, count * _vertsPerQuad * stride),
-        0x88E8); // DYNAMIC_DRAW
-    gl.bindBuffer(0x8892, null);
+    gl.bufferData(0x8892, _vboData, 0x88E8); // DYNAMIC_DRAW
 
     gl.depthMask(false);
     gl.enable(0x0BE2);              // BLEND
@@ -120,8 +116,7 @@ class AtmosphericSmokeRenderer {
     s.setUniformVector3('uCameraUp',    camUp);
     s.setUniformFloat('uTime', time);
 
-    const byteStride = stride * 4;
-    gl.bindBuffer(0x8892, _vbo);
+    const byteStride = _floatsPerVertex * 4;
     _enable(_posLoc,    3, byteStride,  0);
     _enable(_cornerLoc, 2, byteStride, 12);
     _enable(_colorLoc,  4, byteStride, 20);

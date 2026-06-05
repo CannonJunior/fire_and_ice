@@ -36,6 +36,7 @@ void writeGameStateBridge(GameState s, int frame) {
       ',"flightPathAngleDeg":${s.flightPathAngleDeg.toStringAsFixed(2)}'
       ',"aeroAoA":${s.aeroAoA.toStringAsFixed(2)}'
       ',"selectedTargetId":${s.selectedTargetId == null ? 'null' : '"${s.selectedTargetId}"'}'
+      ',"targetInterceptEnabled":${s.targetInterceptEnabled}'
       ',"abilityCooldowns":{$cd}}';
   var el = html.document.getElementById('_gs');
   if (el == null) {

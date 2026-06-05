@@ -214,7 +214,15 @@ class _FpsPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_FpsPainter o) => true;
+  bool shouldRepaint(_FpsPainter o) {
+    if (o.threat != threat) return true;
+    if (o.fireContacts.length   != fireContacts.length)   return true;
+    if (o.wyvernContacts.length != wyvernContacts.length) return true;
+    // Pulse animation only runs when contacts are present; skip per-frame repaint otherwise.
+    if ((fireContacts.isNotEmpty || wyvernContacts.isNotEmpty) &&
+        o.gameTimeMs != gameTimeMs) return true;
+    return false;
+  }
 }
 
 // ── Hull Integrity Arc ────────────────────────────────────────────────────────

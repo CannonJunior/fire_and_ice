@@ -12,15 +12,18 @@ const List<List<double>> _kColorLayers = [
 const List<double> _kOpacity = [1.0, 0.80, 0.60, 0.30, 0.10];
 
 /// One stacked-billboard segment of an atmospheric plume.
+/// Uses flat doubles instead of a Vector3 to avoid per-frame heap allocation.
 class SmokeColumnBillboard {
-  final Vector3 position; // world-space centre of this quad
-  final double  width;
-  final double  height;
-  final Vector4 color;    // rgb + alpha (already includes intensity × opacity)
-  final double  layerIndex; // 0..4 passed to fragment shader for altitude fade
+  final double posX, posY, posZ; // world-space centre of this quad
+  final double width;
+  final double height;
+  final Vector4 color;     // rgb + alpha
+  final double  layerIndex; // 0..4 for altitude fade in fragment shader
 
   const SmokeColumnBillboard({
-    required this.position,
+    required this.posX,
+    required this.posY,
+    required this.posZ,
     required this.width,
     required this.height,
     required this.color,
@@ -65,51 +68,50 @@ class AtmosphericSmokePlume {
       currentHeight = (currentHeight - dt * 4.0).clamp(0.0, maxHeight);
       return;
     }
-    currentHeight = (currentHeight + dt * 7.0).clamp(0.0, maxHeight);
+    currentHeight = (currentHeight + dt * 2.0).clamp(0.0, maxHeight);
     _drift.x     += wind.x * windDriftScale * dt;
     _drift.y     += wind.z * windDriftScale * dt; // world-Z stored in .y
     _noisePhase  += billowFrequency * dt;
   }
 
-  List<SmokeColumnBillboard> buildBillboards({int? count}) {
-    if (currentHeight < 0.5) return const [];
+  /// Appends billboard segments for this plume directly into [out],
+  /// avoiding a transient list allocation.
+  void buildBillboards(List<SmokeColumnBillboard> out, {int? count}) {
+    if (currentHeight < 0.5) return;
     final n    = count ?? segmentCount;
     final segH = currentHeight / n;
-    final out  = <SmokeColumnBillboard>[];
 
     for (int i = 0; i < n; i++) {
-      final t = n > 1 ? i / (n - 1) : 0.0; // 0 = base, 1 = top
-      final layerF  = (t * 4.0).clamp(0.0, 4.0);
-      final layerI  = layerF.floor().clamp(0, 3);
-      final blend   = layerF - layerI;
+      final t      = n > 1 ? i / (n - 1) : 0.0; // 0 = base, 1 = top
+      final layerF = (t * 4.0).clamp(0.0, 4.0);
+      final layerI = layerF.floor().clamp(0, 3);  // always safe: layerI+1 ∈ [1,4]
+      final blend  = layerF - layerI;
 
       final c0  = _kColorLayers[layerI];
-      final c1  = _kColorLayers[(layerI + 1).clamp(0, 4)];
+      final c1  = _kColorLayers[layerI + 1];
       final op0 = _kOpacity[layerI];
-      final op1 = _kOpacity[(layerI + 1).clamp(0, 4)];
+      final op1 = _kOpacity[layerI + 1];
 
-      final r   = c0[0] + (c1[0] - c0[0]) * blend;
-      final g   = c0[1] + (c1[1] - c0[1]) * blend;
-      final b   = c0[2] + (c1[2] - c0[2]) * blend;
-      final op  = (op0 + (op1 - op0) * blend) * intensity;
+      final r  = c0[0] + (c1[0] - c0[0]) * blend;
+      final g  = c0[1] + (c1[1] - c0[1]) * blend;
+      final b  = c0[2] + (c1[2] - c0[2]) * blend;
+      final op = (op0 + (op1 - op0) * blend) * intensity;
 
       final width = baseWidth + (topWidth - baseWidth) * t;
-      // Slow swirl: each segment displaced slightly in XZ for organic feel.
-      final swirl = math.sin(_noisePhase + i * 0.55) * width * 0.06;
+      // Gentle large-scale lean so the column shapes organically rather than
+      // looking like stacked individual pucks.
+      final swirl = math.sin(_noisePhase + i * 0.28) * width * 0.03;
 
       out.add(SmokeColumnBillboard(
-        position:   Vector3(
-          sourceX + _drift.x + swirl,
-          i * segH + segH * 0.5,
-          sourceZ + _drift.y,
-        ),
+        posX:       sourceX + _drift.x + swirl,
+        posY:       i * segH + segH * 0.5,
+        posZ:       sourceZ + _drift.y,
         width:      width,
-        height:     segH * 1.12, // slight overlap hides seams
+        height:     segH * 1.85, // heavy overlap so segments merge into one volume
         color:      Vector4(r, g, b, op),
         layerIndex: layerF,
       ));
     }
-    return out;
   }
 }
 
@@ -146,12 +148,15 @@ class AtmosphericSmokeSystem {
   }
 
   /// Minimum horizontal distance (world units) before atmospheric plumes are
-  /// rendered.  Below this the close-range CPU particle system covers the zone;
-  /// far-field quads that close would fill or dominate the viewport.
+  /// rendered. Below this the close-range CPU particle system covers the zone.
   static const double nearCutoff = 150.0;
 
-  // Pre-allocated billboard buffer — rebuilt each call but avoids repeated list growth.
+  // Pre-allocated billboard buffer — rebuilt each call but avoids list growth.
   final List<SmokeColumnBillboard> _billboardBuf = [];
+
+  // Sort caching: only re-sort when camera moves >3 units or every 10 frames.
+  final Vector3 _lastSortPos    = Vector3.zero();
+  int           _framesSinceSort = 10; // start high so first frame always sorts
 
   /// Returns all billboard segments sorted back-to-front for correct blending.
   List<SmokeColumnBillboard> getAllBillboards(Vector3 cameraPos) {
@@ -161,19 +166,30 @@ class AtmosphericSmokeSystem {
       final dz   = cameraPos.z - p.sourceZ;
       final dist = math.sqrt(dx * dx + dz * dz);
       if (dist < nearCutoff) continue;
-      final lod = dist < 150 ? 15 : 7;
-      _billboardBuf.addAll(p.buildBillboards(count: lod));
+      // LOD: 15 segments within 300 units, 7 beyond.
+      final lod = dist < 300 ? 15 : 7;
+      p.buildBillboards(_billboardBuf, count: lod);
     }
-    // Inline distance squared — avoids per-comparison Vector3 allocation.
-    _billboardBuf.sort((a, b) {
-      final dax = a.position.x - cameraPos.x;
-      final day = a.position.y - cameraPos.y;
-      final daz = a.position.z - cameraPos.z;
-      final dbx = b.position.x - cameraPos.x;
-      final dby = b.position.y - cameraPos.y;
-      final dbz = b.position.z - cameraPos.z;
-      return (dbx*dbx + dby*dby + dbz*dbz).compareTo(dax*dax + day*day + daz*daz);
-    });
+
+    // Re-sort only when camera has moved >3 units or after 10 frames without sorting.
+    final sx = cameraPos.x - _lastSortPos.x;
+    final sy = cameraPos.y - _lastSortPos.y;
+    final sz = cameraPos.z - _lastSortPos.z;
+    _framesSinceSort++;
+    if (sx * sx + sy * sy + sz * sz > 9.0 || _framesSinceSort >= 10) {
+      _billboardBuf.sort((a, b) {
+        final dax = a.posX - cameraPos.x;
+        final day = a.posY - cameraPos.y;
+        final daz = a.posZ - cameraPos.z;
+        final dbx = b.posX - cameraPos.x;
+        final dby = b.posY - cameraPos.y;
+        final dbz = b.posZ - cameraPos.z;
+        return (dbx * dbx + dby * dby + dbz * dbz)
+            .compareTo(dax * dax + day * day + daz * daz);
+      });
+      _lastSortPos.setFrom(cameraPos);
+      _framesSinceSort = 0;
+    }
     return _billboardBuf;
   }
 }

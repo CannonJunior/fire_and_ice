@@ -1,0 +1,122 @@
+Flutter crash report.
+Please report a bug at https://github.com/flutter/flutter/issues.
+
+## command
+
+flutter run -d web-server --web-port=8011 --web-hostname=localhost
+
+## exception
+
+_TypeError: type '_Map<String, dynamic>' is not a subtype of type 'List<Object?>' in type cast
+
+```
+#0      BuiltJsonSerializers._deserialize (package:built_value/src/built_json_serializers.dart:135:32)
+#1      BuiltJsonSerializers.deserialize (package:built_value/src/built_json_serializers.dart:125:18)
+#2      new ExtensionDebugger.<anonymous closure> (package:dwds/src/servers/extension_debugger.dart:75:37)
+#3      _rootRunUnary (dart:async/zone.dart:1538:47)
+#4      _CustomZone.runUnary (dart:async/zone.dart:1429:19)
+#5      _CustomZone.runUnaryGuarded (dart:async/zone.dart:1329:7)
+#6      _BufferingStreamSubscription._sendData (dart:async/stream_impl.dart:381:11)
+#7      _BufferingStreamSubscription._add (dart:async/stream_impl.dart:312:7)
+#8      _ForwardingStreamSubscription._add (dart:async/stream_pipe.dart:154:11)
+#9      _MapStream._handleData (dart:async/stream_pipe.dart:252:10)
+#10     _ForwardingStreamSubscription._handleData (dart:async/stream_pipe.dart:184:13)
+#11     _rootRunUnary (dart:async/zone.dart:1538:47)
+#12     _CustomZone.runUnary (dart:async/zone.dart:1429:19)
+#13     _CustomZone.runUnaryGuarded (dart:async/zone.dart:1329:7)
+#14     _BufferingStreamSubscription._sendData (dart:async/stream_impl.dart:381:11)
+#15     _BufferingStreamSubscription._add (dart:async/stream_impl.dart:312:7)
+#16     _SyncStreamControllerDispatch._sendData (dart:async/stream_controller.dart:798:19)
+#17     _StreamController._add (dart:async/stream_controller.dart:663:7)
+#18     _StreamController.add (dart:async/stream_controller.dart:618:5)
+#19     _rootRunUnary (dart:async/zone.dart:1546:13)
+#20     _CustomZone.runUnary (dart:async/zone.dart:1429:19)
+#21     _CustomZone.runUnaryGuarded (dart:async/zone.dart:1329:7)
+#22     _BufferingStreamSubscription._sendData (dart:async/stream_impl.dart:381:11)
+#23     _BufferingStreamSubscription._add (dart:async/stream_impl.dart:312:7)
+#24     _SyncStreamControllerDispatch._sendData (dart:async/stream_controller.dart:798:19)
+#25     _StreamController._add (dart:async/stream_controller.dart:663:7)
+#26     _StreamController.add (dart:async/stream_controller.dart:618:5)
+#27     _StreamSinkWrapper.add (dart:async/stream_controller.dart:898:13)
+#28     _GuaranteeSink.add (package:stream_channel/src/guarantee_channel.dart:125:12)
+#29     new AdapterWebSocketChannel.<anonymous closure>.<anonymous closure> (package:web_socket_channel/adapter_web_socket_channel.dart:85:36)
+#30     StackZoneSpecification._registerUnaryCallback.<anonymous closure>.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:127:36)
+#31     StackZoneSpecification._run (package:stack_trace/src/stack_zone_specification.dart:207:15)
+#32     StackZoneSpecification._registerUnaryCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:127:24)
+#33     _rootRunUnary (dart:async/zone.dart:1538:47)
+#34     _CustomZone.runUnary (dart:async/zone.dart:1429:19)
+#35     _CustomZone.runUnaryGuarded (dart:async/zone.dart:1329:7)
+#36     _BufferingStreamSubscription._sendData (dart:async/stream_impl.dart:381:11)
+#37     _DelayedData.perform (dart:async/stream_impl.dart:573:14)
+#38     _PendingEvents.handleNext (dart:async/stream_impl.dart:678:11)
+#39     _PendingEvents.schedule.<anonymous closure> (dart:async/stream_impl.dart:649:7)
+#40     StackZoneSpecification._run (package:stack_trace/src/stack_zone_specification.dart:207:15)
+#41     StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:48)
+#42     _rootRun (dart:async/zone.dart:1517:47)
+#43     _CustomZone.run (dart:async/zone.dart:1422:19)
+#44     _CustomZone.runGuarded (dart:async/zone.dart:1321:7)
+#45     _CustomZone.bindCallbackGuarded.<anonymous closure> (dart:async/zone.dart:1362:23)
+#46     StackZoneSpecification._run (package:stack_trace/src/stack_zone_specification.dart:207:15)
+#47     StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:48)
+#48     _rootRun (dart:async/zone.dart:1525:13)
+#49     _CustomZone.run (dart:async/zone.dart:1422:19)
+#50     _CustomZone.runGuarded (dart:async/zone.dart:1321:7)
+#51     _CustomZone.bindCallbackGuarded.<anonymous closure> (dart:async/zone.dart:1362:23)
+#52     _microtaskLoop (dart:async/schedule_microtask.dart:40:35)
+#53     _startMicrotaskLoop (dart:async/schedule_microtask.dart:49:5)
+#54     _runPendingImmediateCallback (dart:isolate-patch/isolate_patch.dart:127:13)
+#55     _RawReceivePort._handleMessage (dart:isolate-patch/isolate_patch.dart:194:5)
+```
+
+## flutter doctor
+
+```
+[✓] Flutter (Channel stable, 3.35.5, on Ubuntu 24.04.4 LTS 6.17.0-22-generic, locale en_US.UTF-8) [74ms]
+    • Flutter version 3.35.5 on channel stable at /home/junior/snap/flutter/common/flutter
+    • Upstream repository https://github.com/flutter/flutter.git
+    • Framework revision ac4e799d23 (8 months ago), 2025-09-26 12:05:09 -0700
+    • Engine revision d3d45dcf25
+    • Dart version 3.9.2
+    • DevTools version 2.48.0
+    • Feature flags: enable-web, enable-linux-desktop, enable-macos-desktop, enable-windows-desktop, enable-android, enable-ios, cli-animations, enable-lldb-debugging
+
+[✗] Android toolchain - develop for Android devices [21ms]
+    ✗ Unable to locate Android SDK.
+      Install Android Studio from: https://developer.android.com/studio/index.html
+      On first launch it will assist you in installing the Android SDK components.
+      (or visit https://flutter.dev/to/linux-android-setup for detailed instructions).
+      If the Android SDK has been installed to a custom location, please use
+      `flutter config --android-sdk` to update to that location.
+
+
+[✓] Chrome - develop for the web [6ms]
+    • Chrome at google-chrome
+
+[✓] Linux toolchain - develop for Linux desktop [3.4s]
+    • clang version 10.0.0-4ubuntu1
+    • cmake version 3.16.3
+    • ninja version 1.10.0
+    • pkg-config version 0.29.1
+    • OpenGL core renderer: llvmpipe (LLVM 20.1.2, 256 bits)
+    • OpenGL core version: 4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.1
+    • OpenGL core shading language version: 4.50
+    • OpenGL ES renderer: llvmpipe (LLVM 20.1.2, 256 bits)
+    • OpenGL ES version: OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.1
+    • OpenGL ES shading language version: OpenGL ES GLSL ES 3.20
+    • GL_EXT_framebuffer_blit: yes
+    • GL_EXT_texture_format_BGRA8888: yes
+
+[!] Android Studio (not installed) [3ms]
+    • Android Studio not found; download from https://developer.android.com/studio/index.html
+      (or visit https://flutter.dev/to/linux-android-setup for detailed instructions).
+
+[✓] Connected device (3 available) [124ms]
+    • Linux (desktop)  • linux      • linux-x64      • Ubuntu 24.04.4 LTS 6.17.0-22-generic
+    • Web Server (web) • web-server • web-javascript • Flutter Tools
+    • Chrome (web)     • chrome     • web-javascript • Google Chrome 148.0.7778.96
+
+[✓] Network resources [180ms]
+    • All expected network resources are available.
+
+! Doctor found issues in 2 categories.
+```

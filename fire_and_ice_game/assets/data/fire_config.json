@@ -9,7 +9,7 @@
     "smokeSizeMin": 2.0,
     "smokeSizeMax": 5.0,
     "buoyancy": 5.2,
-    "smokeBuoyancy": 9.0,
+    "smokeBuoyancy": 12.0,
     "smokeLifetimeMin": 8.0,
     "smokeLifetimeMax": 16.0,
     "smokeSizeGrowth": 0.12,
@@ -59,9 +59,9 @@
   },
   "atmosphericSmoke": {
     "enabled": true,
-    "segmentsPerPlume": 12,
-    "baseWidth": 14.0,
-    "topWidth": 28.0,
+    "segmentsPerPlume": 20,
+    "baseWidth": 16.0,
+    "topWidth": 44.0,
     "maxHeight": 100.0,
     "billowingFrequency": 0.05,
     "windDriftScale": 0.5

@@ -97,9 +97,9 @@ def wait_gs(page, key, pred, timeout_ms=3000):
 
 def enter_cockpit(page):
     if gs(page, 'viewMode') != 'cockpit':
-        page.keyboard.down('Tab')
+        page.keyboard.down('Backquote')
         page.wait_for_timeout(150)
-        page.keyboard.up('Tab')
+        page.keyboard.up('Backquote')
         wait_gs(page, 'viewMode', lambda v: v == 'cockpit')
 
 
@@ -128,9 +128,9 @@ def t01_page_loads(page):
 
 def t02_view_toggle_tab(page):
     before = gs(page, 'viewMode')
-    page.keyboard.down('Tab'); page.wait_for_timeout(150); page.keyboard.up('Tab')
+    page.keyboard.down('Backquote'); page.wait_for_timeout(150); page.keyboard.up('Backquote')
     wait_gs(page, 'viewMode', lambda v: v != before)
-    page.keyboard.down('Tab'); page.wait_for_timeout(150); page.keyboard.up('Tab')
+    page.keyboard.down('Backquote'); page.wait_for_timeout(150); page.keyboard.up('Backquote')
     wait_gs(page, 'viewMode', lambda v: v == before)
 
 
@@ -294,11 +294,18 @@ def t21_auto_button(page):
 
 
 def t22_lock_button(page):
+    # LOCK now engages target-intercept mode when a target is selected.
     enter_cockpit(page)
-    page.mouse.click(R_CLR, R_OSB_BOT_Y)
-    wait_gs(page, 'lockedWaypoint', lambda v: v == -1)
+    page.mouse.click(R_CLR, R_OSB_BOT_Y)  # clear any prior nav state
+    # Select nearest hostile target via Tab key, then engage LOCK intercept.
+    page.keyboard.down('Tab'); page.wait_for_timeout(150); page.keyboard.up('Tab')
+    wait_gs(page, 'selectedTargetId', lambda v: v is not None)
     page.mouse.click(R_LOCK, R_OSB_BOT_Y)
-    wait_gs(page, 'lockedWaypoint', lambda v: v != -1)
+    wait_gs(page, 'targetInterceptEnabled', lambda v: v is True)
+    page.mouse.click(R_LOCK, R_OSB_BOT_Y)
+    wait_gs(page, 'targetInterceptEnabled', lambda v: v is False)
+    # Deselect target so subsequent tests start clean.
+    page.keyboard.down('Escape'); page.wait_for_timeout(100); page.keyboard.up('Escape')
 
 
 def t23_clr_button(page):

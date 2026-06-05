@@ -81,14 +81,24 @@ Widget buildCockpitHud(
   VoidCallback? onToggleNavSidebar,
   VoidCallback? onToggleFireHeatmap,
   VoidCallback? onToggleTreeHeatmap,
+  VoidCallback? onToggleNavLabels,
+  void Function(int delta)? onZoomDelta,
   List<(double, double, int)> treeSnapshot = const [],
+  Offset? hostileScreenPos,
+  Offset? friendlyScreenPos,
+  double screenW = 0,
+  double screenH = 0,
 }) {
   if (state.viewMode == ViewMode.thirdPerson) {
     return Stack(children: [
       hud.buildHud(state,
           showTelemetry: showTelemetry,
           showActionBar: showActionBar,
-          showTutorial:  showTutorial),
+          showTutorial:  showTutorial,
+          hostileScreenPos: hostileScreenPos,
+          friendlyScreenPos: friendlyScreenPos,
+          screenW: screenW,
+          screenH: screenH),
       IgnorePointer(child: Stack(children: [
         Positioned(bottom: 12, right: 12, child: HullIntegrityArc(state: state)),
       ])),
@@ -132,6 +142,8 @@ Widget buildCockpitHud(
           onToggleNavSidebar: onToggleNavSidebar,
           onToggleFireHeatmap: onToggleFireHeatmap,
           onToggleTreeHeatmap: onToggleTreeHeatmap,
+          onToggleNavLabels: onToggleNavLabels,
+          onZoomDelta: onZoomDelta,
           treeSnapshot: treeSnapshot),
     ),
     IgnorePointer(child: Stack(children: [
@@ -277,6 +289,8 @@ Widget _cockpitPanel(GameState state, {
   VoidCallback? onToggleNavSidebar,
   VoidCallback? onToggleFireHeatmap,
   VoidCallback? onToggleTreeHeatmap,
+  VoidCallback? onToggleNavLabels,
+  void Function(int delta)? onZoomDelta,
   List<(double, double, int)> treeSnapshot = const [],
 }) {
   final lp       = state.leftMfdPage;
@@ -419,12 +433,15 @@ Widget _cockpitPanel(GameState state, {
               onOrientToggle: onOrientToggle, treeSnapshot: treeSnapshot,
               onToggleSidebar: onToggleNavSidebar,
               onToggleFireHeatmap: onToggleFireHeatmap,
-              onToggleTreeHeatmap: onToggleTreeHeatmap),
+              onToggleTreeHeatmap: onToggleTreeHeatmap,
+              onToggleLabels: onToggleNavLabels,
+              onZoomDelta: onZoomDelta),
           const SizedBox(height: 4),
           Center(child: _osbRow([
             _Osb('ZOOM', onTap: onMapZoom),
-            _Osb('AUTO', active: state.autopilotEnabled,    onTap: onAutopilot),
-            _Osb('LOCK', active: state.lockedWaypoint >= 0, onTap: onWaypointLock),
+            _Osb('AUTO', active: state.autopilotEnabled,         onTap: onAutopilot),
+            _Osb('LOCK', active: state.targetInterceptEnabled,
+                         alert:  state.targetInterceptEnabled,   onTap: onWaypointLock),
             _Osb('CLR',  onTap: onClear),
           ])),
         ]))),

@@ -111,6 +111,22 @@ class Camera3D {
     return _projCache!;
   }
 
+  /// Project a world-space point to screen pixels (NDC → pixel coords).
+  ///
+  /// Returns null when the point is behind the near clip plane.
+  /// Points in front of camera but outside the viewport are returned with
+  /// out-of-bounds coordinates so the caller can clamp them to the screen edge.
+  (double, double)? worldToScreen(Vector3 world, double screenW, double screenH) {
+    final clip = Vector4(world.x, world.y, world.z, 1.0);
+    getViewMatrix().transform(clip);
+    getProjectionMatrix().transform(clip);
+    if (clip.w <= 0.001) return null; // behind camera
+    return (
+      (clip.x / clip.w + 1.0) * 0.5 * screenW,
+      (1.0 - clip.y / clip.w) * 0.5 * screenH,
+    );
+  }
+
   // ── Third-person follow ──────────────────────────────────────────────────
 
   /// Smoothly reposition the camera behind and above [targetPosition].

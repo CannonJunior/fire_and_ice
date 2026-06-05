@@ -37,7 +37,7 @@
   "terrain": {
     "gridSize": 64,
     "tileSize": 2.0,
-    "maxHeight": 12.0
+    "maxHeight": 80.0
   },
   "trees": {
     "scatterMinGap": 10.0,

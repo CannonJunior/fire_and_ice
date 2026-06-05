@@ -79,7 +79,15 @@ class WebGLRenderer {
   ShaderProgram? _particleShader;
   dynamic _particleVbo;
   Float32List _particleDataBuf = Float32List(0);
+  // Cached view into _particleDataBuf — avoids a heap alloc per frame.
+  // Invalidated whenever _particleDataBuf is reallocated or needed count changes.
+  Float32List? _particleDataView;
+  int _particleDataViewLen = 0;
   final Vector4 _cpuColorScratch = Vector4.zero();
+  // Cached attrib locations for fallback particle shader — queried once at init.
+  int _pFbPosLoc   = -1;
+  int _pFbColorLoc = -1;
+  int _pFbSizeLoc  = -1;
 
   // ── Scene graph scratch ───────────────────────────────────────────────────
 
@@ -121,6 +129,14 @@ void main() {
   /// Currently active shader program — guards redundant useProgram() calls.
   dynamic _activeProgram;
 
+  /// Currently bound VAO — deferred unbind: stays bound across consecutive mesh
+  /// draws (binding a new VAO auto-unbinds the previous one). Unbound at the
+  /// start of particle/smoke/cloud passes that set their own attribute state.
+  dynamic _activeVAO;
+
+  /// Pre-allocated normal matrix — avoids a Matrix3 allocation per draw call.
+  final Matrix3 _normalMatrixScratch = Matrix3.zero();
+
   /// Cached attribute locations (queried once after shader compile).
   late int _posLoc, _normLoc, _colLoc;
 
@@ -137,12 +153,14 @@ void main() {
   /// Obtain a WebGL context from [canvas] and create the renderer.
   ///
   /// Throws if WebGL is unavailable in the current browser.
+  ///
+  /// Prefers WebGL2 so that VAO state correctly tracks the element array buffer
+  /// binding (OES_vertex_array_object on WebGL1 does not track it, causing
+  /// silent draw failures). Falls back to WebGL1 if WebGL2 is unavailable.
   factory WebGLRenderer(html.CanvasElement canvas) {
-    final gl = canvas.getContext3d(
-      alpha: false,
-      depth: true,
-      antialias: true,
-    );
+    final attrs = {'alpha': false, 'depth': true, 'antialias': true};
+    var gl = canvas.getContext('webgl2', attrs);
+    gl ??= canvas.getContext('webgl', attrs);
     if (gl == null) throw Exception('WebGL not supported in this browser');
     return WebGLRenderer._(canvas, gl);
   }
@@ -152,7 +170,7 @@ void main() {
   void _initialize() {
     gl.enable(0x0B71);  // DEPTH_TEST
     gl.depthFunc(0x0201); // LESS
-    gl.enable(0x0B44);  // CULL_FACE
+    gl.enable(0x0B44);   // CULL_FACE
     gl.cullFace(0x0405); // BACK
 
     gl.clearColor(0.25, 0.50, 0.80, 1.0);
@@ -215,6 +233,14 @@ void main() {
     // Reset per-frame render state
     _viewProjDirty = true;
     _activeProgram = null;
+    _unbindActiveVAO();
+  }
+
+  void _unbindActiveVAO() {
+    if (_activeVAO != null) {
+      _unbindVAO();
+      _activeVAO = null;
+    }
   }
 
   /// Draw [mesh] at world-space [transform] as seen by [camera].
@@ -234,31 +260,35 @@ void main() {
       _activeProgram = shader.program;
     }
 
-    // Compute projection × view once per frame (camera doesn't change mid-frame).
+    // Compute projection × view and upload static-per-frame uniforms once per frame.
     if (_viewProjDirty) {
       _scratchViewProj.setFrom(camera.getProjectionMatrix());
       _scratchViewProj.multiply(camera.getViewMatrix());
+      shader.setUniformVector3('uLightPos',     lightPosition);
+      shader.setUniformVector3('uLightColor',   lightColor);
+      shader.setUniformVector3('uAmbientColor', ambientColor);
       _viewProjDirty = false;
     }
 
     shader.setUniformMatrix4('uViewProj',      _scratchViewProj);
     shader.setUniformMatrix4('uModel',         modelMatrix);
-    // mat3(uModel) extracted on CPU — saves per-vertex matrix extraction in GLSL.
-    shader.setUniformMatrix3('uNormalMatrix',  modelMatrix.getRotation());
-
-    // Lighting
-    shader.setUniformVector3('uLightPos',     lightPosition);
-    shader.setUniformVector3('uLightColor',   lightColor);
-    shader.setUniformVector3('uAmbientColor', ambientColor);
+    // Extract rotation in-place — avoids Matrix3 allocation on every draw call.
+    modelMatrix.copyRotation(_normalMatrixScratch);
+    shader.setUniformMatrix3('uNormalMatrix',  _normalMatrixScratch);
 
     if (bufs.vao != null) {
-      // VAO path: attrib state was configured at upload time — just bind and draw.
-      _bindVAO(bufs.vao);
+      // VAO path: only rebind when the VAO changes — binding a new VAO
+      // auto-unbinds the previous one. Explicit unbind is deferred to clear().
+      if (bufs.vao != _activeVAO) {
+        _bindVAO(bufs.vao);
+        _activeVAO = bufs.vao;
+      }
       // Constant vertex color: not tracked by VAO, must be set per draw call.
       if (bufs.colorBuffer == null) gl.vertexAttrib4f(_colLoc, 1.0, 1.0, 1.0, 1.0);
       gl.drawElements(0x0004, mesh.indices.length, 0x1403, 0); // TRIANGLES, UNSIGNED_SHORT
-      _unbindVAO();
     } else {
+      // Fallback: ensure no VAO is bound before manual attribute setup.
+      _unbindActiveVAO();
       // Fallback: per-draw-call attribute setup (no VAO support).
       if (_posLoc >= 0) {
         gl.bindBuffer(0x8892, bufs.vertexBuffer); // ARRAY_BUFFER
@@ -305,7 +335,9 @@ void main() {
   _MeshBuffers _getOrCreateBuffers(Mesh mesh) {
     if (_meshBuffers.containsKey(mesh)) return _meshBuffers[mesh]!;
 
-    // Upload all buffers before creating VAO (upload unbinds; VAO setup re-binds).
+    // Unbind any active VAO before uploads: _upload calls gl.bindBuffer(target, null)
+    // which would corrupt the active VAO's element-array-buffer binding.
+    _unbindActiveVAO();
     final vertexBuffer = _upload(0x8892, mesh.vertices); // ARRAY_BUFFER
     final indexBuffer  = _upload(0x8893, mesh.indices);  // ELEMENT_ARRAY_BUFFER
     final normalBuffer = mesh.normals != null ? _upload(0x8892, mesh.normals!) : null;
@@ -336,6 +368,7 @@ void main() {
       gl.bindBuffer(0x8893, indexBuffer);
 
       _unbindVAO();
+      _activeVAO = null; // VAO was unbound; reset tracking so next draw always rebinds
     }
 
     final bufs = _MeshBuffers(
@@ -393,17 +426,24 @@ void main() {
   /// Render CPU particles — billboard quads when available, GL_POINTS fallback.
   void renderParticles(List<Particle> particles, Camera3D camera) {
     if (particles.isEmpty) return;
+    _unbindActiveVAO(); // particle shader sets its own attribute state
     if (_useParticleRenderer && _pRenderer != null) {
       _pRenderer!.render(particles, camera, _time);
       return;
     }
-    _particleShader ??= ShaderProgram.fromSource(gl, _particleVertSrc, _particleFragSrc);
+    if (_particleShader == null) {
+      _particleShader = ShaderProgram.fromSource(gl, _particleVertSrc, _particleFragSrc);
+      _pFbPosLoc   = _particleShader!.getAttribLocation('aPos');
+      _pFbColorLoc = _particleShader!.getAttribLocation('aColor');
+      _pFbSizeLoc  = _particleShader!.getAttribLocation('aSize');
+    }
     _particleVbo ??= gl.createBuffer();
 
     const stride = 8; // x,y,z, r,g,b,a, size
     final needed = particles.length * stride;
     if (_particleDataBuf.length < needed) {
       _particleDataBuf = Float32List(needed + stride * 100);
+      _particleDataView = null; // backing buffer replaced — invalidate cached view
     }
     for (int i = 0; i < particles.length; i++) {
       final p = particles[i];
@@ -420,7 +460,11 @@ void main() {
     }
 
     gl.bindBuffer(0x8892, _particleVbo); // ARRAY_BUFFER
-    gl.bufferData(0x8892, Float32List.view(_particleDataBuf.buffer, 0, needed), 0x88E8); // DYNAMIC_DRAW
+    if (_particleDataView == null || _particleDataViewLen != needed) {
+      _particleDataView   = Float32List.view(_particleDataBuf.buffer, 0, needed);
+      _particleDataViewLen = needed;
+    }
+    gl.bufferData(0x8892, _particleDataView!, 0x88E8); // DYNAMIC_DRAW
 
     _particleShader!.use();
     _activeProgram = _particleShader!.program;
@@ -432,23 +476,19 @@ void main() {
     }
     _particleShader!.setUniformMatrix4('uViewProj', _scratchViewProj);
 
-    final posLoc   = _particleShader!.getAttribLocation('aPos');
-    final colorLoc = _particleShader!.getAttribLocation('aColor');
-    final sizeLoc  = _particleShader!.getAttribLocation('aSize');
-
     const byteStride = stride * 4;
-    if (posLoc   >= 0) { gl.enableVertexAttribArray(posLoc);   gl.vertexAttribPointer(posLoc,   3, 0x1406, false, byteStride, 0);  }
-    if (colorLoc >= 0) { gl.enableVertexAttribArray(colorLoc); gl.vertexAttribPointer(colorLoc, 4, 0x1406, false, byteStride, 12); }
-    if (sizeLoc  >= 0) { gl.enableVertexAttribArray(sizeLoc);  gl.vertexAttribPointer(sizeLoc,  1, 0x1406, false, byteStride, 28); }
+    if (_pFbPosLoc   >= 0) { gl.enableVertexAttribArray(_pFbPosLoc);   gl.vertexAttribPointer(_pFbPosLoc,   3, 0x1406, false, byteStride, 0);  }
+    if (_pFbColorLoc >= 0) { gl.enableVertexAttribArray(_pFbColorLoc); gl.vertexAttribPointer(_pFbColorLoc, 4, 0x1406, false, byteStride, 12); }
+    if (_pFbSizeLoc  >= 0) { gl.enableVertexAttribArray(_pFbSizeLoc);  gl.vertexAttribPointer(_pFbSizeLoc,  1, 0x1406, false, byteStride, 28); }
 
     gl.enable(0x0BE2); // BLEND
     gl.blendFunc(0x0302, 0x0303); // SRC_ALPHA, ONE_MINUS_SRC_ALPHA
     gl.drawArrays(0x0000, 0, particles.length); // POINTS
     gl.disable(0x0BE2);
 
-    if (posLoc   >= 0) gl.disableVertexAttribArray(posLoc);
-    if (colorLoc >= 0) gl.disableVertexAttribArray(colorLoc);
-    if (sizeLoc  >= 0) gl.disableVertexAttribArray(sizeLoc);
+    if (_pFbPosLoc   >= 0) gl.disableVertexAttribArray(_pFbPosLoc);
+    if (_pFbColorLoc >= 0) gl.disableVertexAttribArray(_pFbColorLoc);
+    if (_pFbSizeLoc  >= 0) gl.disableVertexAttribArray(_pFbSizeLoc);
     gl.bindBuffer(0x8892, null);
     _activeProgram = null;
   }
@@ -459,12 +499,14 @@ void main() {
   /// Call after scene meshes and trees, before close-range particles.
   void renderAtmosphericSmoke(
       List<SmokeColumnBillboard> billboards, Camera3D camera) {
+    _unbindActiveVAO();
     _atmRenderer?.render(billboards, camera, _time);
   }
 
   /// Render cloud billboard chunks.
   /// Call after close-range particles (clouds are highest in the scene).
   void renderClouds(List<CloudChunk> chunks, Camera3D camera) {
+    _unbindActiveVAO();
     _cloudRenderer?.render(chunks, camera, _time);
   }
 

@@ -314,8 +314,8 @@ void main() {
 ''';
 
 // ── Atmospheric smoke plume fragment shader ────────────────────────────────────
-// Dense core (flat-topped), slow 4-octave fBm, altitude fade top and bottom.
-// Designed for far-field plumes that must read as solid geological features.
+// Domain-warped irregular silhouette (not circular), per-quad top/bottom fade
+// so heavily-overlapping segments merge into one continuous smoke volume.
 const String atmosphericSmokeFragSrc = '''
 precision mediump float;
 
@@ -337,27 +337,35 @@ float anoise(vec2 p) {
 }
 float afbm(vec2 p) {
   float r = 0.0; float a = 0.5;
-  for (int i = 0; i < 4; i++) { r += a * anoise(p); p *= 2.0; a *= 0.5; }
+  for (int i = 0; i < 2; i++) { r += a * anoise(p); p *= 2.0; a *= 0.5; }
   return r;
 }
 
 void main() {
-  float d = length(vUV - 0.5);
+  // Domain-warp the UV space to produce an irregular, non-circular shape.
+  // The warp is driven by slow fBm so the silhouette billows organically.
+  vec2 warpUV = vUV * 3.2 + vec2(uTime * 0.012, -uTime * 0.007);
+  float wx = afbm(warpUV) - 0.5;
+  float wy = afbm(warpUV + vec2(1.73, 2.31)) - 0.5;
+  vec2 dUV = vUV + vec2(wx, wy) * 0.22;
+  float d = length(dUV - 0.5);
 
-  // Dense flat-topped core; sharp lobed fringe.
-  float core = 1.0 - smoothstep(0.28, 0.50, d);
-  float edge = 1.0 - smoothstep(0.42, 0.68, d);
-  float mask = max(core, edge * 0.70);
+  // Dense opaque core, cauliflower fringe via lobed noise.
+  float core = 1.0 - smoothstep(0.24, 0.44, d);
+  float edge = 1.0 - smoothstep(0.38, 0.65, d);
+  vec2 lobeUV = vUV * 5.5 + vec2(uTime * 0.018, uTime * 0.011);
+  float lobe  = anoise(lobeUV) * 0.28;
+  float mask  = max(core, clamp(edge + lobe, 0.0, 1.0) * 0.72);
 
-  // Very slow billowing (massive plume must feel geological).
-  vec2  billowUV = vUV * 2.0 + vec2(uTime * 0.03, sin(uTime * 0.02) * 0.22);
-  float billowing = afbm(billowUV);
+  // Altitude fade: fully opaque low, wispy near the column top.
+  float altFade = smoothstep(0.0, 0.20, 1.0 - vHeightFactor)
+                * smoothstep(1.05, 0.50, vHeightFactor);
 
-  // Altitude fade: solid at low layers, wispy near the top.
-  float altFade = smoothstep(0.0, 0.25, 1.0 - vHeightFactor)
-                * smoothstep(1.1, 0.55, vHeightFactor);
+  // Per-quad vertical fade: segments fade in/out at their own top and bottom
+  // so that heavily-overlapping quads dissolve into each other seamlessly.
+  float segFade = smoothstep(0.0, 0.30, vUV.y) * smoothstep(1.0, 0.70, vUV.y);
 
-  float alpha = vColor.a * mask * (0.45 + billowing * 0.55) * altFade;
+  float alpha = vColor.a * mask * altFade * segFade;
   if (alpha < 0.015) discard;
   gl_FragColor = vec4(vColor.rgb, alpha);
 }

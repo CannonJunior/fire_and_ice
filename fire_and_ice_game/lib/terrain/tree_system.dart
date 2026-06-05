@@ -39,6 +39,10 @@ class TreeSystem {
   final List<int> newlyBurningIds = [];
   final List<int> newlyCharredIds = [];
 
+  // Subset of trees that are currently burning — avoids iterating all trees
+  // every frame. Maintained by _ignite(), igniteTree(), suppressInRadius().
+  final List<TreeInstance> _burning = [];
+
   final math.Random _rng;
 
   static const double _kGridCell   = 16.0;
@@ -81,6 +85,7 @@ class TreeSystem {
   /// groupings, which produces the organic density variation seen in real forests.
   void generate({int seed = 42}) {
     trees.clear();
+    _burning.clear();
     _grid.clear();
     newlyBurningIds.clear();
     newlyCharredIds.clear();
@@ -225,21 +230,24 @@ class TreeSystem {
   // ── Update ─────────────────────────────────────────────────────────────────
 
   /// Advance fire spread and burnout. [windVec] is the XZ wind vector (Y=0).
+  /// Iterates only burning trees — O(burning) not O(total).
   void update(double dt, Vector3 windVec) {
-    for (final t in trees) {
-      if (t.state == TreeState.alive) continue;
+    int i = 0;
+    while (i < _burning.length) {
+      final t = _burning[i];
       t.stateTimer += dt;
-
-      if (t.state == TreeState.burning) {
-        final burnDuration = _kBurnTime * (0.7 + t.height / 18.0);
-        if (t.stateTimer >= burnDuration) {
-          t.state = TreeState.charred;
-          t.stateTimer = 0.0;
-          dirty = true;
-          newlyCharredIds.add(t.id);
-        } else if (t.stateTimer > 1.0) {
-          _trySpread(t, dt, windVec);
-        }
+      final burnDuration = _kBurnTime * (0.7 + t.height / 18.0);
+      if (t.stateTimer >= burnDuration) {
+        t.state = TreeState.charred;
+        t.stateTimer = 0.0;
+        dirty = true;
+        newlyCharredIds.add(t.id);
+        // Swap-remove: O(1), order doesn't matter.
+        _burning[i] = _burning.last;
+        _burning.removeLast();
+      } else {
+        if (t.stateTimer > 1.0) _trySpread(t, dt, windVec);
+        i++;
       }
     }
   }
@@ -259,8 +267,9 @@ class TreeSystem {
   /// Ice/cryo suppression: burning trees within radius become charred instantly.
   void suppressInRadius(Vector3 origin, double radius) {
     final r2 = radius * radius;
-    for (final t in trees) {
-      if (t.state != TreeState.burning) continue;
+    int i = 0;
+    while (i < _burning.length) {
+      final t = _burning[i];
       final dx = t.wx - origin.x;
       final dz = t.wz - origin.z;
       if (dx * dx + dz * dz <= r2) {
@@ -268,6 +277,10 @@ class TreeSystem {
         t.stateTimer = 0.0;
         dirty = true;
         newlyCharredIds.add(t.id);
+        _burning[i] = _burning.last;
+        _burning.removeLast();
+      } else {
+        i++;
       }
     }
   }
@@ -304,6 +317,7 @@ class TreeSystem {
     t.stateTimer = 0.0;
     dirty = true;
     newlyBurningIds.add(t.id);
+    _burning.add(t);
   }
 
   // ── Internals ──────────────────────────────────────────────────────────────
@@ -313,6 +327,7 @@ class TreeSystem {
     t.stateTimer = 0.0;
     dirty = true;
     newlyBurningIds.add(t.id);
+    _burning.add(t);
   }
 
   void _trySpread(TreeInstance src, double dt, Vector3 windVec) {
@@ -360,16 +375,27 @@ class TreeSystem {
 
   // Pre-allocated snapshot buffer — updated in-place to avoid per-update list alloc.
   final List<(double, double, int)> _snapshotBuf = [];
+  // Parallel state tracker: avoids re-allocating a tuple when the state hasn't changed.
+  final List<int> _snapshotStateBuf = [];
 
   /// Updates the cached tree snapshot and returns it.
   /// stateIndex: 0=alive, 1=burning, 2=charred.
   List<(double, double, int)> treeSnapshot() {
     if (_snapshotBuf.length != trees.length) {
-      _snapshotBuf.length = trees.length;
-    }
-    for (int i = 0; i < trees.length; i++) {
-      final t = trees[i];
-      _snapshotBuf[i] = (t.wx, t.wz, t.state.index);
+      _snapshotBuf.clear();
+      _snapshotStateBuf.clear();
+      for (final t in trees) {
+        _snapshotBuf.add((t.wx, t.wz, t.state.index));
+        _snapshotStateBuf.add(t.state.index);
+      }
+    } else {
+      for (int i = 0; i < trees.length; i++) {
+        final si = trees[i].state.index;
+        if (_snapshotStateBuf[i] != si) {
+          _snapshotStateBuf[i] = si;
+          _snapshotBuf[i] = (trees[i].wx, trees[i].wz, si);
+        }
+      }
     }
     return _snapshotBuf;
   }

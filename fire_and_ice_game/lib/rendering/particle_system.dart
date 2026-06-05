@@ -115,7 +115,7 @@ class ParticleSystem {
   double smokeFadeAlt      = 200.0;
   double updraftStrength   = 3.0;
   double updraftSigma      = 3.0;
-  double smokeBuoyancy     =  9.0;
+  double smokeBuoyancy     = 12.0;
   double smokeLifeMin      = 22.0;
   double smokeLifeMax      = 40.0;
   double smokeSizeGrowth   =  0.9;  // world-units/sec billboard expansion

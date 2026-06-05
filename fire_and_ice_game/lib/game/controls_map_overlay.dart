@@ -11,7 +11,8 @@ const Map<String, (String, String)> _kDefaultBindings = {
   'a': ('Yaw ← bnk', 'flight'), 'd': ('Yaw → bnk', 'flight'),
   'q': ('Bank ←', 'flight'), 'e': ('Bank →', 'flight'),
   'Alt': ('Boost ×1.5', 'flight'), 'Space': ('Air brake', 'flight'),
-  'Tab': ('View', 'ui'),
+  '`': ('View', 'ui'),
+  'Tab': ('Target', 'targeting'),
   '1': ('Slot 1', 'action'), '2': ('Slot 2', 'action'),
   '3': ('Slot 3', 'action'), '4': ('Slot 4', 'action'),
   '5': ('Slot 5', 'action'), '6': ('Slot 6', 'action'),
@@ -277,11 +278,12 @@ class _KeyboardMapOverlayState extends State<KeyboardMapOverlay> {
   static html.DivElement _buildKey(
       String label, String? desc, String? category, int widthPx) {
     final (bg, border, bb, fg) = switch (category) {
-      'flight' => ('#0A2040', '#0066AA', '#003366', '#00AAFF'),
-      'action' => ('#1A1800', '#554400', '#221100', '#FFCC00'),
-      'ui'     => ('#001A0A', '#004422', '#001108', '#44CC88'),
-      'chat'   => ('#1A0A1A', '#440044', '#110011', '#CC44CC'),
-      _        => ('#111826', '#1E2A3A', '#0A0F18', '#445566'),
+      'flight'    => ('#0A2040', '#0066AA', '#003366', '#00AAFF'),
+      'action'    => ('#1A1800', '#554400', '#221100', '#FFCC00'),
+      'ui'        => ('#001A0A', '#004422', '#001108', '#44CC88'),
+      'chat'      => ('#1A0A1A', '#440044', '#110011', '#CC44CC'),
+      'targeting' => ('#200A00', '#663300', '#331500', '#FF6600'),
+      _           => ('#111826', '#1E2A3A', '#0A0F18', '#445566'),
     };
 
     final key = html.DivElement()

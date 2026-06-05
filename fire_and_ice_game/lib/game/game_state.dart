@@ -40,7 +40,7 @@ class GameState {
 
   int leftMfdPage  = 0;
   int rightMfdPage = 0;
-  int mapZoom      = 0;
+  int mapZoom      = 3; // index into _kZoomRingBases; 3 = "1×" baseline
   int auxDisplayPage = 0; // 0=CHAT 1=VID 2=MAP 3=MIRROR 4=MANUV
   int auxMirrorIndex = 0; // 0..7 → ELMT/LOAD/STAT/MODE/NAV/TERR/FIRE/MARK
   int auxVideoIndex  = 0; // 0=LISA HAYES  1=LIN MINMEI
@@ -48,12 +48,14 @@ class GameState {
   bool navSidebarOpen    = false;
   bool navFireHeatmap    = true;   // burning-tree heat glow on NAV map
   bool navTreeHeatmap    = true;   // vegetation dot layer on NAV map
+  bool navLabels         = true;   // icon labels with auto-declutter on NAV map
   void scrollAuxMirror(int d) => auxMirrorIndex = (auxMirrorIndex + d + 8) % 8;
   void scrollAuxVideo(int d)  => auxVideoIndex  = (auxVideoIndex  + d + 2) % 2;
   void toggleMapOrientation() { mapNorthUp = !mapNorthUp; }
   void toggleNavSidebar()     { navSidebarOpen   = !navSidebarOpen; }
   void toggleNavFireHeatmap() { navFireHeatmap   = !navFireHeatmap; }
   void toggleNavTreeHeatmap() { navTreeHeatmap   = !navTreeHeatmap; }
+  void toggleNavLabels()      { navLabels        = !navLabels; }
 
   // ── Maneuver computer ─────────────────────────────────────────────────────
 
@@ -129,7 +131,12 @@ class GameState {
 
   void toggleAutopilot()   { autopilotEnabled = !autopilotEnabled; }
   void cycleWaypointLock() { lockedWaypoint = lockedWaypoint >= 4 ? -1 : lockedWaypoint + 1; }
-  void clearNav()          { autopilotEnabled = false; lockedWaypoint = -1; clearFlightPlan(); }
+  void clearNav() {
+    autopilotEnabled    = false;
+    lockedWaypoint      = -1;
+    targetInterceptEnabled = false;
+    clearFlightPlan();
+  }
 
   // ── Flight plan (user-placed waypoints) ──────────────────────────────────
 
@@ -380,12 +387,82 @@ class GameState {
   String? _selectedTargetId;
   String? get selectedTargetId => _selectedTargetId;
 
-  /// Cycle to the next available target (active fires then living wyverns).
+  /// Clear both hostile and friendly target selections and disable intercept.
+  void clearTargets() {
+    _selectedTargetId         = null;
+    _selectedFriendlyTargetId = null;
+    targetInterceptEnabled    = false;
+  }
+
+  // ── Target intercept ──────────────────────────────────────────────────────
+
+  /// When true, physics steers the aircraft heading toward the selected target.
+  bool targetInterceptEnabled = false;
+
+  /// Toggle intercept on (requires a selected target) or off.
+  void toggleTargetIntercept() {
+    if (targetInterceptEnabled) {
+      targetInterceptEnabled = false;
+    } else if (currentFriendlyTarget != null || currentTarget != null) {
+      targetInterceptEnabled = true;
+    }
+  }
+
+  /// World-space XZ position of the intercept target; null when no target.
+  /// Friendly target takes priority over hostile (tanker rendezvous > fire attack).
+  (double, double)? get interceptPosition {
+    final ft = currentFriendlyTarget;
+    if (ft != null) return (ft.wx, ft.wz);
+    final t = currentTarget;
+    if (t != null) return (t.wx, t.wz);
+    return null;
+  }
+
+  /// Cycle to next hostile target (active fires + wyverns) sorted by proximity.
   void cycleTarget() {
     final list = _buildTargetList();
     if (list.isEmpty) { _selectedTargetId = null; return; }
     final idx = list.indexWhere((t) => t.id == _selectedTargetId);
     _selectedTargetId = list[(idx + 1) % list.length].id;
+  }
+
+  // ── Friendly target selection ─────────────────────────────────────────────
+
+  String? _selectedFriendlyTargetId;
+  String? get selectedFriendlyTargetId => _selectedFriendlyTargetId;
+
+  /// Cycle to next friendly target (tanker + airbase) sorted by proximity.
+  void cycleFriendlyTarget() {
+    final list = _buildFriendlyTargetList();
+    if (list.isEmpty) { _selectedFriendlyTargetId = null; return; }
+    final idx = list.indexWhere((t) => t.id == _selectedFriendlyTargetId);
+    _selectedFriendlyTargetId = list[(idx + 1) % list.length].id;
+  }
+
+  /// Live world position of the currently selected friendly target; null if none valid.
+  ({String id, String label, double wx, double wz, double wy})? get currentFriendlyTarget {
+    if (_selectedFriendlyTargetId == null) return null;
+    final list = _buildFriendlyTargetList();
+    try {
+      return list.firstWhere((t) => t.id == _selectedFriendlyTargetId);
+    } catch (_) {
+      _selectedFriendlyTargetId = null;
+      return null;
+    }
+  }
+
+  List<({String id, String label, double wx, double wz, double wy})> _buildFriendlyTargetList() {
+    final px = playerPosition.x, pz = playerPosition.z;
+    final results = <({String id, String label, double wx, double wz, double wy})>[
+      (id: 'tanker',  label: 'ART-9 TANKER', wx: tankerPosition.$1, wz: tankerPosition.$2, wy: 10.0),
+      (id: 'airbase', label: 'ALPHA BASE',   wx: 0.0,               wz: -55.0,             wy: 0.0),
+    ];
+    results.sort((a, b) {
+      final da = (a.wx - px) * (a.wx - px) + (a.wz - pz) * (a.wz - pz);
+      final db = (b.wx - px) * (b.wx - px) + (b.wz - pz) * (b.wz - pz);
+      return da.compareTo(db);
+    });
+    return results;
   }
 
   /// Live world position of the currently selected target; null if none valid.
@@ -409,16 +486,25 @@ class GameState {
     return null;
   }
 
-  List<({String id, String label, double wx, double wz, double wy})> _buildTargetList() => [
-    for (int i = 0; i < firePositions.length; i++)
-      if (!fireExtinguished[i])
-        (id: 'fire_$i', label: 'FIRE ${i+1}',
-         wx: firePositions[i].$1, wz: firePositions[i].$2, wy: 0.0),
-    for (final w in wyverns)
-      if (!w.isDying)
-        (id: w.id, label: w.id.replaceAll('_', ' ').toUpperCase(),
-         wx: w.position.x, wz: w.position.z, wy: w.position.y),
-  ];
+  List<({String id, String label, double wx, double wz, double wy})> _buildTargetList() {
+    final px = playerPosition.x, pz = playerPosition.z;
+    final list = <({String id, String label, double wx, double wz, double wy})>[
+      for (int i = 0; i < firePositions.length; i++)
+        if (!fireExtinguished[i])
+          (id: 'fire_$i', label: 'FIRE ${i+1}',
+           wx: firePositions[i].$1, wz: firePositions[i].$2, wy: 8.0),
+      for (final w in wyverns)
+        if (!w.isDying)
+          (id: w.id, label: w.id.replaceAll('_', ' ').toUpperCase(),
+           wx: w.position.x, wz: w.position.z, wy: w.position.y),
+    ];
+    list.sort((a, b) {
+      final da = (a.wx - px) * (a.wx - px) + (a.wz - pz) * (a.wz - pz);
+      final db = (b.wx - px) * (b.wx - px) + (b.wz - pz) * (b.wz - pz);
+      return da.compareTo(db);
+    });
+    return list;
+  }
 
   // ── Return-to-base ────────────────────────────────────────────────────────
 

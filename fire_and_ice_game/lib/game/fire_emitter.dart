@@ -261,7 +261,14 @@ class FireEmitterSystem {
       final smokeSzMax  = (f['smokeSizeMax']       as num).toDouble();
       final leanFactor  = (f['leanFactor']         as num).toDouble();
 
-      for (final e in [..._zoneEmitters, ..._dynamicEmitters]) {
+      for (final e in _zoneEmitters) {
+        e.emitRate     = emitRate;
+        e.fireLifeMin  = fireLifeMin;  e.fireLifeMax  = fireLifeMax;
+        e.fireSizeMin  = fireSzMin;    e.fireSizeMax  = fireSzMax;
+        e.smokeSizeMin = smokeSzMin;   e.smokeSizeMax = smokeSzMax;
+        e.leanFactor   = leanFactor;
+      }
+      for (final e in _dynamicEmitters) {
         e.emitRate     = emitRate;
         e.fireLifeMin  = fireLifeMin;  e.fireLifeMax  = fireLifeMax;
         e.fireSizeMin  = fireSzMin;    e.fireSizeMax  = fireSzMax;
@@ -392,8 +399,10 @@ class FireEmitterSystem {
     }
   }
 
+  static final _burstRng = math.Random();
+
   void emitAbilityBurst(VisualEffect effect, int particleCount, double spread) {
-    final rng = math.Random();
+    final rng = _burstRng;
     for (int i = 0; i < particleCount; i++) {
       final angle = rng.nextDouble() * math.pi * 2;
       final elev  = (rng.nextDouble() - 0.3) * math.pi;
@@ -440,11 +449,15 @@ class FireEmitterSystem {
 
   List<(double, double, double, double)> get fireLightPositions {
     if (_fireLightsBuf.length != _zoneEmitters.length) {
-      _fireLightsBuf.length = _zoneEmitters.length;
-    }
-    for (int i = 0; i < _zoneEmitters.length; i++) {
-      final e = _zoneEmitters[i];
-      _fireLightsBuf[i] = (e.worldX, 2.0, e.worldZ, e.intensity);
+      _fireLightsBuf.clear();
+      for (final e in _zoneEmitters) {
+        _fireLightsBuf.add((e.worldX, 2.0, e.worldZ, e.intensity));
+      }
+    } else {
+      for (int i = 0; i < _zoneEmitters.length; i++) {
+        final e = _zoneEmitters[i];
+        _fireLightsBuf[i] = (e.worldX, 2.0, e.worldZ, e.intensity);
+      }
     }
     return _fireLightsBuf;
   }

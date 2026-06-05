@@ -67,11 +67,14 @@ enum GameAction {
   /// Key 0 - ability slot 10
   actionBar10,
 
-  /// Tab - toggle between third-person and cockpit views
+  /// ` (backtick) - toggle between third-person and cockpit views
   toggleView,
 
-  /// ` (backtick) - cycle through available targets (active fires + living wyverns)
+  /// Tab - cycle through hostile targets (active fires + living wyverns) by proximity
   cycleTarget,
+
+  /// Shift+Tab - cycle through friendly targets (tanker + airbase) by proximity
+  cycleFriendlyTarget,
 
   /// ] - increase throttle
   throttleUp,

@@ -74,6 +74,8 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   Mesh? _secHgrMesh;     Transform3d? _secHgrTransform;
   Mesh? _tocMesh;        Transform3d? _tocTransform;
   Mesh? _towerMesh;      Transform3d? _towerTransform;
+  // Pre-built pairs — avoids a literal-list allocation every render frame.
+  List<(Mesh, Transform3d)> _airbasePairs = const [];
 
   SceneNode?             _aircraftRoot;
   Map<String, SceneNode> _aircraftParts = {};
@@ -137,17 +139,19 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   late final IceBreathEmitter _iceBreathEmitter;
   bool   _iceBreathActive     = false;
   double _iceBreathSupprTimer = 0.0;
+  final Vector3 _iceBreathFwdScratch = Vector3.zero();
   static const double _iceBreathManaDrain = 18.0; // mana/sec while beam held
 
   // ── Edge detection ────────────────────────────────────────────────────────
 
   final List<bool> _prevAbilityKeys = List.filled(10, false);
-  bool _prevToggleView   = false;
-  bool _prevToggleGear   = false;
-  bool _prevToggleFlaps  = false;
-  bool _prevToggleProbe  = false;
-  bool _prevToggleDrogue = false;
-  bool _prevCycleTarget  = false;
+  bool _prevToggleView          = false;
+  bool _prevToggleGear          = false;
+  bool _prevToggleFlaps         = false;
+  bool _prevToggleProbe         = false;
+  bool _prevToggleDrogue        = false;
+  bool _prevCycleTarget         = false;
+  bool _prevCycleFriendlyTarget = false;
 
   // ── Canvas size tracking ──────────────────────────────────────────────────
 
@@ -257,7 +261,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       debugPrint('[FireAndIceGame] WebGL unavailable: $e');
     }
 
-    _camera = Camera3D(aspectRatio: 1600 / 900, fov: 90.0, far: 500.0);
+    _camera = Camera3D(aspectRatio: 1600 / 900, fov: 90.0, far: 2000.0);
   }
 
   void _registerKeyListeners() {
@@ -271,6 +275,11 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
 
   void _onKeyDown(html.KeyboardEvent event) {
     if (_state.chatInputActive) { _handleChatKeyDown(event); return; }
+    if (event.key == 'Escape') {
+      event.preventDefault();
+      setState(() => _state.clearTargets());
+      return;
+    }
     if (event.shiftKey && event.key == 'Enter') {
       event.preventDefault();
       setState(() { _state.chatInputActive = true; _state.auxDisplayPage = 0; });
@@ -316,7 +325,10 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   }
 
   void _buildScene() {
-    _terrain = InfiniteTerrainManager()..preload(_state.playerPosition);
+    final abX = _state.cfgRunwayStartX; // airfield X offset (also used below)
+    _terrain = InfiniteTerrainManager()
+      ..addFlatZone(abX, 0.0, 95.0, blend: 50.0)  // suppress hills under airfield+buildings
+      ..preload(_state.playerPosition);
     final airfield = AirfieldGenerator.generate();
     _airfieldMesh      = airfield.mesh;
     _airfieldTransform = airfield.transform;
@@ -326,7 +338,6 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _lakeTransform = lake.transform;
 
     // Airbase complex — offset west so the airbase is clear of all fire zones.
-    final abX = _state.cfgRunwayStartX;
     final apron  = AirbaseGenerator.generateApron();
     _apronMesh = apron.mesh; _apronTransform = apron.transform;
     final mh = AirbaseGenerator.generateMainHangar();
@@ -341,6 +352,13 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       _airfieldTransform, _apronTransform, _mainHgrTransform,
       _secHgrTransform, _tocTransform, _towerTransform,
     ]) { t?.position.x += abX; }
+    _airbasePairs = [
+      if (_apronMesh    != null && _apronTransform    != null) (_apronMesh!,    _apronTransform!),
+      if (_mainHgrMesh  != null && _mainHgrTransform  != null) (_mainHgrMesh!,  _mainHgrTransform!),
+      if (_secHgrMesh   != null && _secHgrTransform   != null) (_secHgrMesh!,   _secHgrTransform!),
+      if (_tocMesh      != null && _tocTransform      != null) (_tocMesh!,      _tocTransform!),
+      if (_towerMesh    != null && _towerTransform    != null) (_towerMesh!,    _towerTransform!),
+    ];
 
     _treeSystem.generate(seed: 42);
     _treeRenderer.prebuild(_treeSystem); // avoids first-frame blocking rebuild
@@ -376,6 +394,11 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _checkModeTransitions();
     _state.tickMissionEconomy(dt, prevMode);
     _terrain?.update(_state.playerPosition);
+    if (_terrain != null && _renderer != null) {
+      for (final m in _terrain!.drainRemovedMeshes()) {
+        _renderer!.deleteMeshBuffers(m);
+      }
+    }
     _state.windState.update(dt);
     AbilitySystem.update(_state, dt);
     WyvernSystem.tick(_state, dt);
@@ -411,11 +434,11 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       final yaw  = _state.playerRotation.y * math.pi / 180.0;
       final pit  = _state.flightPitchAngle  * math.pi / 180.0;
       final cosP = math.cos(pit);
-      final fwd  = Vector3(-math.sin(yaw) * cosP, math.sin(pit), -math.cos(yaw) * cosP)
-          ..normalize();
+      _iceBreathFwdScratch.setValues(-math.sin(yaw) * cosP, math.sin(pit), -math.cos(yaw) * cosP);
+      _iceBreathFwdScratch.normalize();
       _iceBreathEmitter
-        ..origin.setFrom(_state.playerPosition + fwd.scaled(2.5))
-        ..direction.setFrom(fwd);
+        ..origin.setFrom(_state.playerPosition + _iceBreathFwdScratch.scaled(2.5))
+        ..direction.setFrom(_iceBreathFwdScratch);
       _iceBreathEmitter.tick(_fireSystem.particles, dt, _state.apparentWind);
     }
 
@@ -610,6 +633,10 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     final cycleNow = InputSystem.isActionActive(GameAction.cycleTarget);
     if (cycleNow && !_prevCycleTarget) _state.cycleTarget();
     _prevCycleTarget = cycleNow;
+
+    final cycleFriendlyNow = InputSystem.isActionActive(GameAction.cycleFriendlyTarget);
+    if (cycleFriendlyNow && !_prevCycleFriendlyTarget) _state.cycleFriendlyTarget();
+    _prevCycleFriendlyTarget = cycleFriendlyNow;
   }
 
   // ── Gear animation tick ───────────────────────────────────────────────────
@@ -770,14 +797,14 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       );
     }
 
-    if (ch > 0) camera.aspectRatio = cw / ch;
     final cwi = cw.toInt(), chi = ch.toInt();
     if (cwi > 0 && chi > 0 && (cwi != _lastCanvasW || chi != _lastCanvasH)) {
+      camera.aspectRatio = cw / ch;
       renderer.resize(cwi, chi);
+      renderer.heatDistortion.resize(cwi, chi);
       _lastCanvasW = cwi;
       _lastCanvasH = chi;
     }
-    renderer.heatDistortion.resize(cwi, chi);
 
     renderer.updateSmoke(_settings.disableHaze ? 0.0 : _state.smokeOpacity);
 
@@ -799,17 +826,9 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     if (_lakeMesh != null && _lakeTransform != null) {
       renderer.render(_lakeMesh!, _lakeTransform!, camera);
     }
-    // Airbase buildings
-    for (final pair in [
-      (_apronMesh,   _apronTransform),
-      (_mainHgrMesh, _mainHgrTransform),
-      (_secHgrMesh,  _secHgrTransform),
-      (_tocMesh,     _tocTransform),
-      (_towerMesh,   _towerTransform),
-    ]) {
-      if (pair.$1 != null && pair.$2 != null) {
-        renderer.render(pair.$1!, pair.$2!, camera);
-      }
+    // Airbase buildings (pre-built at scene init — no allocation per frame)
+    for (final (mesh, transform) in _airbasePairs) {
+      renderer.render(mesh, transform, camera);
     }
     if (_state.viewMode != ViewMode.cockpit && _aircraftRoot != null) {
       renderer.renderSceneGraph(_aircraftRoot!, camera);
@@ -891,6 +910,17 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     }
   }
 
+  /// Project a world position to a Flutter screen-space [Offset].
+  /// Returns null if behind the camera; out-of-bounds values are returned as-is
+  /// so the HUD can clamp them to the screen edge for the off-screen indicator.
+  Offset? _project(double wx, double wy, double wz) {
+    final cam = _camera;
+    if (cam == null || _lastCanvasW == 0) return null;
+    final r = cam.worldToScreen(
+        Vector3(wx, wy, wz), _lastCanvasW.toDouble(), _lastCanvasH.toDouble());
+    return r == null ? null : Offset(r.$1, r.$2);
+  }
+
   void _applyAbilityTreeEffect(AbilityData fired) {
     if (fired.suppressRadius != null) {
       // Ice / cryo suppression: extinguish burning trees nearby.
@@ -944,7 +974,12 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
                 color: const Color(0xFFDDE8F0).withValues(alpha: _cloudOverlayOpacity),
               ),
             ),
-          cockpit.buildCockpitHud(
+          // World-space target brackets — only meaningful in 3rd-person view.
+          Builder(builder: (ctx) {
+            final hostile  = _state.viewMode == ViewMode.thirdPerson ? _state.currentTarget         : null;
+            final friendly = _state.viewMode == ViewMode.thirdPerson ? _state.currentFriendlyTarget : null;
+            final sw = _lastCanvasW.toDouble(), sh = _lastCanvasH.toDouble();
+            return cockpit.buildCockpitHud(
             _state,
             showAnnunciator: _settings.showAnnunciator,
             showTelemetry:   _settings.showTelemetry,
@@ -952,19 +987,23 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             showTutorial:    _settings.showTutorial,
             settings:        _settings,
             onLayoutChanged: () { _settings.save(); setState(() {}); },
+            hostileScreenPos:  hostile  != null ? _project(hostile.wx,  hostile.wy,  hostile.wz)  : null,
+            friendlyScreenPos: friendly != null ? _project(friendly.wx, friendly.wy, friendly.wz) : null,
+            screenW: sw, screenH: sh,
             onAbilityActivate: (i) {
               final fired = AbilitySystem.activateAbility(_state, i);
               if (fired != null) _applyAbilityTreeEffect(fired);
             },
             onLeftPage:   (p) => setState(() => _state.leftMfdPage  = p),
             onRightPage:  (p) => setState(() => _state.rightMfdPage = p),
-            onMapZoom:      ()  => setState(() => _state.mapZoom = (_state.mapZoom + 1) % 3),
+            onMapZoom:      ()  => setState(() => _state.mapZoom = (_state.mapZoom + 1) % 7),
+            onZoomDelta:    (d) => setState(() => _state.mapZoom = (_state.mapZoom + d).clamp(0, 6)),
             onGearToggle:   ()  => setState(() => _state.triggerGear()),
             onFlapsToggle:  ()  => setState(() => _state.cycleFlaps()),
             onProbeToggle:  ()  => setState(() => _state.triggerProbe()),
             onDrogueToggle: ()  => setState(() => _state.triggerDrogue()),
             onAutopilot:    ()  => setState(() => _state.toggleAutopilot()),
-            onWaypointLock: ()  => setState(() => _state.cycleWaypointLock()),
+            onWaypointLock: ()  => setState(() => _state.toggleTargetIntercept()),
             onClear:        ()  => setState(() => _state.clearNav()),
             onSuppArm:      ()  => setState(() => _state.toggleSuppArm()),
             onSuppAuto:     ()  => setState(() => _state.toggleSuppAuto()),
@@ -990,8 +1029,10 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             onToggleNavSidebar:  ()  => setState(() => _state.toggleNavSidebar()),
             onToggleFireHeatmap: ()  => setState(() => _state.toggleNavFireHeatmap()),
             onToggleTreeHeatmap: ()  => setState(() => _state.toggleNavTreeHeatmap()),
+            onToggleNavLabels:   ()  => setState(() => _state.toggleNavLabels()),
             treeSnapshot:        _treeSnapshotCache,
-          ),
+          );
+          }),  // Builder
 
           Positioned(
             top: 12, right: 12,

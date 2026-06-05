@@ -261,10 +261,30 @@ class PhysicsSystem {
 
   // ── Autopilot ─────────────────────────────────────────────────────────────
 
-  /// Steer toward the active flight-plan waypoint when autopilot is engaged.
+  /// Steer toward the active flight-plan waypoint when autopilot is engaged,
+  /// or toward the selected target when target-intercept (LOCK) is engaged.
   static void updateAutopilot(GameState state, double dt) {
-    if (!state.autopilotEnabled || state.flightPlan.isEmpty ||
-        state.gameMode == GameMode.taxi) return;
+    if (state.gameMode == GameMode.taxi) return;
+
+    // LOCK: continuously steer toward the selected target (moves each frame).
+    if (state.targetInterceptEnabled) {
+      final pos = state.interceptPosition;
+      if (pos == null) {
+        state.targetInterceptEnabled = false; // target gone — disengage
+      } else {
+        final (tx, tz) = pos;
+        final dx = tx - state.playerPosition.x;
+        final dz = tz - state.playerPosition.z;
+        final targetYaw = math.atan2(-dx, -dz) * 180.0 / math.pi;
+        var diff = (targetYaw - state.playerRotation.y) % 360;
+        if (diff > 180) diff -= 360; else if (diff < -180) diff += 360;
+        state.playerRotation.y += diff.clamp(-60.0 * dt, 60.0 * dt);
+      }
+      return; // intercept takes full control of heading
+    }
+
+    // AUTO: steer toward the active flight-plan waypoint.
+    if (!state.autopilotEnabled || state.flightPlan.isEmpty) return;
     if (state.flightPlanIndex >= state.flightPlan.length) {
       state.autopilotEnabled = false; return;
     }

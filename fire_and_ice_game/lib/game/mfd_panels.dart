@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'game_state.dart';
 import 'loadout_page.dart';
@@ -196,6 +197,16 @@ class _ArcGauge extends CustomPainter {
   bool shouldRepaint(_ArcGauge o) => o.fraction != fraction;
 }
 
+// ── Zoom level tables (7 levels: 0 = farthest out, 6 = closest in) ────────────
+
+/// Ring-base pixel radius for each zoom level; also sets map scale via /30.
+const _kZoomRingBases = [6.0, 10.0, 18.0, 28.0, 42.0, 66.0, 105.0];
+
+/// Footer label for each zoom level.
+const _kZoomLabels = ['¼×', '⅓×', '½×', '1×', '1½×', '2×', '3½×'];
+
+const _kZoomCount = 7;
+
 // ── Right MFD – Terrain Navigation ───────────────────────────────────────────
 
 Widget buildRightMFD(
@@ -207,6 +218,8 @@ Widget buildRightMFD(
   VoidCallback? onToggleSidebar,
   VoidCallback? onToggleFireHeatmap,
   VoidCallback? onToggleTreeHeatmap,
+  VoidCallback? onToggleLabels,
+  void Function(int delta)? onZoomDelta,
   List<(double, double, int)> treeSnapshot = const [],
 }) {
   // Compute world offset to locked waypoint (for NAV map overlay)
@@ -246,7 +259,7 @@ Widget buildRightMFD(
                 onTapDown: onMapTap == null ? null : (details) {
                   final lx = details.localPosition.dx, ly = details.localPosition.dy;
                   if (lx < 0 || lx > mapW || ly < 0 || ly > mapH) return;
-                  final scale = (state.mapZoom == 1 ? 18.0 : state.mapZoom == 2 ? 42.0 : 28.0) / 30.0;
+                  final scale = _kZoomRingBases[state.mapZoom.clamp(0, _kZoomCount - 1)] / 30.0;
                   final sdx = lx - mapW / 2, sdy = ly - mapH / 2;
                   if (state.mapNorthUp) {
                     onMapTap(state.playerPosition.x + sdx / scale, state.playerPosition.z + sdy / scale);
@@ -273,6 +286,7 @@ Widget buildRightMFD(
                     treeSnapshot: treeSnapshot,
                     showFireHeatmap: state.navFireHeatmap,
                     showTreeHeatmap: state.navTreeHeatmap,
+                    showLabels: state.navLabels,
                   ),
                   child: Container(),
                 ),
@@ -283,9 +297,11 @@ Widget buildRightMFD(
                   open: state.navSidebarOpen,
                   fireOn: state.navFireHeatmap,
                   treeOn: state.navTreeHeatmap,
+                  labelsOn: state.navLabels,
                   onToggle: onToggleSidebar ?? () {},
                   onToggleFire: onToggleFireHeatmap ?? () {},
                   onToggleTree: onToggleTreeHeatmap ?? () {},
+                  onToggleLabels: onToggleLabels ?? () {},
                 ),
               ),
             ]);
@@ -294,16 +310,25 @@ Widget buildRightMFD(
         _navFooter(state),
       ]),
   };
-  return Container(
+  final mfd = Container(
     width: 560, height: 400,
     decoration: BoxDecoration(color: _kRBg, border: Border.all(color: _kBevel, width: 2)),
     child: body,
+  );
+  if (onZoomDelta == null) return mfd;
+  return Listener(
+    onPointerSignal: (event) {
+      if (event is PointerScrollEvent && event.scrollDelta.dy != 0) {
+        onZoomDelta(event.scrollDelta.dy < 0 ? 1 : -1);
+      }
+    },
+    child: mfd,
   );
 }
 
 Widget _navFooter(GameState state) {
   final hdg  = ((state.playerRotation.y % 360) + 360) % 360;
-  final zoom = const ['1×', '2×', '½×'][state.mapZoom.clamp(0, 2)];
+  final zoom = _kZoomLabels[state.mapZoom.clamp(0, _kZoomCount - 1)];
   return Container(
     height: 44,
     padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -323,17 +348,21 @@ class _NavSidebar extends StatelessWidget {
   final bool open;
   final bool fireOn;
   final bool treeOn;
+  final bool labelsOn;
   final VoidCallback onToggle;
   final VoidCallback onToggleFire;
   final VoidCallback onToggleTree;
+  final VoidCallback onToggleLabels;
 
   const _NavSidebar({
     required this.open,
     required this.fireOn,
     required this.treeOn,
+    required this.labelsOn,
     required this.onToggle,
     required this.onToggleFire,
     required this.onToggleTree,
+    required this.onToggleLabels,
   });
 
   @override
@@ -386,6 +415,8 @@ class _NavSidebar extends StatelessWidget {
         _toggle('FIRE', fireOn, onToggleFire),
         const SizedBox(height: 6),
         _toggle('TREE', treeOn, onToggleTree),
+        const SizedBox(height: 6),
+        _toggle('LBL',  labelsOn, onToggleLabels),
       ]),
     );
   }
@@ -429,6 +460,7 @@ class _TerrainMap extends CustomPainter {
   final List<(double, double, int)> treeSnapshot;    // (wx, wz, stateIndex)
   final bool showFireHeatmap;
   final bool showTreeHeatmap;
+  final bool showLabels;
 
   const _TerrainMap({
     required this.px, required this.pz, required this.heading,
@@ -442,6 +474,7 @@ class _TerrainMap extends CustomPainter {
     this.treeSnapshot = const [],
     this.showFireHeatmap = true,
     this.showTreeHeatmap = true,
+    this.showLabels = true,
   });
 
   Offset _toScreen(double wx, double wz, double cx, double cy,
@@ -457,7 +490,7 @@ class _TerrainMap extends CustomPainter {
     canvas.clipRect(Offset.zero & size);
     final cx       = size.width / 2;
     final cy       = size.height / 2;
-    final ringBase = zoom == 1 ? 18.0 : zoom == 2 ? 42.0 : 28.0;
+    final ringBase = _kZoomRingBases[zoom.clamp(0, _kZoomCount - 1)];
     final headRad  = heading * math.pi / 180;
     final scale    = ringBase / 30.0;
 
@@ -504,13 +537,6 @@ class _TerrainMap extends CustomPainter {
       final color  = isTgt ? const Color(0xFF00FF88) : const Color(0xFF00AAFF);
       canvas.drawCircle(pos, isTgt ? 4.0 : 3.0,
           Paint()..color = color..style = PaintingStyle.fill);
-      final tp = TextPainter(
-        text: TextSpan(text: name,
-            style: TextStyle(color: color, fontSize: 12,
-                fontWeight: isTgt ? FontWeight.bold : FontWeight.normal)),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(pos.dx + 5, pos.dy - 4));
     }
 
     if (wpData != null) {
@@ -580,6 +606,114 @@ class _TerrainMap extends CustomPainter {
     canvas.drawLine(const Offset(-10, 1), const Offset(10, 1), ap);
     canvas.drawLine(const Offset(-4, 6), const Offset( 4, 6), ap);
     canvas.restore();
+
+    if (showLabels) _drawDeclutteredLabels(canvas, size, cx, cy, scale, headRad, abS);
+  }
+
+  // Greedy label declutter — collects all icon labels, then places each at the
+  // first candidate offset that doesn't overlap any already-placed label rect.
+  // Candidate offsets are tried upper-right first, falling back clockwise.
+  // A thin leader line is drawn when the label is displaced from its default slot.
+  void _drawDeclutteredLabels(Canvas canvas, Size size, double cx, double cy,
+      double scale, double headRad, Offset abS) {
+    // Accumulate (screen pos, text, color, bold) for every labeled icon.
+    final entries = <({Offset pos, String text, Color color, bool bold})>[];
+
+    // Waypoints
+    for (int i = 0; i < flightPlan.length; i++) {
+      final (name, wx, wz) = flightPlan[i];
+      final pos   = _toScreen(wx, wz, cx, cy, scale, headRad);
+      final isTgt = i == flightPlanIndex;
+      entries.add((
+        pos: pos,
+        text: name,
+        color: isTgt ? const Color(0xFF00FF88) : const Color(0xFF00AAFF),
+        bold: isTgt,
+      ));
+    }
+
+    // Fire markers — 'fire_0' → 'F1'
+    for (final (fid, fx, fz) in fireMarkers) {
+      final fs  = _toScreen(fx, fz, cx, cy, scale, headRad);
+      final num = int.tryParse(fid.replaceAll('fire_', '')) ?? 0;
+      entries.add((pos: fs, text: 'F${num + 1}',
+          color: const Color(0xFFFF8833), bold: false));
+    }
+
+    // Wyverns — 'wyvern_alpha' → 'ALPH'
+    for (final (wid, wx, wz) in wyvernPositions) {
+      final ws     = _toScreen(wx, wz, cx, cy, scale, headRad);
+      final suffix = wid.contains('_') ? wid.split('_').last.toUpperCase() : wid.toUpperCase();
+      entries.add((
+        pos: ws,
+        text: suffix.length > 4 ? suffix.substring(0, 4) : suffix,
+        color: const Color(0xFFFF7744),
+        bold: false,
+      ));
+    }
+
+    // Airbase
+    entries.add((pos: abS, text: 'BASE', color: const Color(0xFF4488FF), bold: false));
+
+    const fontSize = 10.0;
+    final leaderP = Paint()..strokeWidth = 0.5;
+    final placed  = <Rect>[];
+
+    for (final e in entries) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: e.text,
+          style: TextStyle(color: e.color, fontSize: fontSize,
+              fontWeight: e.bold ? FontWeight.bold : FontWeight.normal),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final w = tp.width, h = tp.height;
+
+      // Candidate offsets from icon center, tried in preference order.
+      final candidates = [
+        Offset(7, -h - 2),       // upper-right (default)
+        Offset(7, 3),             // lower-right
+        Offset(-w - 7, -h - 2),  // upper-left
+        Offset(-w - 7, 3),        // lower-left
+        Offset(-w / 2, -h - 9),  // above center
+        Offset(-w / 2, 9),        // below center
+        Offset(7, -h / 2),        // right center
+        Offset(-w - 7, -h / 2),  // left center
+      ];
+
+      Offset chosen = candidates[0]; // default — placed even if it overlaps
+      bool isDefault = true;
+      bool didPlace  = false;
+      for (final off in candidates) {
+        final r = Rect.fromLTWH(e.pos.dx + off.dx, e.pos.dy + off.dy, w, h);
+        if (r.left < 0 || r.right > size.width || r.top < 0 || r.bottom > size.height) continue;
+        if (placed.every((p) => !p.overlaps(r))) {
+          chosen = off;
+          isDefault = off == candidates[0];
+          placed.add(r);
+          didPlace = true;
+          break;
+        }
+      }
+      if (!didPlace) {
+        // All candidates overlapped — use default and register it so
+        // subsequent labels still see it as occupied.
+        placed.add(Rect.fromLTWH(e.pos.dx + chosen.dx, e.pos.dy + chosen.dy, w, h));
+      }
+
+      // Leader line when displaced from the default upper-right slot.
+      if (!isDefault) {
+        leaderP.color = e.color.withValues(alpha: 0.45);
+        final labelCenter = Offset(
+          e.pos.dx + chosen.dx + w / 2,
+          e.pos.dy + chosen.dy + h / 2,
+        );
+        canvas.drawLine(e.pos, labelCenter, leaderP);
+      }
+
+      tp.paint(canvas, Offset(e.pos.dx + chosen.dx, e.pos.dy + chosen.dy));
+    }
   }
 
   // Fire heat layer: wide semi-transparent glow circles drawn under contours.
@@ -658,7 +792,8 @@ class _TerrainMap extends CustomPainter {
       o.selectedTargetId != selectedTargetId ||
       o.treeSnapshot.length != treeSnapshot.length ||
       o.showFireHeatmap != showFireHeatmap ||
-      o.showTreeHeatmap != showTreeHeatmap;
+      o.showTreeHeatmap != showTreeHeatmap ||
+      o.showLabels != showLabels;
 }
 
 // ── Center MFD – Flight Data ──────────────────────────────────────────────────
