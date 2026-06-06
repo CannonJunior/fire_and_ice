@@ -21,6 +21,10 @@ class AirfieldGenerator {
   static const double _xMin = -_width  / 2;
   static const double _xMax =  _width  / 2;
 
+  // E-W runway dimensions (crosses N-S at center, offset west so clear of base)
+  static const double _ewHalf = 65.0; // half-length along X axis
+  static const double _ewW    =  7.0; // half-width along Z axis
+
   // ── Colors ────────────────────────────────────────────────────────────────
 
   // Asphalt
@@ -70,12 +74,50 @@ class AirfieldGenerator {
       quad(-0.5, zc - 4, 0.5, zc - 4, 0.5, zc + 4, -0.5, zc + 4, _kCenter);
     }
 
-    // Threshold markings — 6 bars, 2.0 wide, 3.0 long, at each end
+    // N-S threshold markings — 6 bars at each end
     for (final zBase in [_zMin + 2.0, _zMax - 5.0]) {
       for (int j = -3; j <= 2; j++) {
         final xc = (j + 0.5) * 2.4;
         quad(xc - 0.9, zBase, xc + 0.9, zBase,
              xc + 0.9, zBase + 3, xc - 0.9, zBase + 3, _kThresh);
+      }
+    }
+
+    // ── E-W runway ────────────────────────────────────────────────────────
+
+    // Asphalt surface
+    quad(-_ewHalf, -_ewW,  _ewHalf, -_ewW,  _ewHalf,  _ewW, -_ewHalf,  _ewW, _kAsphalt);
+
+    // Edge stripes (z edges, 1 unit wide)
+    quad(-_ewHalf, -_ewW,  _ewHalf, -_ewW,  _ewHalf, -_ewW + 1, -_ewHalf, -_ewW + 1, _kEdge);
+    quad(-_ewHalf,  _ewW - 1,  _ewHalf,  _ewW - 1,  _ewHalf,  _ewW, -_ewHalf,  _ewW, _kEdge);
+
+    // Centerline dashes along X (every 18 units, 8 long, 1 wide)
+    for (int i = 0; i < 6; i++) {
+      final xc = -_ewHalf + 18 + i * 18.0;
+      quad(xc - 4, -0.5, xc + 4, -0.5, xc + 4, 0.5, xc - 4, 0.5, _kCenter);
+    }
+
+    // E-W threshold markings — 4 bars at each end (narrower runway)
+    for (final xBase in [-_ewHalf + 2.0, _ewHalf - 7.0]) {
+      for (int j = -2; j <= 1; j++) {
+        final zc = (j + 0.5) * 2.2;
+        quad(xBase,     zc - 0.8, xBase + 5, zc - 0.8,
+             xBase + 5, zc + 0.8, xBase,     zc + 0.8, _kThresh);
+      }
+    }
+
+    // ── Touchdown zone markings on N-S runway ─────────────────────────────
+
+    // 3 pairs of bars at each end (1000ft zone) — additional visual aid
+    for (final sign in [-1.0, 1.0]) {
+      for (int k = 1; k <= 3; k++) {
+        final zBase = sign > 0 ? _zMax - 5.0 - k * 10.0 : _zMin + 5.0 + k * 10.0;
+        for (int j = -3; j <= 2; j++) {
+          final xc = (j + 0.5) * 2.4;
+          quad(xc - 0.8, zBase, xc + 0.8, zBase,
+               xc + 0.8, zBase + 2.5, xc - 0.8, zBase + 2.5, _kCenter);
+        }
       }
     }
 

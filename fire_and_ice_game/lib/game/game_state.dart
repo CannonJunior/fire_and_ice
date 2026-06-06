@@ -118,7 +118,7 @@ class GameState {
 
   /// Named navigation waypoints: (display name, world-X, world-Z).
   static const List<(String, double, double)> kWaypoints = [
-    ('ORIGIN',      0.0,    0.0),
+    ('YANKEE',      0.0,    0.0),
     ('VALLEY PEAK', 32.0,  32.0),
     ('NORTH RIDGE', 10.0,  80.0),
     ('FIRE SHRINE',-80.0,  20.0),
@@ -126,11 +126,13 @@ class GameState {
   ];
 
   bool autopilotEnabled = false;
-  /// -1 = no lock; 0–4 indexes kWaypoints.
+  /// -1 = no lock; 0–(kWaypoints.length-1) indexes kWaypoints.
   int  lockedWaypoint   = -1;
 
   void toggleAutopilot()   { autopilotEnabled = !autopilotEnabled; }
-  void cycleWaypointLock() { lockedWaypoint = lockedWaypoint >= 4 ? -1 : lockedWaypoint + 1; }
+  void cycleWaypointLock() {
+    lockedWaypoint = lockedWaypoint >= kWaypoints.length - 1 ? -1 : lockedWaypoint + 1;
+  }
   void clearNav() {
     autopilotEnabled    = false;
     lockedWaypoint      = -1;
@@ -159,6 +161,21 @@ class GameState {
   void clearFlightPlan() {
     flightPlan.clear();
     flightPlanIndex = 0;
+  }
+
+  /// Select a named waypoint tapped in CHAT as the sole flight-plan destination.
+  /// Does NOT auto-enable autopilot — player activates via the AUTO button.
+  void setNavFromChat(String name, double wx, double wz) {
+    clearFlightPlan();
+    flightPlan.add((name, wx, wz));
+    flightPlanIndex = 0;
+  }
+
+  /// Select a friendly entity (tanker or airbase) tapped by callsign in CHAT.
+  void selectEntityFromChat(String entityId) {
+    if (entityId == 'tanker' || entityId == 'airbase') {
+      _selectedFriendlyTargetId = entityId;
+    }
   }
 
   // ── Suppression control panel (F-35 style: ARM/SAFE/AUTO/MAN + 3 knobs) ──
@@ -591,9 +608,11 @@ class GameState {
   double cfgStallPitchAngle    = 35.0;
   double cfgGpwsAltitude       = 10.0;
   double cfgCrashDamageRate    = 80.0;
-  double cfgLandingMaxSpeed    = 9.0;
-  double cfgLandingMaxPitchDeg = 10.0;
-  double cfgRudderYawRate      = 45.0; // A/D yaw rate (degrees/sec)
+  double cfgLandingMaxSpeed      = 9.0;
+  double cfgLandingMaxPitchDeg   = 10.0;
+  double cfgRudderYawRate        = 45.0; // A/D yaw rate (degrees/sec)
+  double cfgLandingSinkRateCrash = 4.5;  // u/s sink rate that triggers crash
+  double cfgLandingMaxBankDeg    = 10.0; // bank angle limit at touchdown
 
   // ── Aerodynamics config (mirrors currentAircraft.aero, call applyAeroConfig()) ──
 
@@ -621,6 +640,14 @@ class GameState {
   double cfgRunwayStartZ    = 78.0;
   double cfgThrottleRate    = 0.45;
   double cfgFlightSpeedAccel = 2.5;
+
+  // ── Game over ─────────────────────────────────────────────────────────────
+
+  bool gameOver = false;
+  String gameOverReason = '';
+
+  void triggerGameOver(String reason) { gameOver = true; gameOverReason = reason; }
+  void resetGameOver()                { gameOver = false; gameOverReason = ''; }
 
   // ── Combat — active wyverns ───────────────────────────────────────────────
 
@@ -728,7 +755,9 @@ class GameState {
       cfgCrashDamageRate    = (f['crashDamageRate']      as num).toDouble();
       cfgLandingMaxSpeed    = (f['landingMaxSpeed']      as num).toDouble();
       cfgLandingMaxPitchDeg = (f['landingMaxPitchDeg']   as num).toDouble();
-      cfgRudderYawRate      = (f['rudderYawRate'] as num?)?.toDouble() ?? cfgRudderYawRate;
+      cfgRudderYawRate        = (f['rudderYawRate']        as num?)?.toDouble() ?? cfgRudderYawRate;
+      cfgLandingSinkRateCrash = (f['landingSinkRateCrash'] as num?)?.toDouble() ?? cfgLandingSinkRateCrash;
+      cfgLandingMaxBankDeg    = (f['landingMaxBankDeg']    as num?)?.toDouble() ?? cfgLandingMaxBankDeg;
 
       final t = data['taxi'] as Map<String, dynamic>;
       cfgMaxGroundSpeed   = (t['maxGroundSpeed']  as num).toDouble();

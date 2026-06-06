@@ -1,0 +1,21 @@
+{
+  "clouds": {
+    "weatherIndex": 1,
+    "cumulusCount": 15,
+    "cumulusAltMin": 60.0,
+    "cumulusAltMax": 120.0,
+    "cumulusRadiusMin": 15.0,
+    "cumulusRadiusMax": 40.0,
+    "cumulusBillsMin": 20,
+    "cumulusBillsMax": 40,
+    "cumulusDriftSpeed": 0.8,
+    "cbAltMin": 40.0,
+    "cbAltMax": 80.0,
+    "cbRadiusMin": 20.0,
+    "cbRadiusMax": 50.0,
+    "cbBillsMin": 50,
+    "cbBillsMax": 80,
+    "flyThroughAlpha": 0.65,
+    "flyThroughFadeTime": 1.5
+  }
+}

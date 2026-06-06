@@ -23,7 +23,9 @@
     "crashDamageRate": 80.0,
     "landingMaxSpeed": 9.0,
     "landingMaxPitchDeg": 10.0,
-    "rudderYawRate": 45.0
+    "rudderYawRate": 45.0,
+    "landingSinkRateCrash": 4.5,
+    "landingMaxBankDeg": 10.0
   },
   "taxi": {
     "maxGroundSpeed": 10.0,

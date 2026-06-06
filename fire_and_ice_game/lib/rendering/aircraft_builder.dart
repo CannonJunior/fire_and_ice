@@ -1,121 +1,138 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:vector_math/vector_math.dart';
 import 'mesh.dart';
 import 'scene_node.dart';
+import 'tanker_aircraft.dart';
 import '../game/aircraft_config.dart';
 
-/// Record returned by [AircraftBuilder.build].
-///
-/// [root] is the scene graph root — set its [SceneNode.position] and
-/// [SceneNode.rotation] from game state each frame, then call
-/// [SceneNode.updateWorldMatrix].
-///
-/// [parts] is a name-keyed map of the moving nodes so the game loop can
-/// directly update their [SceneNode.rotation] for control-surface animation.
 typedef AircraftScene = ({SceneNode root, Map<String, SceneNode> parts});
 
-/// AircraftBuilder — constructs a multi-part scene graph for a given aircraft.
+/// Builds a multi-part scene graph for each player aircraft.
 ///
-/// Each aircraft type produces a root SceneNode whose children represent the
-/// fuselage and every animated part.  Parts are authored so that their LOCAL
-/// ORIGIN sits exactly on their hinge line; rotating around that origin
-/// correctly deflects the surface around its real-world hinge.
-///
-/// Animated parts (update [SceneNode.rotation] each frame):
-///   'aileron_l'  — left aileron,  rotates X  (roll input, inverted on left)
-///   'aileron_r'  — right aileron, rotates X  (roll input)
-///   'elevator'   — elevator,      rotates X  (pitch input)
-///   'rudder'     — rudder,        rotates Z  (yaw rate; rotated 90° so span=Y)
-///   'flap_l'     — left flap,     rotates X  (extends in landing mode)
-///   'flap_r'     — right flap,    rotates X
-///   'gear_nose'  — nose strut,    position.y (gearProgress)
-///   'gear_left'  — left strut,    position.y
-///   'gear_right' — right strut,   position.y
-///   'prop'       — propeller,     rotates Z  (continuous at throttle RPM)
-///   'bay_l'      — left bay door, rotates Z  (suppression armed)
-///   'bay_r'      — right bay door,rotates Z
-
+/// Animated part keys (driven by AircraftAnimator each frame):
+///   aileron_l/r, elevator, rudder, flap_l/r — control surfaces
+///   gear_nose/left/right — landing struts (position.y)
+///   gear_door_n/l/r     — gear bay doors  (rotation.x)
+///   bay_l/r             — suppression bay doors (rotation.z)
+///   prop / prop_l/r / prop_1..4 — propeller(s) (rotation.z)
+///   probe               — refueling probe (position.z, IceFighter)
+///   drogue              — drogue basket   (position.z, SkyTanker)
 class AircraftBuilder {
   AircraftBuilder._();
 
-  /// Build and return the full scene graph for the given [config].
   static AircraftScene build(AircraftConfig config) {
     return switch (config.id) {
       'icefighter' => _buildIceFighter(),
       'skytanker'  => _buildSkyTanker(),
-      'seabird'    => _buildSeaBird(),
-      'stormrider' => _buildStormRider(),
-      _            => _buildFireHawk(),  // 'firefighter' and fallback
+      _            => _buildFireHawk(),
     };
   }
 
-  // ── IceFighter — ice-elemental interceptor ─────────────────────────────────
+  // ── IceFighter — sleek twin-engine ice interceptor ─────────────────────────
+
+  static Mesh _buildIceFighterBody() {
+    final v = <double>[], n = <double>[], c = <double>[], ix = <int>[];
+    const fuse  = [0.10, 0.22, 0.48, 1.0];
+    const wing  = [0.08, 0.18, 0.38, 1.0];
+    const eng   = [0.15, 0.20, 0.32, 1.0];
+    const glass = [0.28, 0.60, 0.95, 1.0];
+    const fin   = [0.08, 0.16, 0.30, 1.0];
+
+    void face(List<List<double>> pts, List<double> nm, List<double> col) {
+      final b = v.length ~/ 3;
+      for (final p in pts) { v.addAll(p); n.addAll(nm); c.addAll(col); }
+      ix.addAll([b, b + 1, b + 2, b, b + 2, b + 3]);
+    }
+    void box(double cx, double cy, double cz,
+             double sx, double sy, double sz, List<double> col) {
+      final hx = sx/2, hy = sy/2, hz = sz/2;
+      final x0=cx-hx, x1=cx+hx, y0=cy-hy, y1=cy+hy, z0=cz-hz, z1=cz+hz;
+      face([[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]],[ 0, 1, 0],col);
+      face([[x0,y0,z1],[x1,y0,z1],[x1,y0,z0],[x0,y0,z0]],[ 0,-1, 0],col);
+      face([[x1,y0,z0],[x1,y0,z1],[x1,y1,z1],[x1,y1,z0]],[ 1, 0, 0],col);
+      face([[x0,y0,z1],[x0,y0,z0],[x0,y1,z0],[x0,y1,z1]],[-1, 0, 0],col);
+      face([[x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0]],[ 0, 0,-1],col);
+      face([[x1,y0,z1],[x0,y0,z1],[x0,y1,z1],[x1,y1,z1]],[ 0, 0, 1],col);
+    }
+    // nose Z=-1.5, tail Z=+1.5 (len=3.0)
+    box( 0,     0,      0,    0.30, 0.24, 3.00, fuse);
+    box( 0,     0.18, -0.80,  0.26, 0.12, 0.70, glass);
+    box( 0,    -0.02,  0.15,  2.10, 0.05, 0.90, wing);
+    box(-0.42, -0.05,  0,     0.16, 0.13, 1.80, eng);
+    box( 0.42, -0.05,  0,     0.16, 0.13, 1.80, eng);
+    box( 0,     0.24,  1.10,  0.05, 0.42, 0.55, fin);
+    box( 0,     0.08,  1.10,  0.80, 0.04, 0.28, wing);
+    return Mesh(
+      vertices: Float32List.fromList(v), indices: Uint16List.fromList(ix),
+      normals:  Float32List.fromList(n), colors:  Float32List.fromList(c),
+    );
+  }
 
   static AircraftScene _buildIceFighter() {
-    const len  = 4.0;
-    final hl   = len / 2;
-    final bw   = len * 0.14;       // slim interceptor fuselage
-    final bh   = len * 0.11;
-    final ws   = len * 0.85;       // long agile wings
-    final pri  = Vector3(0.20, 0.50, 0.90);
-    final sec  = Vector3(0.12, 0.28, 0.55);
-    final ctrl = Vector3(0.30, 0.60, 1.00);
+    const bh = 0.24;
+    final ctrl = Vector3(0.35, 0.65, 1.00);
     final gC   = Vector3(0.12, 0.12, 0.14);
+    final bC   = Vector3(0.25, 0.50, 0.90);
 
-    final root = SceneNode(id: 'aircraft_root');
+    final root  = SceneNode(id: 'aircraft_root');
     final parts = <String, SceneNode>{};
-
-    root.addChild(SceneNode(id: 'body', mesh: Mesh.aircraft(length: len,
-        primaryColor: pri, secondaryColor: sec)));
+    root.addChild(SceneNode(id: 'body', mesh: _buildIceFighterBody()));
 
     void add(String id, SceneNode n) { root.addChild(n); parts[id] = n; }
 
-    // Larger ailerons — interceptor agility
     add('aileron_l', SceneNode(id: 'aileron_l',
-        position: Vector3(-ws * 0.42, 0, hl * 0.50),
-        mesh: Mesh.flatPanel(halfSpan: 0.62, chord: 0.44, thickness: 0.04, color: ctrl)));
+        position: Vector3(-0.80, 0, 0.60),
+        mesh: Mesh.flatPanel(halfSpan: 0.42, chord: 0.36, thickness: 0.04, color: ctrl)));
     add('aileron_r', SceneNode(id: 'aileron_r',
-        position: Vector3( ws * 0.42, 0, hl * 0.50),
-        mesh: Mesh.flatPanel(halfSpan: 0.62, chord: 0.44, thickness: 0.04, color: ctrl)));
+        position: Vector3( 0.80, 0, 0.60),
+        mesh: Mesh.flatPanel(halfSpan: 0.42, chord: 0.36, thickness: 0.04, color: ctrl)));
     add('elevator', SceneNode(id: 'elevator',
-        position: Vector3(0, bh * 0.1, hl * 0.70),
-        mesh: Mesh.flatPanel(halfSpan: 0.60, chord: 0.40, thickness: 0.04, color: ctrl)));
+        position: Vector3(0, bh * 0.1, 1.20),
+        mesh: Mesh.flatPanel(halfSpan: 0.44, chord: 0.30, thickness: 0.04, color: ctrl)));
     add('rudder', SceneNode(id: 'rudder',
-        position: Vector3(0, bh * 0.55, hl * 0.68),
+        position: Vector3(0, bh * 0.55, 1.18),
         rotation: Vector3(-math.pi / 2, 0, 0),
-        mesh: Mesh.flatPanel(halfSpan: 0.44, chord: 0.36, thickness: 0.04, color: ctrl)));
-    // Smaller flaps — interceptor, not a hauler
+        mesh: Mesh.flatPanel(halfSpan: 0.38, chord: 0.28, thickness: 0.04, color: ctrl)));
     add('flap_l', SceneNode(id: 'flap_l',
-        position: Vector3(-bw * 0.80, 0, hl * 0.48),
-        mesh: Mesh.flatPanel(halfSpan: 0.22, chord: 0.26, thickness: 0.04, color: ctrl)));
+        position: Vector3(-0.38, 0, 0.50),
+        mesh: Mesh.flatPanel(halfSpan: 0.20, chord: 0.24, thickness: 0.04, color: ctrl)));
     add('flap_r', SceneNode(id: 'flap_r',
-        position: Vector3( bw * 0.80, 0, hl * 0.48),
-        mesh: Mesh.flatPanel(halfSpan: 0.22, chord: 0.26, thickness: 0.04, color: ctrl)));
-    add('gear_nose',  SceneNode(id: 'gear_nose',
-        position: Vector3(0, -bh * 0.5, -hl * 0.40),
-        mesh: Mesh.strut(length: 0.68, radius: 0.06, color: gC)));
-    add('gear_left',  SceneNode(id: 'gear_left',
-        position: Vector3(-bw * 0.60, -bh * 0.5, hl * 0.10),
-        mesh: Mesh.strut(length: 0.72, radius: 0.07, color: gC)));
+        position: Vector3( 0.38, 0, 0.50),
+        mesh: Mesh.flatPanel(halfSpan: 0.20, chord: 0.24, thickness: 0.04, color: ctrl)));
+    add('gear_nose', SceneNode(id: 'gear_nose',
+        position: Vector3(0, -bh * 0.50, -0.60),
+        mesh: Mesh.strut(length: 0.55, radius: 0.05, color: gC)));
+    add('gear_left', SceneNode(id: 'gear_left',
+        position: Vector3(-0.18, -bh * 0.50, 0.15),
+        mesh: Mesh.strut(length: 0.60, radius: 0.06, color: gC)));
     add('gear_right', SceneNode(id: 'gear_right',
-        position: Vector3( bw * 0.60, -bh * 0.5, hl * 0.10),
-        mesh: Mesh.strut(length: 0.72, radius: 0.07, color: gC)));
-    // Compact bay — less retardant capacity
-    final bC = Vector3(0.25, 0.50, 0.90);
+        position: Vector3( 0.18, -bh * 0.50, 0.15),
+        mesh: Mesh.strut(length: 0.60, radius: 0.06, color: gC)));
+    add('gear_door_n', SceneNode(id: 'gear_door_n',
+        position: Vector3(0, -bh * 0.50, -0.60),
+        mesh: Mesh.flatPanel(halfSpan: 0.12, chord: 0.20, thickness: 0.03, color: gC)));
+    add('gear_door_l', SceneNode(id: 'gear_door_l',
+        position: Vector3(-0.18, -bh * 0.50, 0.15),
+        mesh: Mesh.flatPanel(halfSpan: 0.14, chord: 0.22, thickness: 0.03, color: gC)));
+    add('gear_door_r', SceneNode(id: 'gear_door_r',
+        position: Vector3( 0.18, -bh * 0.50, 0.15),
+        mesh: Mesh.flatPanel(halfSpan: 0.14, chord: 0.22, thickness: 0.03, color: gC)));
     add('bay_l', SceneNode(id: 'bay_l',
-        position: Vector3(-bw * 0.45, -bh * 0.50, hl * 0.15),
-        mesh: Mesh.flatPanel(halfSpan: 0.13, chord: 0.26, thickness: 0.03, color: bC)));
+        position: Vector3(-0.14, -bh * 0.50, 0.20),
+        mesh: Mesh.flatPanel(halfSpan: 0.10, chord: 0.22, thickness: 0.03, color: bC)));
     add('bay_r', SceneNode(id: 'bay_r',
-        position: Vector3( bw * 0.45, -bh * 0.50, hl * 0.15),
-        mesh: Mesh.flatPanel(halfSpan: 0.13, chord: 0.26, thickness: 0.03, color: bC)));
-    add('prop', SceneNode(id: 'prop',
-        position: Vector3(0, -bh * 0.10, hl * 0.90),
-        mesh: Mesh.flatPanel(halfSpan: bw * 0.50, chord: 0.06, thickness: 0.02,
-            color: Vector3(0.6, 0.8, 1.0))));
-    // Refueling probe — rotated so strut extends forward in -Z from its local origin.
-    // Animated: position.z slides outward as probeProgress increases.
+        position: Vector3( 0.14, -bh * 0.50, 0.20),
+        mesh: Mesh.flatPanel(halfSpan: 0.10, chord: 0.22, thickness: 0.03, color: bC)));
+    final pC = Vector3(0.55, 0.80, 1.00);
+    add('prop_l', SceneNode(id: 'prop_l',
+        position: Vector3(-0.42, -0.05, -0.95),
+        mesh: Mesh.flatPanel(halfSpan: 0.22, chord: 0.06, thickness: 0.02, color: pC)));
+    add('prop_r', SceneNode(id: 'prop_r',
+        position: Vector3( 0.42, -0.05, -0.95),
+        mesh: Mesh.flatPanel(halfSpan: 0.22, chord: 0.06, thickness: 0.02, color: pC)));
     add('probe', SceneNode(id: 'probe',
-        position: Vector3(0, 0, -hl),
+        position: Vector3(0, 0, -1.5),
         rotation: Vector3(math.pi / 2, 0, 0),
         mesh: Mesh.strut(length: 1.5, radius: 0.05, color: Vector3(0.65, 0.82, 1.0))));
     return (root: root, parts: parts);
@@ -124,229 +141,152 @@ class AircraftBuilder {
   // ── FireHawk — balanced fighter-bomber ─────────────────────────────────────
 
   static AircraftScene _buildFireHawk() {
-    const len  = 4.0;
-    final hl   = len / 2;          // half-length  = 2.0
-    final bw   = len * 0.17;       // wide belly houses retardant tank
-    final bh   = len * 0.13;       // deep fuselage
-    final ws   = len * 0.78;       // shorter span — heavier airframe
-    final pri  = Vector3(0.82, 0.10, 0.06);  // firetruck red
-    final sec  = Vector3(0.52, 0.05, 0.03);  // darker red wings
-    final ctrl = Vector3(1.00, 0.42, 0.08);  // orange-red control surfaces
-
-    final root = SceneNode(id: 'aircraft_root');
-    final parts = <String, SceneNode>{};
-
-    // Static fuselage + wings (existing Mesh.aircraft geometry)
-    root.addChild(SceneNode(id: 'body', mesh: Mesh.aircraft(length: len,
-        primaryColor: pri, secondaryColor: sec)));
-
-    // ── Ailerons ─────────────────────────────────────────────────────────────
-    // Left aileron hinge: at 55% of half-span, 55% of hl along Z (trailing area)
-    // halfSpan = 0.55, chord = 0.38 (extends to wing trailing edge)
-    final ailL = SceneNode(id: 'aileron_l',
-        position: Vector3(-ws * 0.40, 0, hl * 0.50),
-        mesh: Mesh.flatPanel(halfSpan: 0.55, chord: 0.38, thickness: 0.04, color: ctrl));
-    final ailR = SceneNode(id: 'aileron_r',
-        position: Vector3(ws * 0.40, 0, hl * 0.50),
-        mesh: Mesh.flatPanel(halfSpan: 0.55, chord: 0.38, thickness: 0.04, color: ctrl));
-    root.addChild(ailL);
-    root.addChild(ailR);
-    parts['aileron_l'] = ailL;
-    parts['aileron_r'] = ailR;
-
-    // ── Elevator ─────────────────────────────────────────────────────────────
-    // Horizontal stabilizer leading edge at ~70% of hl
-    final elev = SceneNode(id: 'elevator',
-        position: Vector3(0, bh * 0.1, hl * 0.70),
-        mesh: Mesh.flatPanel(halfSpan: 0.65, chord: 0.42, thickness: 0.04, color: ctrl));
-    root.addChild(elev);
-    parts['elevator'] = elev;
-
-    // ── Rudder ───────────────────────────────────────────────────────────────
-    // Vertical surface: span is height (Y), so rotate flatPanel 90° around X.
-    // After rotation: Z=chord direction stays the same, Y=span becomes the height axis.
-    final rud = SceneNode(id: 'rudder',
-        position: Vector3(0, bh * 0.55, hl * 0.68),
-        rotation: Vector3(-math.pi / 2, 0, 0), // rotate so span is Y
-        mesh: Mesh.flatPanel(halfSpan: 0.38, chord: 0.32, thickness: 0.04, color: ctrl));
-    root.addChild(rud);
-    parts['rudder'] = rud;
-
-    // ── Flaps (inboard of ailerons) ──────────────────────────────────────────
-    final flapL = SceneNode(id: 'flap_l',
-        position: Vector3(-bw * 0.80, 0, hl * 0.48),
-        mesh: Mesh.flatPanel(halfSpan: 0.30, chord: 0.32, thickness: 0.04, color: ctrl));
-    final flapR = SceneNode(id: 'flap_r',
-        position: Vector3(bw * 0.80, 0, hl * 0.48),
-        mesh: Mesh.flatPanel(halfSpan: 0.30, chord: 0.32, thickness: 0.04, color: ctrl));
-    root.addChild(flapL);
-    root.addChild(flapR);
-    parts['flap_l'] = flapL;
-    parts['flap_r'] = flapR;
-
-    // ── Landing gear ─────────────────────────────────────────────────────────
-    final gearColor = Vector3(0.12, 0.12, 0.14);
-    final gearN = SceneNode(id: 'gear_nose',
-        position: Vector3(0, -bh * 0.50, -hl * 0.40),
-        mesh: Mesh.strut(length: 0.75, radius: 0.06, color: gearColor));
-    final gearL = SceneNode(id: 'gear_left',
-        position: Vector3(-bw * 0.60, -bh * 0.50, hl * 0.10),
-        mesh: Mesh.strut(length: 0.80, radius: 0.07, color: gearColor));
-    final gearR = SceneNode(id: 'gear_right',
-        position: Vector3(bw * 0.60, -bh * 0.50, hl * 0.10),
-        mesh: Mesh.strut(length: 0.80, radius: 0.07, color: gearColor));
-    root.addChild(gearN);
-    root.addChild(gearL);
-    root.addChild(gearR);
-    parts['gear_nose']  = gearN;
-    parts['gear_left']  = gearL;
-    parts['gear_right'] = gearR;
-
-    // ── Suppression bay doors (larger on FireHawk — bigger retardant bay) ──────
-    final bayColor = Vector3(0.65, 0.08, 0.04);  // dark red bay doors
-    final bayL = SceneNode(id: 'bay_l',
-        position: Vector3(-bw * 0.45, -bh * 0.50, hl * 0.15),
-        mesh: Mesh.flatPanel(halfSpan: 0.24, chord: 0.40, thickness: 0.03, color: bayColor));
-    final bayR = SceneNode(id: 'bay_r',
-        position: Vector3(bw * 0.45, -bh * 0.50, hl * 0.15),
-        mesh: Mesh.flatPanel(halfSpan: 0.24, chord: 0.40, thickness: 0.03, color: bayColor));
-    root.addChild(bayL);
-    root.addChild(bayR);
-    parts['bay_l'] = bayL;
-    parts['bay_r'] = bayR;
-
-    // ── Exhaust bloom (orange-red for fire-themed engine) ─────────────────────
-    final prop = SceneNode(id: 'prop',
-        position: Vector3(0, -bh * 0.10, hl * 0.90),
-        mesh: Mesh.flatPanel(halfSpan: bw * 0.55, chord: 0.06, thickness: 0.02,
-            color: Vector3(1.0, 0.35, 0.05)));
-    root.addChild(prop);
-    parts['prop'] = prop;
-
-    return (root: root, parts: parts);
-  }
-
-  // ── SkyTanker — heavy retardant bomber ─────────────────────────────────────
-
-  static AircraftScene _buildSkyTanker() {
-    const len = 5.5;
+    const len = 4.0;
     final hl  = len / 2;
-    final bw  = len * 0.18;
-    final bh  = len * 0.14;
+    final bw  = len * 0.17;
+    final bh  = len * 0.13;
+    final ws  = len * 0.78;
+    final pri  = Vector3(0.82, 0.10, 0.06);
+    final sec  = Vector3(0.52, 0.05, 0.03);
+    final ctrl = Vector3(1.00, 0.42, 0.08);
+    final gC   = Vector3(0.12, 0.12, 0.14);
 
-    // Reuse FireHawk geometry but with different scale/colors
-    final root = SceneNode(id: 'aircraft_root');
+    final root  = SceneNode(id: 'aircraft_root');
     final parts = <String, SceneNode>{};
-
-    root.addChild(SceneNode(id: 'body', mesh: Mesh.aircraft(length: len,
-        primaryColor:   Vector3(0.70, 0.50, 0.20),  // tan/sand heavy bomber
-        secondaryColor: Vector3(0.45, 0.30, 0.12))));
-
-    _addSharedSurfaces(root, parts, hl, bw, bh, len,
-        ctrl: Vector3(0.85, 0.65, 0.25));
-
-    // Drogue basket — trails behind the tail when deployed.
-    // Animated: position.z slides backward (+Z) as drogueProgress increases.
-    final drogue = SceneNode(id: 'drogue',
-        position: Vector3(0, -bh * 0.15, hl),
-        mesh: Mesh.cube(size: 0.55, color: Vector3(1.0, 0.55, 0.10)));
-    root.addChild(drogue);
-    parts['drogue'] = drogue;
-
-    return (root: root, parts: parts);
-  }
-
-  // ── SeaBird — amphibious scooper ────────────────────────────────────────────
-
-  static AircraftScene _buildSeaBird() {
-    const len = 4.5;
-    final hl  = len / 2;
-    final bw  = len * 0.14;
-    final bh  = len * 0.11;
-
-    final root = SceneNode(id: 'aircraft_root');
-    final parts = <String, SceneNode>{};
-
-    root.addChild(SceneNode(id: 'body', mesh: Mesh.aircraft(length: len,
-        primaryColor:   Vector3(0.15, 0.60, 0.55),  // teal amphibious
-        secondaryColor: Vector3(0.08, 0.40, 0.38))));
-
-    _addSharedSurfaces(root, parts, hl, bw, bh, len,
-        ctrl: Vector3(0.20, 0.80, 0.75));
-    return (root: root, parts: parts);
-  }
-
-  // ── StormRider — elemental specialist ──────────────────────────────────────
-
-  static AircraftScene _buildStormRider() {
-    const len = 3.8;
-    final hl  = len / 2;
-    final bw  = len * 0.12;
-    final bh  = len * 0.10;
-
-    final root = SceneNode(id: 'aircraft_root');
-    final parts = <String, SceneNode>{};
-
-    root.addChild(SceneNode(id: 'body', mesh: Mesh.aircraft(length: len,
-        primaryColor:   Vector3(0.45, 0.10, 0.80),  // elemental violet
-        secondaryColor: Vector3(0.25, 0.05, 0.50))));
-
-    _addSharedSurfaces(root, parts, hl, bw, bh, len,
-        ctrl: Vector3(0.70, 0.30, 1.00));
-    return (root: root, parts: parts);
-  }
-
-  // ── Shared surface builder (reused by non-FireHawk types) ──────────────────
-
-  static void _addSharedSurfaces(
-    SceneNode root,
-    Map<String, SceneNode> parts,
-    double hl, double bw, double bh, double len, {
-    required Vector3 ctrl,
-  }) {
-    final ws = len * 0.80;
-    final gC = Vector3(0.12, 0.12, 0.14);
+    root.addChild(SceneNode(id: 'body',
+        mesh: Mesh.aircraft(length: len, primaryColor: pri, secondaryColor: sec)));
 
     void add(String id, SceneNode n) { root.addChild(n); parts[id] = n; }
 
     add('aileron_l', SceneNode(id: 'aileron_l',
         position: Vector3(-ws * 0.40, 0, hl * 0.50),
-        mesh: Mesh.flatPanel(halfSpan: 0.50, chord: 0.36, thickness: 0.04, color: ctrl)));
+        mesh: Mesh.flatPanel(halfSpan: 0.55, chord: 0.38, thickness: 0.04, color: ctrl)));
     add('aileron_r', SceneNode(id: 'aileron_r',
-        position: Vector3(ws * 0.40, 0, hl * 0.50),
-        mesh: Mesh.flatPanel(halfSpan: 0.50, chord: 0.36, thickness: 0.04, color: ctrl)));
+        position: Vector3( ws * 0.40, 0, hl * 0.50),
+        mesh: Mesh.flatPanel(halfSpan: 0.55, chord: 0.38, thickness: 0.04, color: ctrl)));
     add('elevator', SceneNode(id: 'elevator',
         position: Vector3(0, bh * 0.1, hl * 0.70),
-        mesh: Mesh.flatPanel(halfSpan: 0.60, chord: 0.38, thickness: 0.04, color: ctrl)));
+        mesh: Mesh.flatPanel(halfSpan: 0.65, chord: 0.42, thickness: 0.04, color: ctrl)));
     add('rudder', SceneNode(id: 'rudder',
         position: Vector3(0, bh * 0.55, hl * 0.68),
         rotation: Vector3(-math.pi / 2, 0, 0),
-        mesh: Mesh.flatPanel(halfSpan: 0.35, chord: 0.28, thickness: 0.04, color: ctrl)));
+        mesh: Mesh.flatPanel(halfSpan: 0.38, chord: 0.32, thickness: 0.04, color: ctrl)));
     add('flap_l', SceneNode(id: 'flap_l',
         position: Vector3(-bw * 0.80, 0, hl * 0.48),
-        mesh: Mesh.flatPanel(halfSpan: 0.28, chord: 0.30, thickness: 0.04, color: ctrl)));
+        mesh: Mesh.flatPanel(halfSpan: 0.30, chord: 0.32, thickness: 0.04, color: ctrl)));
     add('flap_r', SceneNode(id: 'flap_r',
-        position: Vector3(bw * 0.80, 0, hl * 0.48),
-        mesh: Mesh.flatPanel(halfSpan: 0.28, chord: 0.30, thickness: 0.04, color: ctrl)));
-    add('gear_nose',  SceneNode(id: 'gear_nose',
-        position: Vector3(0, -bh * 0.5, -hl * 0.40),
-        mesh: Mesh.strut(length: 0.75, radius: 0.07, color: gC)));
-    add('gear_left',  SceneNode(id: 'gear_left',
-        position: Vector3(-bw * 0.60, -bh * 0.5, hl * 0.10),
-        mesh: Mesh.strut(length: 0.80, radius: 0.08, color: gC)));
+        position: Vector3( bw * 0.80, 0, hl * 0.48),
+        mesh: Mesh.flatPanel(halfSpan: 0.30, chord: 0.32, thickness: 0.04, color: ctrl)));
+    add('gear_nose', SceneNode(id: 'gear_nose',
+        position: Vector3(0, -bh * 0.50, -hl * 0.40),
+        mesh: Mesh.strut(length: 0.75, radius: 0.06, color: gC)));
+    add('gear_left', SceneNode(id: 'gear_left',
+        position: Vector3(-bw * 0.60, -bh * 0.50, hl * 0.10),
+        mesh: Mesh.strut(length: 0.80, radius: 0.07, color: gC)));
     add('gear_right', SceneNode(id: 'gear_right',
-        position: Vector3(bw * 0.60, -bh * 0.5, hl * 0.10),
-        mesh: Mesh.strut(length: 0.80, radius: 0.08, color: gC)));
-    final bC = Vector3(ctrl.x * 0.6, ctrl.y * 0.6, ctrl.z * 0.6);
+        position: Vector3( bw * 0.60, -bh * 0.50, hl * 0.10),
+        mesh: Mesh.strut(length: 0.80, radius: 0.07, color: gC)));
+    add('gear_door_n', SceneNode(id: 'gear_door_n',
+        position: Vector3(0, -bh * 0.50, -hl * 0.40),
+        mesh: Mesh.flatPanel(halfSpan: 0.18, chord: 0.26, thickness: 0.04, color: gC)));
+    add('gear_door_l', SceneNode(id: 'gear_door_l',
+        position: Vector3(-bw * 0.60, -bh * 0.50, hl * 0.10),
+        mesh: Mesh.flatPanel(halfSpan: 0.20, chord: 0.30, thickness: 0.04, color: gC)));
+    add('gear_door_r', SceneNode(id: 'gear_door_r',
+        position: Vector3( bw * 0.60, -bh * 0.50, hl * 0.10),
+        mesh: Mesh.flatPanel(halfSpan: 0.20, chord: 0.30, thickness: 0.04, color: gC)));
+    final bayColor = Vector3(0.65, 0.08, 0.04);
     add('bay_l', SceneNode(id: 'bay_l',
         position: Vector3(-bw * 0.45, -bh * 0.50, hl * 0.15),
-        mesh: Mesh.flatPanel(halfSpan: 0.22, chord: 0.38, thickness: 0.03, color: bC)));
+        mesh: Mesh.flatPanel(halfSpan: 0.24, chord: 0.40, thickness: 0.03, color: bayColor)));
     add('bay_r', SceneNode(id: 'bay_r',
-        position: Vector3(bw * 0.45, -bh * 0.50, hl * 0.15),
-        mesh: Mesh.flatPanel(halfSpan: 0.22, chord: 0.38, thickness: 0.03, color: bC)));
+        position: Vector3( bw * 0.45, -bh * 0.50, hl * 0.15),
+        mesh: Mesh.flatPanel(halfSpan: 0.24, chord: 0.40, thickness: 0.03, color: bayColor)));
     add('prop', SceneNode(id: 'prop',
         position: Vector3(0, -bh * 0.10, hl * 0.90),
         mesh: Mesh.flatPanel(halfSpan: bw * 0.55, chord: 0.06, thickness: 0.02,
-            color: Vector3(0.8, 0.4, 0.1))));
+            color: Vector3(1.0, 0.35, 0.05))));
+    return (root: root, parts: parts);
+  }
+
+  // ── SkyTanker — Leviathan ART-9 player aircraft ────────────────────────────
+
+  static AircraftScene _buildSkyTanker() {
+    // Body uses the same ART-9 mesh as the NPC tanker (14 units long, ±7 Z)
+    const hl = 7.0;
+    const bw = 1.8;
+    const bh = 1.4;
+    final ctrl = Vector3(0.65, 0.55, 0.30);
+    final gC   = Vector3(0.12, 0.12, 0.14);
+
+    final root  = SceneNode(id: 'aircraft_root');
+    final parts = <String, SceneNode>{};
+    root.addChild(SceneNode(id: 'body', mesh: TankerAircraft.buildBodyMesh()));
+
+    void add(String id, SceneNode n) { root.addChild(n); parts[id] = n; }
+
+    add('aileron_l', SceneNode(id: 'aileron_l',
+        position: Vector3(-8.0, 0, hl * 0.20),
+        mesh: Mesh.flatPanel(halfSpan: 1.8, chord: 0.90, thickness: 0.08, color: ctrl)));
+    add('aileron_r', SceneNode(id: 'aileron_r',
+        position: Vector3( 8.0, 0, hl * 0.20),
+        mesh: Mesh.flatPanel(halfSpan: 1.8, chord: 0.90, thickness: 0.08, color: ctrl)));
+    add('elevator', SceneNode(id: 'elevator',
+        position: Vector3(0, bh * 0.1, hl * 0.80),
+        mesh: Mesh.flatPanel(halfSpan: 2.8, chord: 1.20, thickness: 0.08, color: ctrl)));
+    add('rudder', SceneNode(id: 'rudder',
+        position: Vector3(0, bh * 0.55, hl * 0.78),
+        rotation: Vector3(-math.pi / 2, 0, 0),
+        mesh: Mesh.flatPanel(halfSpan: 1.4, chord: 1.00, thickness: 0.08, color: ctrl)));
+    add('flap_l', SceneNode(id: 'flap_l',
+        position: Vector3(-bw * 1.5, 0, hl * 0.15),
+        mesh: Mesh.flatPanel(halfSpan: 1.4, chord: 1.10, thickness: 0.08, color: ctrl)));
+    add('flap_r', SceneNode(id: 'flap_r',
+        position: Vector3( bw * 1.5, 0, hl * 0.15),
+        mesh: Mesh.flatPanel(halfSpan: 1.4, chord: 1.10, thickness: 0.08, color: ctrl)));
+    add('gear_nose', SceneNode(id: 'gear_nose',
+        position: Vector3(0, -bh * 0.50, -hl * 0.50),
+        mesh: Mesh.strut(length: 2.0, radius: 0.18, color: gC)));
+    add('gear_left', SceneNode(id: 'gear_left',
+        position: Vector3(-bw * 0.60, -bh * 0.50, hl * 0.08),
+        mesh: Mesh.strut(length: 2.5, radius: 0.22, color: gC)));
+    add('gear_right', SceneNode(id: 'gear_right',
+        position: Vector3( bw * 0.60, -bh * 0.50, hl * 0.08),
+        mesh: Mesh.strut(length: 2.5, radius: 0.22, color: gC)));
+    add('gear_door_n', SceneNode(id: 'gear_door_n',
+        position: Vector3(0, -bh * 0.50, -hl * 0.50),
+        mesh: Mesh.flatPanel(halfSpan: 0.50, chord: 0.90, thickness: 0.06, color: gC)));
+    add('gear_door_l', SceneNode(id: 'gear_door_l',
+        position: Vector3(-bw * 0.60, -bh * 0.50, hl * 0.08),
+        mesh: Mesh.flatPanel(halfSpan: 0.60, chord: 1.00, thickness: 0.06, color: gC)));
+    add('gear_door_r', SceneNode(id: 'gear_door_r',
+        position: Vector3( bw * 0.60, -bh * 0.50, hl * 0.08),
+        mesh: Mesh.flatPanel(halfSpan: 0.60, chord: 1.00, thickness: 0.06, color: gC)));
+    final bC = Vector3(0.55, 0.38, 0.12);
+    add('bay_l', SceneNode(id: 'bay_l',
+        position: Vector3(-bw * 0.45, -bh * 0.50, hl * 0.15),
+        mesh: Mesh.flatPanel(halfSpan: 0.70, chord: 1.20, thickness: 0.05, color: bC)));
+    add('bay_r', SceneNode(id: 'bay_r',
+        position: Vector3( bw * 0.45, -bh * 0.50, hl * 0.15),
+        mesh: Mesh.flatPanel(halfSpan: 0.70, chord: 1.20, thickness: 0.05, color: bC)));
+    // Four turboprops — one at front of each engine nacelle
+    final pC = Vector3(0.60, 0.55, 0.45);
+    add('prop_1', SceneNode(id: 'prop_1',
+        position: Vector3(-2.5, 0.36, -3.65),
+        mesh: Mesh.flatPanel(halfSpan: 1.40, chord: 0.12, thickness: 0.04, color: pC)));
+    add('prop_2', SceneNode(id: 'prop_2',
+        position: Vector3(-6.2, 0.28, -3.65),
+        mesh: Mesh.flatPanel(halfSpan: 1.30, chord: 0.12, thickness: 0.04, color: pC)));
+    add('prop_3', SceneNode(id: 'prop_3',
+        position: Vector3( 2.5, 0.36, -3.65),
+        mesh: Mesh.flatPanel(halfSpan: 1.40, chord: 0.12, thickness: 0.04, color: pC)));
+    add('prop_4', SceneNode(id: 'prop_4',
+        position: Vector3( 6.2, 0.28, -3.65),
+        mesh: Mesh.flatPanel(halfSpan: 1.30, chord: 0.12, thickness: 0.04, color: pC)));
+    // Drogue basket — starts at tail, extends backward when deployed
+    add('drogue', SceneNode(id: 'drogue',
+        position: Vector3(0, -0.50, 7.5),
+        mesh: Mesh.cube(size: 0.55, color: Vector3(1.0, 0.55, 0.10))));
+    return (root: root, parts: parts);
   }
 }

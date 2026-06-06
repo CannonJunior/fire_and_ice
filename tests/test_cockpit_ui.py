@@ -36,7 +36,7 @@ ABLT_OSB1_X = 385  # ability slot 1 x-centre
 OSB_BOT_Y   = 840  # y-centre of left MFD ability OSBs (probe-verified)
 
 # Right MFD top/bottom OSBs — NAV/TERR/FIRE/MARK and ZOOM/AUTO/LOCK/CLR
-R_NAV, R_TERR, R_TGT, R_MARK = 1530, 1610, 1690, 1770
+R_NAV, R_TERR, R_TGT, R_MARK = 1450, 1530, 1610, 1690
 R_ZOOM, R_AUTO, R_LOCK, R_CLR = 1530, 1610, 1690, 1770
 R_OSB_BOT_Y = 866  # right MFD action OSBs row
 

@@ -4,6 +4,7 @@ import 'game_state.dart';
 import 'hud_ability_hex.dart';
 import 'hud_gauges.dart';
 import 'hud_tutorial.dart';
+import 'landing_system.dart';
 
 /// Build the complete third-person HUD overlay for the given [state].
 Widget buildHud(
@@ -94,9 +95,85 @@ Widget buildHud(
           ),
 
         if (showTutorial) buildTutorialOverlay(state),
+
+        // Approach strip — visible in landing mode only
+        if (state.gameMode == GameMode.landing)
+          ..._approachStripWidgets(state),
       ],
     ),
   );
+}
+
+List<Widget> _approachStripWidgets(GameState state) {
+  final rw = LandingSystem.bestRunway(
+      state.playerPosition.x, state.playerPosition.z, state.playerRotation.y);
+  if (rw == null) {
+    return [const Positioned(
+      top: 50, left: 0, right: 0,
+      child: Center(child: _ApproachBanner(
+        runway: '---', locStr: 'NO SIGNAL', gsStr: '', rng: '', papiCount: -1)),
+    )];
+  }
+  final a = LandingSystem.computeApproach(
+      state.playerPosition.x, state.playerPosition.y, state.playerPosition.z, rw);
+  final locDir = a.locDots > 0.1 ? '▶R${a.locDots.abs().toStringAsFixed(1)}' :
+                 a.locDots < -0.1 ? 'L${a.locDots.abs().toStringAsFixed(1)}◀' : '◆CTR';
+  final gsDir  = a.gsDots  > 0.1 ? '▼HI${a.gsDots.abs().toStringAsFixed(1)}' :
+                 a.gsDots  < -0.1 ? '▲LO${a.gsDots.abs().toStringAsFixed(1)}' : '◆ON GS';
+  final rngStr = a.downrangeM > 0 ? '${a.downrangeM.toStringAsFixed(0)}u' : 'PAST';
+  final white  = a.papiWhite.where((b) => b).length;
+  return [Positioned(
+    top: 50, left: 0, right: 0,
+    child: Center(child: _ApproachBanner(
+      runway: rw.id, locStr: locDir, gsStr: gsDir,
+      rng: rngStr, papiCount: white)),
+  )];
+}
+
+class _ApproachBanner extends StatelessWidget {
+  final String runway, locStr, gsStr, rng;
+  final int papiCount; // number of white PAPI lights; -1 = no signal
+
+  const _ApproachBanner({
+    required this.runway, required this.locStr,
+    required this.gsStr,  required this.rng, required this.papiCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final onGs  = papiCount == 2;
+    final color = onGs ? const Color(0xFF00FF88) : const Color(0xFFFFAA00);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.72),
+        border: Border.all(color: color.withValues(alpha: 0.8), width: 1.5),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text('$runway  ',
+            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        Text(locStr, style: TextStyle(color: color, fontSize: 11, letterSpacing: 0.5)),
+        const SizedBox(width: 12),
+        Text(gsStr,  style: TextStyle(color: color, fontSize: 11, letterSpacing: 0.5)),
+        if (rng.isNotEmpty) ...[
+          const SizedBox(width: 12),
+          Text('RNG $rng', style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 10)),
+        ],
+        if (papiCount >= 0) ...[
+          const SizedBox(width: 10),
+          ...List.generate(4, (i) => Container(
+            width: 10, height: 10,
+            margin: const EdgeInsets.only(left: 2),
+            decoration: BoxDecoration(
+              color: i < 4 - papiCount ? const Color(0xFFCC2200) : Colors.white,
+              shape: BoxShape.circle,
+            ),
+          )),
+        ],
+      ]),
+    );
+  }
 }
 
 // ── World-space indicator ─────────────────────────────────────────────────────

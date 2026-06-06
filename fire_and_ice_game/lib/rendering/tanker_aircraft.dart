@@ -15,7 +15,7 @@ class TankerAircraft {
   // ── YANKEE waypoint ───────────────────────────────────────────────────────────
   static const double yankeeX  =   0.0;
   static const double yankeeZ  =   0.0;
-  static const double orbitY   =  22.0;
+  static const double orbitY   = 100.0;
 
   static const double _legTime  =  42.0; // seconds per north leg — keeps same orbit length at new cruise speed
   static const double _speed    =   8.0; // world units/sec — minimum sustainable lift at kLift 0.55 / mass 1.8
@@ -160,6 +160,8 @@ class TankerAircraft {
   }
 
   Vector3 get drogueWorldPos => basketTransform.position.clone();
+
+  static Mesh buildBodyMesh() => _buildBody();
 
   // ── Mesh construction ─────────────────────────────────────────────────────────
 

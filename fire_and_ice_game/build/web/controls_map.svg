@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 490">
+
+<!-- Background -->
+<rect width="820" height="490" fill="#07070F" rx="6"/>
+
+<!-- Title bar -->
+<rect width="820" height="38" fill="#0A0A1A" rx="6"/>
+<rect y="32" width="820" height="6" fill="#07070F"/>
+<line x1="0" y1="38" x2="820" y2="38" stroke="#1A2436" stroke-width="1"/>
+<text x="410" y="24" font-family="monospace" font-size="12" font-weight="bold" fill="#00AAFF" text-anchor="middle" letter-spacing="2">FIRE &amp; ICE — CONTROLS REFERENCE</text>
+
+<!-- Panel divider -->
+<line x1="416" y1="38" x2="416" y2="488" stroke="#1A2436" stroke-width="1"/>
+
+<!-- ================================================================ -->
+<!-- LEFT PANEL: KEYBOARD                                             -->
+<!-- ================================================================ -->
+
+<text x="208" y="50" font-family="monospace" font-size="8" font-weight="bold" fill="#2A3A50" text-anchor="middle" letter-spacing="3">KEYBOARD</text>
+
+<!-- ── FLIGHT CONTROLS ────────────────────────────────────────────── -->
+<rect x="10" y="54" width="399" height="138" rx="4" fill="#00091F" stroke="#0D3580" stroke-width="1"/>
+<text x="18" y="67" font-family="monospace" font-size="7" font-weight="bold" fill="#1A4488" letter-spacing="2">FLIGHT CONTROLS</text>
+
+<!-- W -->
+<rect x="20"  y="71" width="34" height="26" rx="3" fill="#001030" stroke="#1155CC"/>
+<text x="37"  y="88" font-family="monospace" font-size="11" font-weight="bold" fill="#6699EE" text-anchor="middle" dominant-baseline="middle">W</text>
+<text x="37"  y="104" font-family="monospace" font-size="7" fill="#2A4466" text-anchor="middle">PITCH UP</text>
+
+<!-- S -->
+<rect x="60"  y="71" width="34" height="26" rx="3" fill="#001030" stroke="#1155CC"/>
+<text x="77"  y="88" font-family="monospace" font-size="11" font-weight="bold" fill="#6699EE" text-anchor="middle" dominant-baseline="middle">S</text>
+<text x="77"  y="104" font-family="monospace" font-size="7" fill="#2A4466" text-anchor="middle">PITCH DN</text>
+
+<line x1="105" y1="72" x2="105" y2="96" stroke="#1A2436" stroke-width="1"/>
+
+<!-- Q -->
+<rect x="113" y="71" width="34" height="26" rx="3" fill="#001828" stroke="#1166BB"/>
+<text x="130" y="88" font-family="monospace" font-size="11" font-weight="bold" fill="#44AADD" text-anchor="middle" dominant-baseline="middle">Q</text>
+<text x="130" y="104" font-family="monospace" font-size="7" fill="#224455" text-anchor="middle">BANK ←</text>
+
+<!-- E -->
+<rect x="153" y="71" width="34" height="26" rx="3" fill="#001828" stroke="#1166BB"/>
+<text x="170" y="88" font-family="monospace" font-size="11" font-weight="bold" fill="#44AADD" text-anchor="middle" dominant-baseline="middle">E</text>
+<text x="170" y="104" font-family="monospace" font-size="7" fill="#224455" text-anchor="middle">BANK →</text>
+
+<line x1="198" y1="72" x2="198" y2="96" stroke="#1A2436" stroke-width="1"/>
+
+<!-- A -->
+<rect x="206" y="71" width="34" height="26" rx="3" fill="#001030" stroke="#1155CC"/>
+<text x="223" y="88" font-family="monospace" font-size="11" font-weight="bold" fill="#6699EE" text-anchor="middle" dominant-baseline="middle">A</text>
+<text x="223" y="104" font-family="monospace" font-size="7" fill="#2A4466" text-anchor="middle">YAW ←</text>
+
+<!-- D -->
+<rect x="246" y="71" width="34" height="26" rx="3" fill="#001030" stroke="#1155CC"/>
+<text x="263" y="88" font-family="monospace" font-size="11" font-weight="bold" fill="#6699EE" text-anchor="middle" dominant-baseline="middle">D</text>
+<text x="263" y="104" font-family="monospace" font-size="7" fill="#2A4466" text-anchor="middle">YAW →</text>
+
+<!-- Barrel roll combos -->
+<text x="20"  y="120" font-family="monospace" font-size="7" fill="#4455AA" letter-spacing="1">BARREL ROLL:</text>
+
+<rect x="92"  y="111" width="22" height="18" rx="2" fill="#0A0022" stroke="#6633BB"/>
+<text x="103" y="122" font-family="monospace" font-size="9" font-weight="bold" fill="#AA77FF" text-anchor="middle" dominant-baseline="middle">Q</text>
+<text x="118" y="122" font-family="monospace" font-size="8" fill="#334455" text-anchor="middle" dominant-baseline="middle">+</text>
+<rect x="124" y="111" width="22" height="18" rx="2" fill="#0A0022" stroke="#6633BB"/>
+<text x="135" y="122" font-family="monospace" font-size="9" font-weight="bold" fill="#AA77FF" text-anchor="middle" dominant-baseline="middle">A</text>
+<text x="157" y="122" font-family="monospace" font-size="7" fill="#7755AA" text-anchor="middle" dominant-baseline="middle">ROLL LEFT</text>
+
+<rect x="210" y="111" width="22" height="18" rx="2" fill="#0A0022" stroke="#6633BB"/>
+<text x="221" y="122" font-family="monospace" font-size="9" font-weight="bold" fill="#AA77FF" text-anchor="middle" dominant-baseline="middle">E</text>
+<text x="236" y="122" font-family="monospace" font-size="8" fill="#334455" text-anchor="middle" dominant-baseline="middle">+</text>
+<rect x="242" y="111" width="22" height="18" rx="2" fill="#0A0022" stroke="#6633BB"/>
+<text x="253" y="122" font-family="monospace" font-size="9" font-weight="bold" fill="#AA77FF" text-anchor="middle" dominant-baseline="middle">D</text>
+<text x="277" y="122" font-family="monospace" font-size="7" fill="#7755AA" text-anchor="middle" dominant-baseline="middle">ROLL RIGHT</text>
+
+<!-- ALT -->
+<rect x="20"  y="140" width="44" height="26" rx="3" fill="#180A00" stroke="#AA5500"/>
+<text x="42"  y="156" font-family="monospace" font-size="10" font-weight="bold" fill="#FFAA44" text-anchor="middle" dominant-baseline="middle">ALT</text>
+<text x="42"  y="173" font-family="monospace" font-size="7" fill="#553311" text-anchor="middle">BOOST ×1.5</text>
+
+<!-- SPACE -->
+<rect x="70"  y="140" width="128" height="26" rx="3" fill="#180A00" stroke="#AA5500"/>
+<text x="134" y="156" font-family="monospace" font-size="10" font-weight="bold" fill="#FFAA44" text-anchor="middle" dominant-baseline="middle">SPACE</text>
+<text x="134" y="173" font-family="monospace" font-size="7" fill="#553311" text-anchor="middle">AIR BRAKE + ALT BUMP</text>
+
+<!-- TAB -->
+<rect x="208" y="140" width="42" height="26" rx="3" fill="#0A1020" stroke="#224466"/>
+<text x="229" y="156" font-family="monospace" font-size="9" font-weight="bold" fill="#5588AA" text-anchor="middle" dominant-baseline="middle">TAB</text>
+<text x="229" y="173" font-family="monospace" font-size="7" fill="#223344" text-anchor="middle">TOGGLE VIEW</text>
+
+<!-- ── SYSTEMS ────────────────────────────────────────────────────── -->
+<rect x="10" y="200" width="399" height="66" rx="4" fill="#100900" stroke="#664400" stroke-width="1"/>
+<text x="18" y="213" font-family="monospace" font-size="7" font-weight="bold" fill="#664400" letter-spacing="2">SYSTEMS</text>
+
+<!-- G -->
+<rect x="20"  y="218" width="34" height="26" rx="3" fill="#0A1200" stroke="#446622"/>
+<text x="37"  y="234" font-family="monospace" font-size="11" font-weight="bold" fill="#88CC44" text-anchor="middle" dominant-baseline="middle">G</text>
+<text x="37"  y="251" font-family="monospace" font-size="7" fill="#334422" text-anchor="middle">GEAR ↕</text>
+
+<!-- F -->
+<rect x="60"  y="218" width="34" height="26" rx="3" fill="#181000" stroke="#665500"/>
+<text x="77"  y="234" font-family="monospace" font-size="11" font-weight="bold" fill="#FFCC00" text-anchor="middle" dominant-baseline="middle">F</text>
+<text x="77"  y="251" font-family="monospace" font-size="7" fill="#554400" text-anchor="middle">FLAPS ↑</text>
+
+<!-- Shift+F -->
+<rect x="100" y="218" width="60" height="26" rx="3" fill="#181000" stroke="#665500"/>
+<text x="130" y="234" font-family="monospace" font-size="9" font-weight="bold" fill="#FFCC00" text-anchor="middle" dominant-baseline="middle">⇧ + F</text>
+<text x="130" y="251" font-family="monospace" font-size="7" fill="#554400" text-anchor="middle">FLAPS ↓</text>
+
+<!-- [ -->
+<rect x="172" y="218" width="28" height="26" rx="3" fill="#001410" stroke="#005533"/>
+<text x="186" y="234" font-family="monospace" font-size="11" font-weight="bold" fill="#00BB77" text-anchor="middle" dominant-baseline="middle">[</text>
+<text x="186" y="251" font-family="monospace" font-size="7" fill="#003322" text-anchor="middle">THR −</text>
+
+<!-- ] -->
+<rect x="206" y="218" width="28" height="26" rx="3" fill="#001410" stroke="#005533"/>
+<text x="220" y="234" font-family="monospace" font-size="11" font-weight="bold" fill="#00BB77" text-anchor="middle" dominant-baseline="middle">]</text>
+<text x="220" y="251" font-family="monospace" font-size="7" fill="#003322" text-anchor="middle">THR +</text>
+
+<!-- ── ABILITY SLOTS ───────────────────────────────────────────────── -->
+<rect x="10" y="274" width="399" height="60" rx="4" fill="#0A1200" stroke="#3A5500" stroke-width="1"/>
+<text x="18" y="287" font-family="monospace" font-size="7" font-weight="bold" fill="#3A5500" letter-spacing="2">ABILITY SLOTS</text>
+
+<!-- Keys 1-0: 30px wide, 3px gap = 33px step, start x=16 -->
+<rect x="16"  y="293" width="30" height="24" rx="2" fill="#0F1A00" stroke="#446600"/>
+<text x="31"  y="307" font-family="monospace" font-size="10" font-weight="bold" fill="#88BB33" text-anchor="middle" dominant-baseline="middle">1</text>
+<rect x="49"  y="293" width="30" height="24" rx="2" fill="#0F1A00" stroke="#446600"/>
+<text x="64"  y="307" font-family="monospace" font-size="10" font-weight="bold" fill="#88BB33" text-anchor="middle" dominant-baseline="middle">2</text>
+<rect x="82"  y="293" width="30" height="24" rx="2" fill="#0F1A00" stroke="#446600"/>
+<text x="97"  y="307" font-family="monospace" font-size="10" font-weight="bold" fill="#88BB33" text-anchor="middle" dominant-baseline="middle">3</text>
+<rect x="115" y="293" width="30" height="24" rx="2" fill="#0F1A00" stroke="#446600"/>
+<text x="130" y="307" font-family="monospace" font-size="10" font-weight="bold" fill="#88BB33" text-anchor="middle" dominant-baseline="middle">4</text>
+<rect x="148" y="293" width="30" height="24" rx="2" fill="#0F1A00" stroke="#446600"/>
+<text x="163" y="307" font-family="monospace" font-size="10" font-weight="bold" fill="#88BB33" text-anchor="middle" dominant-baseline="middle">5</text>
+<rect x="181" y="293" width="30" height="24" rx="2" fill="#0F1A00" stroke="#446600"/>
+<text x="196" y="307" font-family="monospace" font-size="10" font-weight="bold" fill="#88BB33" text-anchor="middle" dominant-baseline="middle">6</text>
+<rect x="214" y="293" width="30" height="24" rx="2" fill="#0F1A00" stroke="#446600"/>
+<text x="229" y="307" font-family="monospace" font-size="10" font-weight="bold" fill="#88BB33" text-anchor="middle" dominant-baseline="middle">7</text>
+<rect x="247" y="293" width="30" height="24" rx="2" fill="#0F1A00" stroke="#446600"/>
+<text x="262" y="307" font-family="monospace" font-size="10" font-weight="bold" fill="#88BB33" text-anchor="middle" dominant-baseline="middle">8</text>
+<rect x="280" y="293" width="30" height="24" rx="2" fill="#0F1A00" stroke="#446600"/>
+<text x="295" y="307" font-family="monospace" font-size="10" font-weight="bold" fill="#88BB33" text-anchor="middle" dominant-baseline="middle">9</text>
+<rect x="313" y="293" width="30" height="24" rx="2" fill="#0F1A00" stroke="#446600"/>
+<text x="328" y="307" font-family="monospace" font-size="10" font-weight="bold" fill="#88BB33" text-anchor="middle" dominant-baseline="middle">0</text>
+<text x="208" y="326" font-family="monospace" font-size="7" fill="#3A5500" text-anchor="middle">ACTIVATE ABILITY IN SLOT  1 – 10</text>
+
+<!-- ── Color Legend ────────────────────────────────────────────────── -->
+<text x="10" y="348" font-family="monospace" font-size="7" font-weight="bold" fill="#2A3A50" letter-spacing="1">LEGEND:</text>
+<rect x="56"  y="341" width="8" height="8" rx="1" fill="#001030" stroke="#1155CC"/>
+<text x="68"  y="349" font-family="monospace" font-size="7" fill="#6699EE">PITCH / YAW</text>
+<rect x="140" y="341" width="8" height="8" rx="1" fill="#001828" stroke="#1166BB"/>
+<text x="152" y="349" font-family="monospace" font-size="7" fill="#44AADD">BANK</text>
+<rect x="186" y="341" width="8" height="8" rx="1" fill="#0A0022" stroke="#6633BB"/>
+<text x="198" y="349" font-family="monospace" font-size="7" fill="#AA77FF">BARREL ROLL</text>
+<rect x="268" y="341" width="8" height="8" rx="1" fill="#180A00" stroke="#AA5500"/>
+<text x="280" y="349" font-family="monospace" font-size="7" fill="#FFAA44">BOOST / BRAKE</text>
+
+<rect x="56"  y="355" width="8" height="8" rx="1" fill="#0A1200" stroke="#446622"/>
+<text x="68"  y="363" font-family="monospace" font-size="7" fill="#88CC44">GEAR</text>
+<rect x="100" y="355" width="8" height="8" rx="1" fill="#181000" stroke="#665500"/>
+<text x="112" y="363" font-family="monospace" font-size="7" fill="#FFCC00">FLAPS</text>
+<rect x="148" y="355" width="8" height="8" rx="1" fill="#001410" stroke="#005533"/>
+<text x="160" y="363" font-family="monospace" font-size="7" fill="#00BB77">THROTTLE</text>
+<rect x="214" y="355" width="8" height="8" rx="1" fill="#0F1A00" stroke="#446600"/>
+<text x="226" y="363" font-family="monospace" font-size="7" fill="#88BB33">ABILITY SLOTS</text>
+
+<!-- ── Notes ──────────────────────────────────────────────────────── -->
+<rect x="10" y="374" width="399" height="106" rx="4" fill="#080810" stroke="#1A2436" stroke-width="1"/>
+<text x="18" y="387" font-family="monospace" font-size="7" font-weight="bold" fill="#2A3A50" letter-spacing="2">NOTES</text>
+<text x="18" y="401" font-family="monospace" font-size="7" fill="#445566">·  W/S = PITCH (invert in Settings → Flight → Inverted Pitch)</text>
+<text x="18" y="414" font-family="monospace" font-size="7" fill="#445566">·  Q/E alone = pure bank (no yaw); A/D = yaw + bank-enhanced turn</text>
+<text x="18" y="427" font-family="monospace" font-size="7" fill="#445566">·  Hold Q+A simultaneously for continuous barrel roll left</text>
+<text x="18" y="440" font-family="monospace" font-size="7" fill="#445566">·  Hold E+D simultaneously for continuous barrel roll right</text>
+<text x="18" y="453" font-family="monospace" font-size="7" fill="#445566">·  Any flight key cancels an active maneuver computer sequence</text>
+<text x="18" y="466" font-family="monospace" font-size="7" fill="#445566">·  Autopilot disengages when you press W / S / A / D / Q / E</text>
+
+<!-- ================================================================ -->
+<!-- RIGHT PANEL: COCKPIT MOUSE                                       -->
+<!-- ================================================================ -->
+
+<text x="617" y="50" font-family="monospace" font-size="8" font-weight="bold" fill="#2A3A50" text-anchor="middle" letter-spacing="3">COCKPIT MOUSE</text>
+
+<!-- ── Gear lever schematic ─────────────────────────────────────── -->
+<text x="428" y="66" font-family="monospace" font-size="7" font-weight="bold" fill="#446644" letter-spacing="1">GEAR LEVER</text>
+<rect x="428" y="70" width="46" height="88" rx="3" fill="#101018" stroke="#2A3040" stroke-width="1.5"/>
+<!-- header strip -->
+<rect x="429" y="71" width="44" height="12" rx="2" fill="#1A1A28"/>
+<text x="451" y="80" font-family="monospace" font-size="6" fill="#334455" text-anchor="middle">GEAR</text>
+<!-- track -->
+<rect x="449" y="87" width="4" height="50" rx="2" fill="#1A1A28"/>
+<!-- knob -->
+<circle cx="451" cy="90" r="6" fill="#DD2222"/>
+<!-- status light -->
+<rect x="432" y="146" width="38" height="9" rx="1" fill="#001A00" stroke="#224422" stroke-width="0.5"/>
+<text x="451" y="153" font-family="monospace" font-size="5" fill="#336633" text-anchor="middle">DN  TRANS</text>
+<!-- annotation -->
+<line x1="476" y1="100" x2="494" y2="100" stroke="#446655" stroke-width="1"/>
+<text x="496" y="88" font-family="monospace" font-size="8" fill="#AABBCC">CLICK to toggle</text>
+<text x="496" y="100" font-family="monospace" font-size="8" fill="#AABBCC">gear UP / DOWN</text>
+<text x="496" y="114" font-family="monospace" font-size="7" fill="#DD4444">● RED = UP</text>
+<text x="496" y="125" font-family="monospace" font-size="7" fill="#44CC44">● GRN = DOWN</text>
+<text x="496" y="136" font-family="monospace" font-size="7" fill="#FFAA00">● AMB = TRANSIT</text>
+<text x="496" y="148" font-family="monospace" font-size="7" fill="#335544">Disabled in TAXI mode</text>
+
+<!-- ── Flaps lever schematic ─────────────────────────────────────── -->
+<text x="428" y="175" font-family="monospace" font-size="7" font-weight="bold" fill="#886644" letter-spacing="1">FLAPS LEVER</text>
+<rect x="428" y="179" width="46" height="96" rx="3" fill="#101018" stroke="#2A3040" stroke-width="1.5"/>
+<rect x="429" y="180" width="44" height="12" rx="2" fill="#1A1A28"/>
+<text x="451" y="189" font-family="monospace" font-size="6" fill="#334455" text-anchor="middle">FLAP</text>
+<!-- track -->
+<rect x="449" y="196" width="4" height="68" rx="2" fill="#1A1A28"/>
+<!-- tick marks + labels -->
+<line x1="445" y1="197" x2="457" y2="197" stroke="#334455" stroke-width="1"/>
+<text x="442" y="200" font-family="monospace" font-size="5" fill="#334455" text-anchor="end">UP</text>
+<line x1="445" y1="220" x2="457" y2="220" stroke="#334455" stroke-width="1"/>
+<text x="442" y="223" font-family="monospace" font-size="5" fill="#334455" text-anchor="end">T/O</text>
+<line x1="445" y1="243" x2="457" y2="243" stroke="#334455" stroke-width="1"/>
+<text x="442" y="246" font-family="monospace" font-size="5" fill="#334455" text-anchor="end">APR</text>
+<line x1="445" y1="264" x2="457" y2="264" stroke="#334455" stroke-width="1"/>
+<text x="442" y="267" font-family="monospace" font-size="5" fill="#334455" text-anchor="end">FUL</text>
+<!-- knob at APR -->
+<circle cx="451" cy="243" r="6" fill="#FFAA00"/>
+
+<!-- tap-above annotation -->
+<line x1="476" y1="205" x2="494" y2="195" stroke="#00CCFF" stroke-width="1"/>
+<text x="496" y="192" font-family="monospace" font-size="7" fill="#00CCFF">TAP ABOVE knob</text>
+<text x="496" y="202" font-family="monospace" font-size="7" fill="#557799">→ retract one detent</text>
+<text x="496" y="212" font-family="monospace" font-size="7" fill="#557799">→ or press  F</text>
+
+<!-- tap-below annotation -->
+<line x1="476" y1="254" x2="494" y2="263" stroke="#FFCC00" stroke-width="1"/>
+<text x="496" y="261" font-family="monospace" font-size="7" fill="#FFCC00">TAP BELOW knob</text>
+<text x="496" y="271" font-family="monospace" font-size="7" fill="#886644">→ extend one detent</text>
+<text x="496" y="281" font-family="monospace" font-size="7" fill="#886644">→ or press  ⇧+F</text>
+
+<!-- ── MFD OSB Buttons ───────────────────────────────────────────── -->
+<text x="428" y="300" font-family="monospace" font-size="7" font-weight="bold" fill="#445566" letter-spacing="1">MFD  OSB  BUTTONS</text>
+
+<!-- Left MFD -->
+<rect x="428" y="306" width="88" height="40" rx="2" fill="#1A1A22" stroke="#3C3C4C" stroke-width="1"/>
+<text x="472" y="318" font-family="monospace" font-size="6" fill="#444455" text-anchor="middle">LEFT MFD</text>
+<text x="472" y="332" font-family="monospace" font-size="6" fill="#5577AA" text-anchor="middle">ELMT · LOAD · STAT · MODE</text>
+<text x="472" y="344" font-family="monospace" font-size="6" fill="#334466" text-anchor="middle">click button = change page</text>
+
+<!-- Right MFD -->
+<rect x="524" y="306" width="88" height="40" rx="2" fill="#1A1A22" stroke="#3C3C4C" stroke-width="1"/>
+<text x="568" y="318" font-family="monospace" font-size="6" fill="#444455" text-anchor="middle">RIGHT MFD</text>
+<text x="568" y="332" font-family="monospace" font-size="6" fill="#5577AA" text-anchor="middle">NAV · TERR · FIRE · MARK</text>
+<text x="568" y="344" font-family="monospace" font-size="6" fill="#334466" text-anchor="middle">ZOOM · AUTO · LOCK · CLR</text>
+
+<!-- AUX display -->
+<rect x="620" y="306" width="90" height="40" rx="2" fill="#101018" stroke="#2A3040" stroke-width="1"/>
+<text x="665" y="318" font-family="monospace" font-size="6" fill="#444455" text-anchor="middle">AUX DISPLAY</text>
+<text x="665" y="332" font-family="monospace" font-size="6" fill="#5577AA" text-anchor="middle">CHAT·VID·MAP·MIRROR</text>
+<text x="665" y="344" font-family="monospace" font-size="6" fill="#5577AA" text-anchor="middle">MANUV  (maneuver comp)</text>
+
+<!-- ── Throttle quadrant ─────────────────────────────────────────── -->
+<text x="428" y="366" font-family="monospace" font-size="7" font-weight="bold" fill="#445566" letter-spacing="1">THROTTLE QUADRANT</text>
+<rect x="428" y="372" width="36" height="90" rx="3" fill="#0A0A10" stroke="#2A3040" stroke-width="1.5"/>
+<rect x="434" y="378" width="24" height="74" rx="2" fill="#1A1200"/>
+<rect x="434" y="414" width="24" height="38" rx="1" fill="#FFAA00" opacity="0.55"/>
+<text x="446" y="464" font-family="monospace" font-size="6" fill="#554400" text-anchor="middle">THR</text>
+<!-- annotations -->
+<text x="470" y="384" font-family="monospace" font-size="8" fill="#AABBCC">DRAG slider</text>
+<text x="470" y="396" font-family="monospace" font-size="8" fill="#AABBCC">or click position</text>
+<text x="470" y="408" font-family="monospace" font-size="8" fill="#AABBCC">to set throttle</text>
+<text x="470" y="422" font-family="monospace" font-size="7" fill="#667788">Keys:  [  decrease</text>
+<text x="470" y="434" font-family="monospace" font-size="7" fill="#667788">       ]  increase</text>
+
+<!-- ── Maneuver computer note ────────────────────────────────────── -->
+<rect x="580" y="372" width="228" height="100" rx="4" fill="#100A00" stroke="#664400" stroke-width="1"/>
+<text x="694" y="386" font-family="monospace" font-size="7" font-weight="bold" fill="#AA6600" text-anchor="middle" letter-spacing="1">MANEUVER COMPUTER</text>
+<text x="588" y="401" font-family="monospace" font-size="7" fill="#887744">1. AUX Display → MANUV page</text>
+<text x="588" y="414" font-family="monospace" font-size="7" fill="#887744">2. Scroll to select maneuver</text>
+<text x="588" y="427" font-family="monospace" font-size="7" fill="#887744">3. ARM (firefighting only)</text>
+<text x="588" y="440" font-family="monospace" font-size="7" fill="#887744">4. EXECUTE — flight computer</text>
+<text x="588" y="453" font-family="monospace" font-size="7" fill="#887744">   flies the sequence for you</text>
+<text x="588" y="466" font-family="monospace" font-size="7" fill="#554433">Any flight key = cancel</text>
+
+</svg>

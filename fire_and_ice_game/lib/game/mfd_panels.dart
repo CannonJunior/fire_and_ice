@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'game_state.dart';
+import 'ils_page.dart';
 import 'loadout_page.dart';
 import 'mfd_pages.dart';
 import '../terrain/terrain_generator.dart';
@@ -241,6 +242,7 @@ Widget buildRightMFD(
     1 => buildTerrPage(state, onOrientToggle: onOrientToggle),
     2 => buildFirePage(state, onOrientToggle: onOrientToggle),
     3 => buildMarkPage(state, onDeleteWaypoint: onDeleteWaypoint),
+    4 => buildIlsPage(state),
     _ => Column(children: [
         _header('TERRAIN NAV', 'NAV', _kRFg, _kRDim, action: GestureDetector(
           onTap: onOrientToggle,

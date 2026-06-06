@@ -63,6 +63,10 @@ Widget buildAuxDisplay(GameState state, {
   void Function(int)? onManeuverScroll,
   void Function()?    onManeuverExecute,
   void Function()?    onManeuverStop,
+  /// Called when a waypoint keyword is tapped in CHAT. Args: (name, wx, wz).
+  void Function(String, double, double)? onChatWaypointTap,
+  /// Called when an entity callsign badge is tapped in CHAT. Arg: 'tanker'|'airbase'.
+  void Function(String)? onChatEntityTap,
 }) {
   final page = state.auxDisplayPage;
   final mi   = state.auxMirrorIndex.clamp(0, _kOpts.length - 1);
@@ -83,7 +87,8 @@ Widget buildAuxDisplay(GameState state, {
         onExecute: onManeuverExecute,
         onStop:    onManeuverStop,
       ),
-    _ => _ChatPage(state: state),
+    _ => _ChatPage(state: state,
+        onWaypointTap: onChatWaypointTap, onEntityTap: onChatEntityTap),
   };
 
   return Column(mainAxisSize: MainAxisSize.min, children: [
@@ -206,7 +211,9 @@ Widget _ftr(String a, String b, String c) => Container(
 
 class _ChatPage extends StatefulWidget {
   final GameState state;
-  const _ChatPage({required this.state});
+  final void Function(String, double, double)? onWaypointTap;
+  final void Function(String)? onEntityTap;
+  const _ChatPage({required this.state, this.onWaypointTap, this.onEntityTap});
   @override
   State<_ChatPage> createState() => _ChatPageState();
 }
@@ -214,9 +221,16 @@ class _ChatPage extends StatefulWidget {
 class _ChatPageState extends State<_ChatPage> {
   final _scroll = ScrollController();
   int _lastCount = 0;
+  // Gesture recognizers for tappable waypoint keywords — rebuilt each frame,
+  // disposed on the next rebuild and on widget disposal.
+  final List<TapGestureRecognizer> _recs = [];
 
   @override
-  void dispose() { _scroll.dispose(); super.dispose(); }
+  void dispose() {
+    _scroll.dispose();
+    for (final r in _recs) r.dispose();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(_ChatPage old) {
@@ -233,8 +247,55 @@ class _ChatPageState extends State<_ChatPage> {
     }
   }
 
+  /// Build an InlineSpan for [text], highlighting any waypoint keyword as a
+  /// gold tappable link.  Recognizers are registered into [_recs] so they can
+  /// be disposed on the next rebuild.
+  InlineSpan _parseMsg(String text, TextStyle base) {
+    final onWp = widget.onWaypointTap;
+    if (onWp == null) return TextSpan(text: text, style: base);
+
+    // Sort by descending length so "VALLEY PEAK" is matched before "VALLEY".
+    final escaped = GameState.kWaypoints.map((w) => RegExp.escape(w.$1)).toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+    final pat = RegExp('\\b(${escaped.join('|')})\\b', caseSensitive: false);
+
+    final spans = <TextSpan>[];
+    int pos = 0;
+    for (final m in pat.allMatches(text)) {
+      if (m.start > pos) spans.add(TextSpan(text: text.substring(pos, m.start), style: base));
+      final raw   = m.group(0)!;
+      final upper = raw.toUpperCase();
+      final wp    = GameState.kWaypoints.firstWhere(
+          (w) => w.$1.toUpperCase() == upper,
+          orElse: () => (upper, 0.0, 0.0));
+      final rec = TapGestureRecognizer()..onTap = () => onWp(wp.$1, wp.$2, wp.$3);
+      _recs.add(rec);
+      spans.add(TextSpan(
+        text: raw,
+        style: base.copyWith(
+          color: const Color(0xFFFFCC00),
+          fontWeight: FontWeight.bold,
+          decoration: TextDecoration.underline,
+          decorationColor: const Color(0xFFFFCC00),
+        ),
+        recognizer: rec,
+      ));
+      pos = m.end;
+    }
+    if (pos < text.length) spans.add(TextSpan(text: text.substring(pos), style: base));
+    if (spans.isEmpty) return TextSpan(text: text, style: base);
+    return spans.length == 1 ? spans.first : TextSpan(children: spans);
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Swap list so _parseMsg populates a fresh set; dispose old ones after frame.
+    final toDispose = List<TapGestureRecognizer>.from(_recs);
+    _recs.clear();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final r in toDispose) r.dispose();
+    });
+
     final s       = widget.state;
     final msgs    = s.chatHistory;
     final active  = s.chatInputActive;
@@ -281,18 +342,39 @@ class _ChatPageState extends State<_ChatPage> {
                     : isSdo    ? const Color(0xFFCC8888)
                     : _kADim;
 
+                // Friendly entities (tanker / airbase) have a tappable callsign badge.
+                final entityId   = isTanker ? 'tanker' : isSdo ? 'airbase' : null;
+                final onEntity   = widget.onEntityTap;
+                final isSelected = entityId != null &&
+                    (entityId == 'tanker'
+                        ? s.selectedFriendlyTargetId == 'tanker'
+                        : s.selectedFriendlyTargetId == 'airbase');
+                final csBadgeClr = isSelected
+                    ? const Color(0xFFFFDD44)
+                    : csClr;
+
+                Widget callsignRow = Row(children: [
+                  Text(callsign,
+                      style: TextStyle(color: csBadgeClr, fontSize: 7 * _kS,
+                          fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  Text(ts, style: TextStyle(color: csClr, fontSize: 6 * _kS)),
+                ]);
+                if (entityId != null && onEntity != null) {
+                  callsignRow = GestureDetector(
+                    onTap: () => onEntity(entityId),
+                    child: callsignRow,
+                  );
+                }
+
                 return Container(
                   margin: EdgeInsets.symmetric(horizontal: 4 * _kS, vertical: 1 * _kS),
                   padding: EdgeInsets.symmetric(horizontal: 4 * _kS, vertical: 2 * _kS),
                   color: rowBg,
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
-                      Text(callsign, style: TextStyle(
-                          color: csClr, fontSize: 7 * _kS, fontWeight: FontWeight.bold)),
-                      const Spacer(),
-                      Text(ts, style: TextStyle(color: csClr, fontSize: 6 * _kS)),
-                    ]),
-                    Text(displayMsg, style: TextStyle(color: msgClr, fontSize: 7 * _kS)),
+                    callsignRow,
+                    Text.rich(_parseMsg(displayMsg,
+                        TextStyle(color: msgClr, fontSize: 7 * _kS))),
                   ]),
                 );
               },

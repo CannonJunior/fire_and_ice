@@ -3,32 +3,17 @@ import 'package:vector_math/vector_math.dart';
 import 'scene_node.dart';
 import '../game/game_state.dart';
 
-/// AircraftAnimator — drives control-surface deflections each frame.
+/// Drives control-surface deflections and animated parts each frame.
 ///
-/// Owns the continuous animation accumulators (propeller angle, bay-door lerp)
-/// so game_widget.dart does not need to hold them as separate fields.
-///
-/// Deflection rules (research references: DCS, FlightGear, Tiny Combat Arena):
-///
-///  Aileron L:  rotation.x = +bankRad × 0.40   (UP when banking left)
-///  Aileron R:  rotation.x = -bankRad × 0.40   (DOWN when banking left)
-///  Elevator:   rotation.x = -pitchRad × 0.35  (trailing edge UP when pitching nose up)
-///  Rudder:     rotation.y = -bankRad × 0.18   (coordinated turn proxy)
-///  Flaps:      rotation.x → 35° in landing mode, 0° otherwise (lerped)
-///  Gear:       position.y offset based on gearProgress; hidden when fully up
-///  Propeller:  rotation.z += throttle × 18 rad/s
-///  Bay doors:  rotation.z ± lerped to 1.15 rad when armed, 0 when safe
+/// Gear Y and probe/drogue Z offsets are cached from the SceneNode's initial
+/// position on the first frame so they work regardless of aircraft scale.
 class AircraftAnimator {
   double _propAngle = 0.0;
   double _bayAngle  = 0.0;
+  double? _probeBaseZ;
+  double? _drogueBaseZ;
+  final Map<String, double> _gearDeployedY = {};
 
-  // Gear base Y positions (in aircraft-local space, below centre of fuselage)
-  static const double _gearBaseY = -(4.0 * 0.12 * 0.50); // -bh/2
-
-  /// Update all animated nodes from [state] then call root.updateWorldMatrix().
-  ///
-  /// Must be called AFTER [PhysicsSystem.updateFlight] so flight-state values
-  /// are current.
   void update(
     SceneNode root,
     Map<String, SceneNode> parts,
@@ -37,7 +22,6 @@ class AircraftAnimator {
   ) {
     final toRad = math.pi / 180.0;
 
-    // ── Root: world position + orientation ───────────────────────────────────
     root.position.setFrom(state.playerPosition);
     root.rotation.setValues(
       state.flightPitchAngle * toRad,
@@ -45,17 +29,14 @@ class AircraftAnimator {
       -state.flightBankAngle * toRad,
     );
 
-    // ── Control surfaces ─────────────────────────────────────────────────────
     final pitchRad = state.flightPitchAngle * toRad;
     final bankRad  = state.flightBankAngle  * toRad;
 
     _set(parts, 'aileron_l', (n) => n.rotation.x =  bankRad * 0.40);
     _set(parts, 'aileron_r', (n) => n.rotation.x = -bankRad * 0.40);
     _set(parts, 'elevator',  (n) => n.rotation.x = -pitchRad * 0.35);
-    // Rudder base is RotateZ=π/2 (span vertical); RotateY deflects trailing edge.
     _set(parts, 'rudder',    (n) => n.rotation.y = -bankRad * 0.18);
 
-    // ── Flaps: deploy in landing mode ────────────────────────────────────────
     final flapTarget = (state.gameMode == GameMode.landing) ? 0.61 : 0.0;
     _set(parts, 'flap_l', (n) {
       n.rotation.x += (flapTarget - n.rotation.x) * math.min(dt * 2.0, 1.0);
@@ -64,43 +45,54 @@ class AircraftAnimator {
       n.rotation.x = parts['flap_l']?.rotation.x ?? 0.0;
     });
 
-    // ── Landing gear: retract into fuselage ──────────────────────────────────
-    final gearOffset = (1.0 - state.gearProgress) * 0.90;
+    // Gear struts — cache deployed Y on first call so any aircraft scale works
     void syncGear(String id) {
       final node = parts[id];
       if (node == null) return;
-      node.visible   = state.gearProgress > 0.02;
-      node.position.y = _gearBaseY + gearOffset;
+      final baseY = _gearDeployedY.putIfAbsent(id, () => node.position.y);
+      node.visible    = state.gearProgress > 0.02;
+      node.position.y = baseY + (1.0 - state.gearProgress) * 0.90;
     }
     syncGear('gear_nose');
     syncGear('gear_left');
     syncGear('gear_right');
 
-    // ── Propeller / exhaust bloom ─────────────────────────────────────────────
-    _propAngle += state.throttle * 18.0 * dt;
-    _set(parts, 'prop', (n) => n.rotation.z = _propAngle);
+    // Gear doors — open (−π/2) when gear down, closed when gear up
+    final doorAngle = -state.gearProgress * math.pi / 2;
+    _set(parts, 'gear_door_n', (n) => n.rotation.x = doorAngle);
+    _set(parts, 'gear_door_l', (n) => n.rotation.x = doorAngle);
+    _set(parts, 'gear_door_r', (n) => n.rotation.x = doorAngle);
 
-    // ── Bay doors ─────────────────────────────────────────────────────────────
+    // Propellers — single, twin, or quad configs all spin at throttle RPM
+    _propAngle += state.throttle * 18.0 * dt;
+    _set(parts, 'prop',   (n) => n.rotation.z =  _propAngle);
+    _set(parts, 'prop_l', (n) => n.rotation.z =  _propAngle);
+    _set(parts, 'prop_r', (n) => n.rotation.z =  _propAngle);
+    _set(parts, 'prop_1', (n) => n.rotation.z =  _propAngle);
+    _set(parts, 'prop_2', (n) => n.rotation.z = -_propAngle);
+    _set(parts, 'prop_3', (n) => n.rotation.z =  _propAngle);
+    _set(parts, 'prop_4', (n) => n.rotation.z = -_propAngle);
+
+    // Suppression bay doors
     final bayTarget = state.suppressionArmed ? 1.15 : 0.0;
     _bayAngle += (bayTarget - _bayAngle) * math.min(dt * 3.5, 1.0);
     _set(parts, 'bay_l', (n) => n.rotation.z = -_bayAngle);
     _set(parts, 'bay_r', (n) => n.rotation.z =  _bayAngle);
 
-    // ── Refueling probe — slides forward from nose as probeProgress increases ─
-    // IceFighter hl = 2.0; strut is rotated +π/2 around X so it extends in -Z.
+    // Probe — slides forward (−Z) from nose; cache initial Z on first frame
     _set(parts, 'probe', (n) {
+      _probeBaseZ ??= n.position.z;
       n.visible    = state.probeProgress > 0.04;
-      n.position.z = -(2.0 + state.probeProgress * 1.5);
+      n.position.z = _probeBaseZ! - state.probeProgress * 1.5;
     });
 
-    // ── Drogue basket — slides backward from tail as drogueProgress increases ─
-    // SkyTanker hl = 2.75; basket starts at tail (+Z) and trails further back.
+    // Drogue — slides backward (+Z) from tail; cache initial Z on first frame
     _set(parts, 'drogue', (n) {
+      _drogueBaseZ ??= n.position.z;
       n.visible    = state.drogueProgress > 0.04;
-      n.position.z = 2.75 + state.drogueProgress * 3.0;
+      n.position.z = _drogueBaseZ! + state.drogueProgress * 5.0;
     });
 
-    // ── Cascade world matrices ───────────────────────────────────────────────
     root.updateWorldMatrix();
   }
 

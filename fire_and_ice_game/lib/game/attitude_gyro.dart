@@ -6,7 +6,7 @@ const _kBevel = Color(0xFF30303C);
 
 Widget buildAttitudeGyro(GameState state) {
   return Container(
-    width: 284,
+    width: 150,
     decoration: BoxDecoration(
       color: const Color(0xFF000810),
       border: Border.all(color: _kBevel, width: 2),
@@ -27,7 +27,7 @@ Widget buildAttitudeGyro(GameState state) {
         ]),
       ),
       SizedBox(
-        height: 100,
+        height: 118,
         child: ClipRect(child: CustomPaint(
           painter: _AttitudeGyroPainter(
             pitch: state.flightPitchAngle,
@@ -92,7 +92,7 @@ class _AttitudeGyroPainter extends CustomPainter {
     canvas.drawLine(Offset(cx + 14, cy), Offset(cx + 14, cy + 10), wp);
     canvas.drawCircle(Offset(cx, cy), 4, Paint()..color = _kWings..style = PaintingStyle.fill);
 
-    const arcR = 84.0;
+    const arcR = 52.0;
     canvas.drawArc(
       Rect.fromCircle(center: Offset(cx, cy), radius: arcR),
       -math.pi * 0.85, math.pi * 0.7, false,

@@ -107,7 +107,7 @@ class TreeSystem {
     for (final (wx, wz) in scatter) {
       if (densityAt(wx, wz) < _scatterDensityThreshold) continue;
       final wy = TerrainGenerator.heightAt(wx, wz);
-      if (wy < 0.6 || wy > 11.0) continue;
+      if (wy < 0.6 || wy > 45.0) continue;
       trees.add(_makeTree(id++, wx, wy, wz, seed));
     }
 
@@ -117,7 +117,7 @@ class TreeSystem {
     for (final (sx, sz) in seeds) {
       if (densityAt(sx, sz) < _clusterSeedDensityThreshold) continue;
       final sy = TerrainGenerator.heightAt(sx, sz);
-      if (sy < 0.6 || sy > 11.0) continue;
+      if (sy < 0.6 || sy > 45.0) continue;
       final countRange = _clusterCountMax - _clusterCountMin;
       final count = _clusterCountMin + (densityAt(sx, sz) * countRange).round();
       for (int c = 0; c < count; c++) {
@@ -127,7 +127,7 @@ class TreeSystem {
         final wx = (sx + math.cos(angle) * r).clamp(worldMin, worldMax);
         final wz = (sz + math.sin(angle) * r).clamp(worldMin, worldMax);
         final wy = TerrainGenerator.heightAt(wx, wz);
-        if (wy < 0.6 || wy > 11.0) continue;
+        if (wy < 0.6 || wy > 45.0) continue;
         trees.add(_makeTree(id++, wx, wy, wz, seed));
       }
     }
@@ -202,7 +202,7 @@ class TreeSystem {
   /// Build a single tree instance from world position.
   /// Species assigned by elevation: pines on ridges, deciduous in valleys.
   TreeInstance _makeTree(int id, double wx, double wy, double wz, int seed) {
-    final elevNorm  = ((wy - 0.6) / 10.4).clamp(0.0, 1.0);
+    final elevNorm  = ((wy - 0.6) / 44.4).clamp(0.0, 1.0);
     final typeNoise = (math.sin(wx * 0.99 + wz * 1.31) + 1.0) * 0.5;
     final type = elevNorm > 0.58
         ? 0 // pine on ridges

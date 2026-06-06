@@ -27,6 +27,7 @@ import '../terrain/terrain_generator.dart';
 import '../models/game_action.dart';
 import '../rendering/wind_particles.dart';
 import 'fire_emitter.dart';
+import 'game_over_overlay.dart';
 import 'game_state.dart';
 import 'ice_breath_emitter.dart';
 import 'hangar_screen.dart';
@@ -64,6 +65,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
   InfiniteTerrainManager? _terrain;
   Mesh?        _airfieldMesh;
   Transform3d? _airfieldTransform;
+  // E-W runway is baked into the same airfield mesh (generated together)
 
   Mesh?        _lakeMesh;
   Transform3d? _lakeTransform;
@@ -739,24 +741,46 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     switch (_state.gameMode) {
       case GameMode.taxi:
         if (_state.groundSpeed >= _state.cfgLiftoffSpeed) {
-          _state.gameMode   = GameMode.flight;
+          _state.gameMode    = GameMode.flight;
           _state.flightSpeed = _state.groundSpeed;
           debugPrint('[Game] Liftoff → FLIGHT');
         }
       case GameMode.landing:
-        final lndH    = _state.terrainHeight;
+        // Gear retracted mid-approach → abort, return to flight
+        if (!_state.gearDeployed && !_state.gearMoving) {
+          _state.gameMode = GameMode.flight;
+          debugPrint('[Game] Gear up → FLIGHT (abort approach)');
+          break;
+        }
+        final lndH       = _state.terrainHeight;
         final touchFloor = math.max(lndH, 0.5);
         if (_state.playerPosition.y <= touchFloor + 0.1 && lndH < 0.6) {
-          _state.playerPosition.y = touchFloor;
-          _state.gameMode         = GameMode.taxi;
-          _state.groundSpeed      = _state.flightSpeed;
-          _state.throttle = _state.flightPitchAngle = _state.flightBankAngle = 0.0;
-          _state.gearTargetDown = _state.gearDeployed = true;
-          _state.gearProgress   = 1.0;
-          _state.gearMoving     = false;
+          final sinkRate = -_state.verticalSpeed;
+          final bankAbs  = _state.flightBankAngle.abs();
+          final crash    = sinkRate > _state.cfgLandingSinkRateCrash ||
+                           bankAbs  > _state.cfgLandingMaxBankDeg;
+          if (crash && !_state.gameOver) {
+            final reason = sinkRate > _state.cfgLandingSinkRateCrash
+                ? 'HARD LANDING — SINK RATE ${sinkRate.toStringAsFixed(1)} U/S'
+                : 'RUNWAY EXCURSION — BANK ${bankAbs.toStringAsFixed(0)}°';
+            setState(() => _state.triggerGameOver(reason));
+          } else if (!_state.gameOver) {
+            _state.playerPosition.y = touchFloor;
+            _state.gameMode         = GameMode.taxi;
+            _state.groundSpeed      = _state.flightSpeed;
+            _state.throttle = _state.flightPitchAngle = _state.flightBankAngle = 0.0;
+            _state.gearTargetDown = _state.gearDeployed = true;
+            _state.gearProgress   = 1.0;
+            _state.gearMoving     = false;
+            debugPrint('[Game] Touchdown → TAXI  sink=${sinkRate.toStringAsFixed(2)} bank=${bankAbs.toStringAsFixed(1)}°');
+          }
         }
       case GameMode.flight:
-        break; // always-in-flight: no automatic transition to taxi
+        // Gear deployed → enter landing mode
+        if (_state.gearDeployed && !_state.gearMoving) {
+          _state.gameMode = GameMode.landing;
+          debugPrint('[Game] Gear down → LANDING');
+        }
       case GameMode.manaTanking:
         break; // physics unchanged; mode reverts to flight when probe disconnects
     }
@@ -1031,6 +1055,10 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
             onToggleTreeHeatmap: ()  => setState(() => _state.toggleNavTreeHeatmap()),
             onToggleNavLabels:   ()  => setState(() => _state.toggleNavLabels()),
             treeSnapshot:        _treeSnapshotCache,
+            onChatWaypointTap: (name, wx, wz) =>
+                setState(() => _state.setNavFromChat(name, wx, wz)),
+            onChatEntityTap: (id) =>
+                setState(() => _state.selectEntityFromChat(id)),
           );
           }),  // Builder
 
@@ -1079,6 +1107,12 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
               onDispatch:      (id) => setState(() => _state.missions.dispatch(id)),
               onRTB:           () => setState(() => _state.activateRTB()),
               onCancelMission: () => setState(() => _state.missions.cancel()),
+            )),
+
+          if (_state.gameOver)
+            Positioned.fill(child: GameOverOverlay(
+              reason:    _state.gameOverReason,
+              onRestart: () => setState(() => _state.resetGameOver()),
             )),
         ],
       ),

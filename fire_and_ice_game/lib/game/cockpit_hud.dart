@@ -88,6 +88,8 @@ Widget buildCockpitHud(
   Offset? friendlyScreenPos,
   double screenW = 0,
   double screenH = 0,
+  void Function(String, double, double)? onChatWaypointTap,
+  void Function(String)? onChatEntityTap,
 }) {
   if (state.viewMode == ViewMode.thirdPerson) {
     return Stack(children: [
@@ -144,7 +146,9 @@ Widget buildCockpitHud(
           onToggleTreeHeatmap: onToggleTreeHeatmap,
           onToggleNavLabels: onToggleNavLabels,
           onZoomDelta: onZoomDelta,
-          treeSnapshot: treeSnapshot),
+          treeSnapshot: treeSnapshot,
+          onChatWaypointTap: onChatWaypointTap,
+          onChatEntityTap: onChatEntityTap),
     ),
     IgnorePointer(child: Stack(children: [
       WarningTextZone(state: state),
@@ -292,6 +296,8 @@ Widget _cockpitPanel(GameState state, {
   VoidCallback? onToggleNavLabels,
   void Function(int delta)? onZoomDelta,
   List<(double, double, int)> treeSnapshot = const [],
+  void Function(String, double, double)? onChatWaypointTap,
+  void Function(String)? onChatEntityTap,
 }) {
   final lp       = state.leftMfdPage;
   final rp       = state.rightMfdPage;
@@ -426,6 +432,9 @@ Widget _cockpitPanel(GameState state, {
             _Osb('TERR', active: rp == 1, onTap: () => onRightPage?.call(1)),
             _Osb('FIRE', active: rp == 2, onTap: () => onRightPage?.call(2)),
             _Osb('MARK', active: rp == 3, onTap: () => onRightPage?.call(3)),
+            _Osb('ILS',  active: rp == 4,
+                         alert:  state.gameMode == GameMode.landing && rp != 4,
+                         onTap: () => onRightPage?.call(4)),
           ])),
           const SizedBox(height: 4),
           buildRightMFD(state, page: rp,
@@ -448,7 +457,8 @@ Widget _cockpitPanel(GameState state, {
         const SizedBox(width: 20),
         keep(vis('auxDisp'), drag('auxDisp', 'Aux Display', buildAuxDisplay(state,
             onPage: onAuxPage, onMirrorScroll: onAuxMirrorScroll, onVideoScroll: onAuxVideoScroll,
-            onManeuverScroll: onManeuverScroll, onManeuverExecute: onManeuverExecute, onManeuverStop: onManeuverStop))),
+            onManeuverScroll: onManeuverScroll, onManeuverExecute: onManeuverExecute, onManeuverStop: onManeuverStop,
+            onChatWaypointTap: onChatWaypointTap, onChatEntityTap: onChatEntityTap))),
       ]),
   );
 }
