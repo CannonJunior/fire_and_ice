@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import '../data/abilities.dart';
 import 'game_state.dart';
@@ -71,7 +72,8 @@ class _ManaBarPainter extends CustomPainter {
 /// a radial cooldown sweep, a mana cost arc, and a ready-state border glow.
 class AbilityHexRow extends StatelessWidget {
   final GameState state;
-  const AbilityHexRow({super.key, required this.state});
+  final void Function(int delta)? onSlot1Scroll;
+  const AbilityHexRow({super.key, required this.state, this.onSlot1Scroll});
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +86,19 @@ class AbilityHexRow extends StatelessWidget {
       final ab = state.abilityByName(name);
       if (ab == null) continue;
       if (tiles.isNotEmpty) tiles.add(const SizedBox(width: 4));
-      tiles.add(_HexTile(ability: ab, state: state, slotIndex: i));
+      Widget tile = _HexTile(ability: ab, state: state, slotIndex: i);
+      if (i == 0 && onSlot1Scroll != null) {
+        tile = Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerSignal: (e) {
+            if (e is PointerScrollEvent) {
+              onSlot1Scroll!(e.scrollDelta.dy > 0 ? 1 : -1);
+            }
+          },
+          child: tile,
+        );
+      }
+      tiles.add(tile);
     }
     if (tiles.isEmpty) return const SizedBox.shrink();
 
@@ -98,6 +112,16 @@ class AbilityHexRow extends StatelessWidget {
     );
   }
 }
+
+// ── Ice breath variant appearance ─────────────────────────────────────────────
+
+const _kVariantIcons   = ['❄', '🐉', '🌬', '⚡'];
+const _kVariantColors  = [
+  Color(0xFF33D1FF), // STD  — ice blue
+  Color(0xFFCCF0FF), // DRGN — pale ice white (wide billowing cone)
+  Color(0xFF00BBFF), // FT   — bright pressure cyan (tight stream)
+  Color(0xFFFFDD44), // STRM — electric gold
+];
 
 // ── Single Hex Tile ───────────────────────────────────────────────────────────
 
@@ -120,7 +144,11 @@ class _HexTile extends StatelessWidget {
     final ready  = cd <= 0.0;
     final mana   = state.hasManaFor(ability);
 
-    final abColor = Color.fromRGBO(
+    // Slot 0 = ice breath: icon and border color reflect the active variant.
+    final bool isIceSlot = slotIndex == 0;
+    final int  vIdx      = state.iceBreathVariant;
+    final String icon    = isIceSlot ? _kVariantIcons[vIdx]  : ability.icon;
+    final Color abColor  = isIceSlot ? _kVariantColors[vIdx] : Color.fromRGBO(
       (ability.color.x * 255).toInt(),
       (ability.color.y * 255).toInt(),
       (ability.color.z * 255).toInt(),
@@ -152,7 +180,7 @@ class _HexTile extends StatelessWidget {
             child: Opacity(
               opacity: cdFrac > 0 ? 0.35 : 1.0,
               child: Text(
-                ability.icon,
+                icon,
                 style: const TextStyle(fontSize: 20),
               ),
             ),
@@ -177,6 +205,22 @@ class _HexTile extends StatelessWidget {
               style: const TextStyle(color: kIceShelf, fontSize: 8),
             ),
           ),
+
+          // Variant name badge on slot 1 (ice breath)
+          if (slotIndex == 0)
+            Positioned(
+              bottom: 3, left: 0, right: 0,
+              child: Text(
+                state.iceBreathVariantName,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF88CCFF),
+                  fontSize: 5.5,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ),
         ],
       ),
     );

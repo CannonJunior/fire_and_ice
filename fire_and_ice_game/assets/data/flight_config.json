@@ -45,7 +45,7 @@
     "attackRange": 18.0,
     "attackDmg": 10.0,
     "attackCooldown": 3.0,
-    "hitboxRadius": 22.0,
+    "hitboxRadius": 35.0,
     "missileRadius": 55.0,
     "dmgBase": 25.0,
     "dmgIceBonus": 2.0,

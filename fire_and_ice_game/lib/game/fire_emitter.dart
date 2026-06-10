@@ -64,55 +64,40 @@ class FireEmitter {
   void _emitFire(ParticleSystem system, double terrainY, Vector3 wind) {
     final angle = _rng.nextDouble() * math.pi * 2;
     final r     = _rng.nextDouble() * radius;
-    final px    = worldX + math.cos(angle) * r;
-    final pz    = worldZ + math.sin(angle) * r;
-    final py    = terrainY + _rng.nextDouble() * 1.5;
-
     final life  = fireLifeMin + _rng.nextDouble() * (fireLifeMax - fireLifeMin);
-    final size  = fireSizeMin + _rng.nextDouble() * (fireSizeMax - fireSizeMin);
-
-    // Wind lean at birth: slight horizontal offset in wind direction.
-    final vx = (_rng.nextDouble() - 0.5) * 0.4 + wind.x * leanFactor;
-    final vz = (_rng.nextDouble() - 0.5) * 0.4 + wind.z * leanFactor;
-    final vy = 1.5 + _rng.nextDouble() * 2.0;
-
-    system.emit(Particle(
-      position:     Vector3(px, py, pz),
-      velocity:     Vector3(vx, vy, vz),
-      lifetime:     life,
-      size:         size,
-      isFire:       true,
-      sourceX:      worldX,
-      sourceZ:      worldZ,
-      temperature:  0.7 + _rng.nextDouble() * 0.3,
-      fuelFraction: 1.0,
-    ));
+    final p     = system.acquire();
+    if (p == null) return;
+    p.position.setValues(worldX + math.cos(angle) * r,
+                         terrainY + _rng.nextDouble() * 1.5,
+                         worldZ + math.sin(angle) * r);
+    p.velocity.setValues((_rng.nextDouble() - 0.5) * 0.4 + wind.x * leanFactor,
+                         1.5 + _rng.nextDouble() * 2.0,
+                         (_rng.nextDouble() - 0.5) * 0.4 + wind.z * leanFactor);
+    p.lifetime    = life;
+    p.size        = fireSizeMin + _rng.nextDouble() * (fireSizeMax - fireSizeMin);
+    p.isFire      = true;
+    p.sourceX     = worldX;
+    p.sourceZ     = worldZ;
+    p.temperature = 0.7 + _rng.nextDouble() * 0.3;
   }
 
   void _emitEmber(ParticleSystem system, double terrainY) {
     final angle = _rng.nextDouble() * math.pi * 2;
     final r     = _rng.nextDouble() * radius * 0.5;
-    final px    = worldX + math.cos(angle) * r;
-    final pz    = worldZ + math.sin(angle) * r;
-    final py    = terrainY + 0.5 + _rng.nextDouble() * 2.0;
-
-    // Embers shoot upward with high initial velocity.
-    final vx = (_rng.nextDouble() - 0.5) * 1.2;
-    final vz = (_rng.nextDouble() - 0.5) * 1.2;
-    final vy = 3.0 + _rng.nextDouble() * 4.0;
-
-    system.emit(Particle(
-      position:     Vector3(px, py, pz),
-      velocity:     Vector3(vx, vy, vz),
-      lifetime:     6.0 + _rng.nextDouble() * 12.0,
-      size:         0.1 + _rng.nextDouble() * 0.2,
-      isFire:       false,
-      isEmber:      true,
-      sourceX:      worldX,
-      sourceZ:      worldZ,
-      temperature:  0.4 + _rng.nextDouble() * 0.3,
-      fuelFraction: 1.0,
-    ));
+    final p     = system.acquire();
+    if (p == null) return;
+    p.position.setValues(worldX + math.cos(angle) * r,
+                         terrainY + 0.5 + _rng.nextDouble() * 2.0,
+                         worldZ + math.sin(angle) * r);
+    p.velocity.setValues((_rng.nextDouble() - 0.5) * 1.2,
+                         3.0 + _rng.nextDouble() * 4.0,
+                         (_rng.nextDouble() - 0.5) * 1.2);
+    p.lifetime    = 6.0 + _rng.nextDouble() * 12.0;
+    p.size        = 0.1 + _rng.nextDouble() * 0.2;
+    p.isEmber     = true;
+    p.sourceX     = worldX;
+    p.sourceZ     = worldZ;
+    p.temperature = 0.4 + _rng.nextDouble() * 0.3;
   }
 }
 
@@ -130,6 +115,12 @@ class WyvernBreathEmitter {
   double emitRate   = 200.0;
   double _emitAccum = 0.0;
   final math.Random _rng = math.Random();
+
+  // Scratch vectors — one allocation per emitter, reused every particle.
+  final Vector3 _rightScratch  = Vector3.zero();
+  final Vector3 _upScratch     = Vector3.zero();
+  final Vector3 _conDirScratch = Vector3.zero();
+  final Vector3 _velScratch    = Vector3.zero();
 
   WyvernBreathEmitter({
     required this.origin,
@@ -156,34 +147,41 @@ class WyvernBreathEmitter {
       final sT    = math.sin(theta);
       final cT    = math.cos(theta);
 
-      final right = _perpendicular(direction);
-      final up    = direction.cross(right).normalized();
-      final conDir = (direction.scaled(cT) +
-                      right.scaled(sT * math.cos(phi)) +
-                      up.scaled(sT * math.sin(phi))).normalized();
+      _perpendicularInto(direction, _rightScratch);
+      direction.crossInto(_rightScratch, _upScratch);
+      _upScratch.normalize();
+
+      _conDirScratch.setFrom(direction);
+      _conDirScratch.scale(cT);
+      _conDirScratch.addScaled(_rightScratch, sT * math.cos(phi));
+      _conDirScratch.addScaled(_upScratch,    sT * math.sin(phi));
+      _conDirScratch.normalize();
 
       final speed = 18.0 + _rng.nextDouble() * 6.0;
-      final vel   = conDir.scaled(speed) + wind.scaled(0.2);
-      final life  = range / speed * (0.8 + _rng.nextDouble() * 0.4);
+      _velScratch.setFrom(_conDirScratch);
+      _velScratch.scale(speed);
+      _velScratch.addScaled(wind, 0.2);
+      final life = range / speed * (0.8 + _rng.nextDouble() * 0.4);
 
-      system.emit(Particle(
-        position:    Vector3.copy(origin),
-        velocity:    vel,
-        lifetime:    life,
-        size:        0.5 + _rng.nextDouble() * 0.8,
-        isFire:      true,
-        sourceX:     origin.x,
-        sourceZ:     origin.z,
-        temperature: 0.8,
-      ));
+      final p = system.acquire();
+      if (p == null) return;
+      p.position.setFrom(origin);
+      p.velocity.setFrom(_velScratch);
+      p.lifetime    = life;
+      p.size        = 0.5 + _rng.nextDouble() * 0.8;
+      p.isFire      = true;
+      p.sourceX     = origin.x;
+      p.sourceZ     = origin.z;
+      p.temperature = 0.8;
     }
   }
 
-  static Vector3 _perpendicular(Vector3 v) {
-    final abs = Vector3(v.x.abs(), v.y.abs(), v.z.abs());
-    if (abs.x <= abs.y && abs.x <= abs.z) return Vector3(0, -v.z, v.y).normalized();
-    if (abs.y <= abs.z) return Vector3(-v.z, 0, v.x).normalized();
-    return Vector3(-v.y, v.x, 0).normalized();
+  static void _perpendicularInto(Vector3 v, Vector3 out) {
+    final ax = v.x.abs(), ay = v.y.abs(), az = v.z.abs();
+    if (ax <= ay && ax <= az) { out.setValues(0, -v.z, v.y); }
+    else if (ay <= az)        { out.setValues(-v.z, 0, v.x); }
+    else                       { out.setValues(-v.y, v.x, 0); }
+    out.normalize();
   }
 }
 
@@ -196,7 +194,9 @@ class FireEmitterSystem {
   WyvernBreathEmitter? wyvernBreath;
 
   // Dynamic fire spread radius per zone (GameState.firePositions stays const).
-  final Map<int, double> _zoneRadius = {};
+  // List indexed by zone number — O(1) access, no hash overhead.
+  final List<double> _zoneRadius = List.filled(
+    GameState.firePositions.length, GameState.fireRadius * 0.7);
   double _cfgSpreadRate = 0.5;
 
   // Long-range atmospheric smoke plumes (one per zone).
@@ -226,7 +226,7 @@ class FireEmitterSystem {
   bool get configLoaded => _configLoaded;
 
   /// Current emitter radius for zone [i] (grows with wind-driven spread).
-  double zoneRadius(int i) => _zoneRadius[i] ?? GameState.fireRadius * 0.7;
+  double zoneRadius(int i) => _zoneRadius[i];
 
   Future<void> loadConfig() async {
     try {
@@ -403,26 +403,23 @@ class FireEmitterSystem {
 
   void emitAbilityBurst(VisualEffect effect, int particleCount, double spread) {
     final rng = _burstRng;
+    final isFireAbility = effect.color.r > 0.5;
     for (int i = 0; i < particleCount; i++) {
       final angle = rng.nextDouble() * math.pi * 2;
       final elev  = (rng.nextDouble() - 0.3) * math.pi;
       final r     = rng.nextDouble() * spread;
-      final vel   = Vector3(
-        math.cos(angle) * math.cos(elev) * r,
-        math.sin(elev).abs() * r + 1.5,
-        math.sin(angle) * math.cos(elev) * r,
-      );
-      final isFireAbility = effect.color.r > 0.5;
-      particles.emit(Particle(
-        position:    Vector3.copy(effect.position),
-        velocity:    vel,
-        lifetime:    0.6 + rng.nextDouble() * 0.8,
-        size:        0.3 + rng.nextDouble() * 0.5,
-        isFire:      isFireAbility,
-        sourceX:     effect.position.x,
-        sourceZ:     effect.position.z,
-        temperature: 0.75,
-      ));
+      final p = particles.acquire();
+      if (p == null) break;
+      p.position.setFrom(effect.position);
+      p.velocity.setValues(math.cos(angle) * math.cos(elev) * r,
+                           math.sin(elev).abs() * r + 1.5,
+                           math.sin(angle) * math.cos(elev) * r);
+      p.lifetime    = 0.6 + rng.nextDouble() * 0.8;
+      p.size        = 0.3 + rng.nextDouble() * 0.5;
+      p.isFire      = isFireAbility;
+      p.sourceX     = effect.position.x;
+      p.sourceZ     = effect.position.z;
+      p.temperature = 0.75;
     }
   }
 

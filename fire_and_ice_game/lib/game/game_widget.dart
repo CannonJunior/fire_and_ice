@@ -29,7 +29,11 @@ import '../rendering/wind_particles.dart';
 import 'fire_emitter.dart';
 import 'game_over_overlay.dart';
 import 'game_state.dart';
+import 'ice_breath_base.dart';
 import 'ice_breath_emitter.dart';
+import 'ice_breath_helix.dart';
+import 'ice_breath_cascade.dart';
+import 'ice_breath_storm.dart';
 import 'hangar_screen.dart';
 import 'mission_screen.dart';
 import 'mission_state.dart';
@@ -138,7 +142,8 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
 
   // ── Ice Breath ────────────────────────────────────────────────────────────
 
-  late final IceBreathEmitter _iceBreathEmitter;
+  late final List<IceBreathEmitterBase> _allEmitters;
+  IceBreathEmitterBase get _iceBreathEmitter => _allEmitters[_state.iceBreathVariant];
   bool   _iceBreathActive     = false;
   double _iceBreathSupprTimer = 0.0;
   final Vector3 _iceBreathFwdScratch = Vector3.zero();
@@ -366,10 +371,14 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
     _treeRenderer.prebuild(_treeSystem); // avoids first-frame blocking rebuild
     _treeSnapshotCache = _treeSystem.treeSnapshot();
     _tanker = TankerAircraft();
-    _iceBreathEmitter = IceBreathEmitter(
-      origin:    Vector3.copy(_state.playerPosition),
-      direction: Vector3(0.0, 0.0, 1.0),
-    );
+    final _ibo = Vector3.copy(_state.playerPosition);
+    final _ibd = Vector3(0.0, 0.0, 1.0);
+    _allEmitters = [
+      IceBreathEmitter(origin: _ibo,              direction: _ibd),
+      IceBreathDragonEmitter(origin: Vector3.copy(_ibo), direction: Vector3.copy(_ibd)),
+      IceBreathFlamethrowerEmitter(origin: Vector3.copy(_ibo), direction: Vector3.copy(_ibd)),
+      IceBreathStormEmitter(origin: Vector3.copy(_ibo), direction: Vector3.copy(_ibd)),
+    ];
     _rebuildAircraftScene();
     for (final ab in _state.abilities) {
       final key = _colorKey(ab.color);
@@ -593,8 +602,14 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
       _iceBreathSupprTimer -= dt;
       if (_iceBreathSupprTimer <= 0) {
         _iceBreathSupprTimer = 0.5;
-        _state.suppressFiresInRadius(28.0);
-        _treeSystem.suppressInRadius(_state.playerPosition, 18.0);
+        _state.suppressFiresInRadius(28.0 * _iceBreathEmitter.rangeScale);
+        _treeSystem.suppressInRadius(_state.playerPosition, 18.0 * math.min(_iceBreathEmitter.rangeScale, 3.0));
+        // Damage wyverns in beam range — damageTick=false so WyvernSystem picks it up
+        AbilitySystem.activeEffects.add(VisualEffect(
+          position: Vector3.copy(_state.playerPosition),
+          color:    Vector3(0.0, 0.3, 1.0),
+          lifetime: 0.4,
+        )..emitted = true); // emitted=true skips the particle burst (IceBreathEmitter owns visuals)
       }
     } else if (_iceBreathActive) {
       _iceBreathActive = false;
@@ -671,7 +686,7 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
 
   void _tickTankerAndProbe(double dt) {
     _tanker.tick(dt);
-    _state.tankerPosition = (_tanker.position.x, _tanker.position.z);
+    _state.tankerPosition = (_tanker.position.x, _tanker.position.y, _tanker.position.z);
     RadioSystem.tick(_state, _tanker.crossedWaypoint, _tanker.crossNorthbound, dt, _emitRadio);
 
     // Probe deploy / retract animation
@@ -1059,6 +1074,13 @@ class _FireAndIceGameState extends State<FireAndIceGame> {
                 setState(() => _state.setNavFromChat(name, wx, wz)),
             onChatEntityTap: (id) =>
                 setState(() => _state.selectEntityFromChat(id)),
+            onSlot1Scroll: (delta) => setState(() {
+              if (_iceBreathActive) _iceBreathEmitter.stopBreath();
+              _state.iceBreathVariant =
+                  (_state.iceBreathVariant + delta + _allEmitters.length) %
+                  _allEmitters.length;
+              if (_iceBreathActive) _iceBreathEmitter.startBreath();
+            }),
           );
           }),  // Builder
 

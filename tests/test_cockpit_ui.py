@@ -41,7 +41,7 @@ R_ZOOM, R_AUTO, R_LOCK, R_CLR = 1530, 1610, 1690, 1770
 R_OSB_BOT_Y = 866  # right MFD action OSBs row
 
 # AUX display OSBs (CHAT/VID/MAP) — probe-verified at y=866
-AUX_CHAT, AUX_VID, AUX_MAP = 2033, 2113, 2160
+AUX_CHAT, AUX_VID, AUX_MAP = 2033, 2113, 2193
 AUX_Y = 866
 
 # IceFighter external gear lever (leftmost element in cockpit Row)

@@ -41,7 +41,10 @@ class GameState {
   int leftMfdPage  = 0;
   int rightMfdPage = 0;
   int mapZoom      = 3; // index into _kZoomRingBases; 3 = "1×" baseline
-  int auxDisplayPage = 0; // 0=CHAT 1=VID 2=MAP 3=MIRROR 4=MANUV
+  int auxDisplayPage    = 0; // 0=CHAT 1=VID 2=MAP 3=MIRROR 4=MANUV
+  int iceBreathVariant  = 0; // 0=STD 1=DRGN 2=FT 3=STRM
+  static const List<String> kIceBreathVariantNames = ['STD', 'DRGN', 'FT', 'STRM'];
+  String get iceBreathVariantName => kIceBreathVariantNames[iceBreathVariant];
   int auxMirrorIndex = 0; // 0..7 → ELMT/LOAD/STAT/MODE/NAV/TERR/FIRE/MARK
   int auxVideoIndex  = 0; // 0=LISA HAYES  1=LIN MINMEI
   bool mapNorthUp        = true;
@@ -471,7 +474,7 @@ class GameState {
   List<({String id, String label, double wx, double wz, double wy})> _buildFriendlyTargetList() {
     final px = playerPosition.x, pz = playerPosition.z;
     final results = <({String id, String label, double wx, double wz, double wy})>[
-      (id: 'tanker',  label: 'ART-9 TANKER', wx: tankerPosition.$1, wz: tankerPosition.$2, wy: 10.0),
+      (id: 'tanker',  label: 'ART-9 TANKER', wx: tankerPosition.$1, wy: tankerPosition.$2, wz: tankerPosition.$3),
       (id: 'airbase', label: 'ALPHA BASE',   wx: 0.0,               wz: -55.0,             wy: 0.0),
     ];
     results.sort((a, b) {
@@ -655,7 +658,7 @@ class GameState {
 
   // ── Tanker tracking (updated by game loop) ───────────────────────────────
 
-  (double, double) tankerPosition = (0.0, 0.0); // (worldX, worldZ)
+  (double, double, double) tankerPosition = (0.0, 100.0, 0.0); // (worldX, worldY, worldZ)
 
   // ── Radio / chat ──────────────────────────────────────────────────────────
 

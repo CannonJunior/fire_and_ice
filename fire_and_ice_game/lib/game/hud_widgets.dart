@@ -16,91 +16,70 @@ Widget buildHud(
   Offset? friendlyScreenPos,
   double screenW = 0,
   double screenH = 0,
+  void Function(int delta)? onSlot1Scroll,
 }) {
   final ms = DateTime.now().millisecondsSinceEpoch;
-  return IgnorePointer(
-    child: Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned(
-          top: 12, left: 12,
-          child: FlightDataCluster(state: state),
-        ),
-        WarningTextZone(state: state),
-        Positioned(
-          bottom: 12, right: 12,
-          child: HullIntegrityArc(state: state),
-        ),
-        if (showActionBar)
-          Positioned(
-            bottom: 12, left: 0, right: 0,
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ManaSegmentBar(state: state),
-                  const SizedBox(height: 6),
-                  AbilityHexRow(state: state),
-                ],
+  return Stack(
+    clipBehavior: Clip.none,
+    children: [
+      // All non-interactive elements wrapped in IgnorePointer.
+      IgnorePointer(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              top: 12, left: 12,
+              child: FlightDataCluster(state: state),
+            ),
+            WarningTextZone(state: state),
+            Positioned(
+              bottom: 12, right: 12,
+              child: HullIntegrityArc(state: state),
+            ),
+            ...buildTargetCards(state, ms),
+            if (hostileScreenPos != null)
+              ..._worldIndicator(
+                screenPos: hostileScreenPos,
+                isHostile: true,
+                label: state.currentTarget!.label,
+                distance: _dist2d(state.currentTarget!, state),
+                animMs: ms,
+                screenW: screenW,
+                screenH: screenH,
               ),
+            if (friendlyScreenPos != null)
+              ..._worldIndicator(
+                screenPos: friendlyScreenPos,
+                isHostile: false,
+                label: state.currentFriendlyTarget!.label,
+                distance: _dist2d(state.currentFriendlyTarget!, state),
+                animMs: ms,
+                screenW: screenW,
+                screenH: screenH,
+              ),
+            if (showTutorial) buildTutorialOverlay(state),
+            if (state.gameMode == GameMode.landing)
+              ..._approachStripWidgets(state),
+          ],
+        ),
+      ),
+
+      // Action bar lives outside IgnorePointer so slot-1 scroll events reach it.
+      if (showActionBar)
+        Positioned(
+          bottom: 12, left: 0, right: 0,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IgnorePointer(child: ManaSegmentBar(state: state)),
+                const SizedBox(height: 6),
+                AbilityHexRow(state: state, onSlot1Scroll: onSlot1Scroll),
+              ],
             ),
           ),
-
-        // ── Target info panels (top-right / top-left) ──────────────────────
-        if (state.currentTarget != null)
-          Positioned(
-            top: 90, right: 12,
-            child: _AnimeTargetLock(
-              isHostile: true,
-              targetName: state.currentTarget!.label,
-              distance: _dist2d(state.currentTarget!, state),
-              extraLine: _hostileExtra(state.currentTarget!, state),
-              animMs: ms,
-            ),
-          ),
-
-        if (state.currentFriendlyTarget != null)
-          Positioned(
-            top: 120, left: 12,
-            child: _AnimeTargetLock(
-              isHostile: false,
-              targetName: state.currentFriendlyTarget!.label,
-              distance: _dist2d(state.currentFriendlyTarget!, state),
-              extraLine: _friendlyExtra(state.currentFriendlyTarget!, state),
-              animMs: ms,
-            ),
-          ),
-
-        // ── World-space target brackets ─────────────────────────────────────
-        if (hostileScreenPos != null)
-          ..._worldIndicator(
-            screenPos: hostileScreenPos,
-            isHostile: true,
-            label: state.currentTarget!.label,
-            distance: _dist2d(state.currentTarget!, state),
-            animMs: ms,
-            screenW: screenW,
-            screenH: screenH,
-          ),
-
-        if (friendlyScreenPos != null)
-          ..._worldIndicator(
-            screenPos: friendlyScreenPos,
-            isHostile: false,
-            label: state.currentFriendlyTarget!.label,
-            distance: _dist2d(state.currentFriendlyTarget!, state),
-            animMs: ms,
-            screenW: screenW,
-            screenH: screenH,
-          ),
-
-        if (showTutorial) buildTutorialOverlay(state),
-
-        // Approach strip — visible in landing mode only
-        if (state.gameMode == GameMode.landing)
-          ..._approachStripWidgets(state),
-      ],
-    ),
+        ),
+    ],
   );
 }
 
@@ -493,12 +472,62 @@ String _friendlyExtra(
   return '';
 }
 
+/// Rate of closure toward [t] in world-units/sec.
+/// Positive = player is approaching; negative = player is retreating.
+double _closureRate(
+  ({String id, String label, double wx, double wz, double wy}) t,
+  GameState state,
+) {
+  final dx = t.wx - state.playerPosition.x;
+  final dz = t.wz - state.playerPosition.z;
+  final d  = math.sqrt(dx * dx + dz * dz);
+  if (d < 0.1) return 0.0;
+  final hdg = state.playerRotation.y * math.pi / 180;
+  final vx  = -math.sin(hdg) * state.flightSpeed;
+  final vz  = -math.cos(hdg) * state.flightSpeed;
+  return (dx * vx + dz * vz) / d;
+}
+
+/// Positioned target-lock info cards for hostile and friendly selections.
+/// Returns Positioned widgets for a Stack — shared by 3rd-person and cockpit views.
+List<Widget> buildTargetCards(GameState state, int animMs) {
+  final hostile  = state.currentTarget;
+  final friendly = state.currentFriendlyTarget;
+  return [
+    if (hostile != null)
+      Positioned(
+        top: 90, right: 12,
+        child: _AnimeTargetLock(
+          isHostile: true,
+          targetName: hostile.label,
+          distance: _dist2d(hostile, state),
+          closureRate: _closureRate(hostile, state),
+          extraLine: _hostileExtra(hostile, state),
+          animMs: animMs,
+        ),
+      ),
+    if (friendly != null)
+      Positioned(
+        top: 120, left: 12,
+        child: _AnimeTargetLock(
+          isHostile: false,
+          targetName: friendly.label,
+          distance: _dist2d(friendly, state),
+          closureRate: _closureRate(friendly, state),
+          extraLine: _friendlyExtra(friendly, state),
+          animMs: animMs,
+        ),
+      ),
+  ];
+}
+
 // ── Anime Target Lock info panel ──────────────────────────────────────────────
 
 class _AnimeTargetLock extends StatelessWidget {
   final bool isHostile;
   final String targetName;
   final double distance;
+  final double closureRate; // world units/sec; positive = closing
   final String extraLine;
   final int animMs;
 
@@ -506,6 +535,7 @@ class _AnimeTargetLock extends StatelessWidget {
     required this.isHostile,
     required this.targetName,
     required this.distance,
+    required this.closureRate,
     required this.extraLine,
     required this.animMs,
   });
@@ -591,6 +621,26 @@ class _AnimeTargetLock extends StatelessWidget {
                     Text(extraLine, style: TextStyle(color: primary.withOpacity(0.8),
                         fontSize: 9, letterSpacing: 0.8)),
                   ],
+                  const SizedBox(height: 4),
+                  Row(children: [
+                    Text('CLR', style: TextStyle(color: primary.withOpacity(0.7),
+                        fontSize: 9, letterSpacing: 1.2)),
+                    const SizedBox(width: 4),
+                    Text('▸', style: TextStyle(color: primary, fontSize: 9)),
+                    const SizedBox(width: 5),
+                    Text(
+                      '${closureRate >= 0 ? '+' : ''}${closureRate.toStringAsFixed(1)} u/s',
+                      style: TextStyle(
+                        color: closureRate > 1.0
+                            ? const Color(0xFF00FF88)
+                            : closureRate < -1.0
+                                ? const Color(0xFFFF5500)
+                                : Colors.white70,
+                        fontSize: 11,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ]),
                 ],
               ),
             ),

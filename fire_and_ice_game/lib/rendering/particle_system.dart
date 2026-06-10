@@ -47,6 +47,21 @@ class Particle {
     this.fuelFraction = 1.0,
   }) : age = 0.0;
 
+  Particle.blank()
+    : position    = Vector3.zero(),
+      velocity    = Vector3.zero(),
+      lifetime    = 0.0,
+      size        = 1.0,
+      isFire      = false,
+      isEmber     = false,
+      isIce       = false,
+      sourceX     = 0.0,
+      sourceZ     = 0.0,
+      temperature = 0.8,
+      rotation    = 0.0,
+      fuelFraction= 1.0,
+      age         = 0.0;
+
   bool get isDead => age >= lifetime;
   double get t => (age / lifetime).clamp(0.0, 1.0);
 
@@ -104,6 +119,7 @@ class Particle {
 class ParticleSystem {
   final int maxParticles;
   final List<Particle> _particles = [];
+  final List<Particle> _pool      = [];
   final math.Random _rng = math.Random();
 
   double buoyancy          = 5.2;
@@ -202,10 +218,11 @@ class ParticleSystem {
       }
     }
 
-    // Swap-remove dead particles — O(n) single pass, no list reallocation.
+    // Swap-remove dead particles, returning them to the pool for reuse.
     int i = 0;
     while (i < _particles.length) {
       if (_particles[i].isDead) {
+        _pool.add(_particles[i]);
         _particles[i] = _particles.last;
         _particles.removeLast();
       } else {
@@ -226,6 +243,26 @@ class ParticleSystem {
     }
   }
 
+  /// Acquire a particle from the pool (or create a new one) and add it to the
+  /// active list.  Returns null when at capacity.  Fields are reset to safe
+  /// defaults — caller must set position, velocity, lifetime, size, and isFire
+  /// before the particle is first ticked.
+  Particle? acquire() {
+    if (_particles.length >= maxParticles) return null;
+    final p = _pool.isNotEmpty ? _pool.removeLast() : Particle.blank();
+    p.age         = 0.0;
+    p.isFire      = false;
+    p.isEmber     = false;
+    p.isIce       = false;
+    p.sourceX     = 0.0;
+    p.sourceZ     = 0.0;
+    p.temperature = 0.8;
+    p.rotation    = 0.0;
+    p.fuelFraction= 1.0;
+    _particles.add(p);
+    return p;
+  }
+
   bool emit(Particle p) {
     if (_particles.length >= maxParticles) return false;
     _particles.add(p);
@@ -238,7 +275,10 @@ class ParticleSystem {
     }
   }
 
-  void clear() => _particles.clear();
+  void clear() {
+    _pool.addAll(_particles);
+    _particles.clear();
+  }
 
   static double _hash(double v) =>
       (math.sin(v * 127.1) * 43758.5453).abs() % 1.0;

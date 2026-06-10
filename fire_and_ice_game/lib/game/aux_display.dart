@@ -428,7 +428,7 @@ Widget _mapPage(GameState s) => Column(children: [
     painter: _MapPainter(
       px: s.playerPosition.x, pz: s.playerPosition.z,
       heading: s.playerRotation.y,
-      tankerX: s.tankerPosition.$1, tankerZ: s.tankerPosition.$2,
+      tankerX: s.tankerPosition.$1, tankerZ: s.tankerPosition.$3,
     ),
     child: Container(),
   )),

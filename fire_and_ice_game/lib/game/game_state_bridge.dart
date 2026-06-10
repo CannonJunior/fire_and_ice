@@ -1,10 +1,13 @@
 import 'dart:html' as html;
 import 'game_state.dart';
 
-/// Writes key game state to a hidden DOM element every frame.
+var _bridgeSkip = 0;
+
+/// Writes key game state to a hidden DOM element (throttled to every 3 frames).
 /// Tests read it with:
 ///   JSON.parse(document.getElementById('_gs').dataset.state)
 void writeGameStateBridge(GameState s, int frame) {
+  if (++_bridgeSkip % 3 != 0) return;
   final cd = s.abilityCooldowns.entries
       .where((e) => e.value > 0)
       .map((e) => '"${e.key}":${e.value.toStringAsFixed(4)}')

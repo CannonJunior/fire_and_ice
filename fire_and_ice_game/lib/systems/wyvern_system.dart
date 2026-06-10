@@ -27,7 +27,7 @@ class WyvernSystem {
   static double cfgAttackRange    = 18.0;
   static double cfgAttackDmg      = 10.0;
   static double cfgAttackCooldown =  3.0;
-  static double cfgHitboxRadius   = 22.0;  // rechargeable ability range
+  static double cfgHitboxRadius   = 35.0;  // rechargeable ability range
   static double cfgMissileRadius  = 55.0;  // expendable missile range
   static double cfgDmgBase        = 25.0;
   static double cfgDmgIceBonus    =  2.0;  // multiplier for ice vs fire wyvern

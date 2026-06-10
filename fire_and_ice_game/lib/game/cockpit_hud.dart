@@ -90,6 +90,7 @@ Widget buildCockpitHud(
   double screenH = 0,
   void Function(String, double, double)? onChatWaypointTap,
   void Function(String)? onChatEntityTap,
+  void Function(int delta)? onSlot1Scroll,
 }) {
   if (state.viewMode == ViewMode.thirdPerson) {
     return Stack(children: [
@@ -100,7 +101,8 @@ Widget buildCockpitHud(
           hostileScreenPos: hostileScreenPos,
           friendlyScreenPos: friendlyScreenPos,
           screenW: screenW,
-          screenH: screenH),
+          screenH: screenH,
+          onSlot1Scroll: onSlot1Scroll),
       IgnorePointer(child: Stack(children: [
         Positioned(bottom: 12, right: 12, child: HullIntegrityArc(state: state)),
       ])),
@@ -155,6 +157,7 @@ Widget buildCockpitHud(
       Positioned(bottom: 12, right: 12,
           child: HullIntegrityArc(state: state)),
       if (showTutorial) buildTutorialOverlay(state),
+      ...hud.buildTargetCards(state, DateTime.now().millisecondsSinceEpoch),
     ])),
     Positioned(top: 0, left: 0, right: 0, child: _portBanner()),
   ]);
